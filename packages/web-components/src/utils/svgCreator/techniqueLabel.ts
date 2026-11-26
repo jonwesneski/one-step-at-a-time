@@ -2,21 +2,28 @@ import {
   resolveGlissandoLabel,
   type LabelAnchor,
 } from '../../rules/glissandoLabelRules';
-import type { TremoloLabel } from '../../types/theory';
+import {
+  estimateTextWidthPx,
+  hangOf,
+  parseTechniqueText,
+} from '../../rules/techniqueTextRules';
+import type { TextStyle, TremoloLabel } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
   TECHNIQUE_LABEL_CHAR_WIDTH_PX,
   TECHNIQUE_LABEL_FONT_SIZE_PX,
   TECHNIQUE_LABEL_GAP_PX,
   TECHNIQUE_LABEL_LINE_HEIGHT_PX,
+  TECHNIQUE_TEXT_BELOW_GAP_PX,
 } from '../notationDimensions';
 
 // ─── Technique labels ───────────────────────────────────────────────────────
 //
-// Text above the stave over one entry: a tremolo label, a glissando label.
+// Text over (or under) one entry: a tremolo label, a glissando label, a
+// technique text.
 
 export type TechniqueLabel = {
-  kind: 'tremolo' | 'glissando';
+  kind: 'tremolo' | 'glissando' | 'text';
   lines: readonly string[];
   italic: boolean;
   anchor: LabelAnchor;
@@ -33,10 +40,30 @@ const TREMOLO_LABEL_TEXT: Record<TremoloLabel, string> = {
   norm: 'norm.',
 };
 
-/** An entry's labels, the one nearest the note first. */
+/**
+ * A `technique-text` as a label: it starts at the first grace head, or the
+ * head. Null with no text.
+ */
+export function techniqueTextLabel(
+  value: string | null,
+  style: TextStyle
+): TechniqueLabel | null {
+  const lines = parseTechniqueText(value);
+  return lines === null
+    ? null
+    : {
+        kind: 'text',
+        lines: lines.map(({ text }) => text),
+        italic: style === 'italic',
+        anchor: 'grace',
+      };
+}
+
+/** An entry's labels above the stave, the one nearest the note first. */
 export function techniqueLabels(
   tremoloLabel: TremoloLabel | null,
-  glissandoLabel: string | null
+  glissandoLabel: string | null,
+  text: TechniqueLabel | null = null
 ): TechniqueLabel[] {
   const labels: TechniqueLabel[] = [];
   if (tremoloLabel !== null) {
@@ -51,49 +78,51 @@ export function techniqueLabels(
   if (glissando !== null) {
     labels.push({ kind: 'glissando', ...glissando });
   }
+  if (text !== null) {
+    labels.push(text);
+  }
   return labels;
 }
 
-// Share of the font size each kind of character advances in a serif face.
-const CHARACTER_WIDTHS: readonly [RegExp, number][] = [
-  [/[ijl.,:;'!|]/, 0.28],
-  [/[ ftr()-]/, 0.34],
-  [/[mwMW¼½¾]/, 0.8],
-  [/[A-Z]/, 0.7],
-];
-const CHARACTER_WIDTH = 0.5;
+export function textWidthPx(line: string): number {
+  return estimateTextWidthPx(line, TECHNIQUE_LABEL_FONT_SIZE_PX);
+}
 
-// A little over, since serif faces differ.
-const WIDTH_MARGIN = 1.08;
-
-function textWidthPx(line: string): number {
-  const ems = Array.from(line).reduce(
-    (sum, character) =>
-      sum +
-      (CHARACTER_WIDTHS.find(([pattern]) => pattern.test(character))?.[1] ??
-        CHARACTER_WIDTH),
-    0
-  );
-  return ems * TECHNIQUE_LABEL_FONT_SIZE_PX * WIDTH_MARGIN;
+// How far (px) a line's opening quote or bracket hangs left of the margin.
+function hangWidthPx(
+  kind: TechniqueLabel['kind'],
+  line: string,
+  count: number
+) {
+  return kind === 'text' ? textWidthPx(hangOf(line, count)) : 0;
 }
 
 /**
- * Estimated drawn width (px) of a label's longest line. A glissando label may
- * be a whole instruction, so it is judged by its characters.
+ * Estimated drawn width (px) of a label's longest line from its margin. A
+ * glissando label or technique text may be a whole instruction, so it is
+ * judged by its characters.
  */
 export function techniqueLabelWidthPx({ kind, lines }: TechniqueLabel): number {
   return Math.max(
     ...lines.map((line) =>
       kind === 'tremolo'
         ? line.length * TECHNIQUE_LABEL_CHAR_WIDTH_PX
-        : textWidthPx(line)
+        : textWidthPx(line) - hangWidthPx(kind, line, lines.length)
     )
   );
 }
 
+/** How far (px) a label's hanging punctuation reaches left of its margin. */
+export function techniqueLabelHangPx({ kind, lines }: TechniqueLabel): number {
+  return Math.max(
+    0,
+    ...lines.map((line) => hangWidthPx(kind, line, lines.length))
+  );
+}
+
 /**
- * A glissando label with every line wider than `maxWidth` broken at its
- * spaces. A single word wider than that stays whole.
+ * A glissando label or technique text with every line wider than `maxWidth`
+ * broken at its spaces. A single word wider than that stays whole.
  */
 export function wrapTechniqueLabel(
   label: TechniqueLabel,
@@ -129,15 +158,20 @@ export function techniqueLabelHeightPx({ lines }: TechniqueLabel): number {
   );
 }
 
-/** A label starting at leftX, its last line on baselineY. */
+/**
+ * A label whose margin is leftX, its last line on baselineY. A technique
+ * text's opening quotes and brackets hang left of the margin.
+ */
 export function createTechniqueLabel(
   leftX: number,
   baselineY: number,
   { kind, lines, italic }: TechniqueLabel
 ): SVGTextElement {
   const text = document.createElementNS(SVG_NS, 'text');
-  text.classList.add(`${kind}-label`);
-  text.setAttribute('x', `${leftX}`);
+  text.classList.add(kind === 'text' ? 'technique-text' : `${kind}-label`);
+  const lineX = (line: string): number =>
+    leftX - hangWidthPx(kind, line, lines.length);
+  text.setAttribute('x', `${lineX(lines[0])}`);
   text.setAttribute(
     'y',
     `${baselineY - (lines.length - 1) * TECHNIQUE_LABEL_LINE_HEIGHT_PX}`
@@ -155,12 +189,29 @@ export function createTechniqueLabel(
   }
   lines.forEach((line, i) => {
     const span = document.createElementNS(SVG_NS, 'tspan');
-    span.setAttribute('x', `${leftX}`);
+    span.setAttribute('x', `${lineX(line)}`);
     span.setAttribute('dy', `${i === 0 ? 0 : TECHNIQUE_LABEL_LINE_HEIGHT_PX}`);
     span.textContent = line;
     text.appendChild(span);
   });
   return text;
+}
+
+/** A standalone entry's text below its lowest ink. */
+export function appendTechniqueTextBelow(
+  svg: SVGElement,
+  leftX: number,
+  inkBottomY: number,
+  label: TechniqueLabel
+): void {
+  svg.setAttribute('overflow', 'visible');
+  svg.appendChild(
+    createTechniqueLabel(
+      leftX,
+      inkBottomY + TECHNIQUE_TEXT_BELOW_GAP_PX + techniqueLabelHeightPx(label),
+      label
+    )
+  );
 }
 
 /** A standalone entry's labels, stacked above its topmost ink. */

@@ -64,6 +64,19 @@ describe(MUSIC_DRUM_NOTE, () => {
     );
   });
 
+  it('takes technique and dynamic text', () => {
+    const note = makeDrumNote({
+      instrument: 'snare',
+      'technique-text': 'rim',
+      'technique-text-placement': 'below',
+      dynamic: 'p',
+      'dynamic-text': 'sub.',
+    });
+    expect(note.techniqueText).toBe('rim');
+    expect(note.techniqueTextPlacement).toBe('below');
+    expect(note.dynamicText).toBe('sub.');
+  });
+
   it('ignores an unknown instrument', () => {
     const note = makeDrumNote({ instrument: 'cowbell' });
     expect(note.instrument).toBeNull();

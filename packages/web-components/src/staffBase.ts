@@ -805,8 +805,17 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     return Math.max(0, this.#inkExtent({ top, bottom }).bottom - bottom);
   }
 
+  /** Ink (client px) drawn over this staff by another, counted as its own. */
+  protected get borrowedInkBands(): readonly VerticalBand[] {
+    return [];
+  }
+
   #inkExtent(stave: VerticalBand): VerticalBand {
     const extent = { ...stave };
+    for (const band of this.borrowedInkBands) {
+      extent.top = Math.min(extent.top, band.top);
+      extent.bottom = Math.max(extent.bottom, band.bottom);
+    }
     const visit = (root: ParentNode | null | undefined) => {
       for (const element of Array.from(
         root?.querySelectorAll<SVGGraphicsElement>(INK_SELECTOR) ?? []

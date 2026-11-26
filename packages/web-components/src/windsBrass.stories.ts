@@ -54,7 +54,7 @@ export const Articulation: Story = {
  * A woodwind slur over a reiterated pitch needs marks under it: each note is
  * tongued again, so tenuto lines (or staccato dots) show the rearticulation.
  * A bare slur here is ungrammatical for woodwind; the alternative is a
- * written `legato`, which needs staff text.
+ * written `legato` (`technique-text`).
  */
 export const ReiteratedPitchWoodwind: Story = {
   name: 'Reiterated Pitch (Woodwind)',

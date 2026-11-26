@@ -43,6 +43,8 @@ import type { CrossStaffTremoloRole } from './rules/crossStaffTremoloRules';
 import { CrossStaffTupletRole } from './rules/crossStaffTupletRules';
 import {
   dynamicsRowY,
+  dynamicTextHalfWidth,
+  dynamicTextTrailingPx,
   type HairpinPair,
   pairHairpinsWithLeftovers,
   resolveSwellSpan,
@@ -148,6 +150,10 @@ import {
   totalMarkerWidth,
 } from './rules/streamMarkerRules';
 import {
+  belowTextPlacement,
+  techniqueTextSpan,
+} from './rules/techniqueTextRules';
+import {
   durationToBase,
   durationToDotCount,
   durationToFlagCountMap,
@@ -182,6 +188,7 @@ import {
   resolveStemlessClusters,
   type UnisonPartDescriptor,
 } from './rules/unisonRules';
+import type { VerticalBand } from './rules/verticalSpaceRules';
 import {
   CombinedGroup,
   detectCombinableGroups,
@@ -259,6 +266,7 @@ import {
   createBendSvg,
   createBreathMarkSvg,
   createDynamicMarkingSvg,
+  createDynamicTextSvg,
   createFlatSvg,
   createHairpinSvg,
   createNaturalSvg,
@@ -384,6 +392,7 @@ import {
   SWELL_MIN_SPAN_PX,
   TECHNIQUE_LABEL_FONT_SIZE_PX,
   TECHNIQUE_LABEL_GAP_PX,
+  TECHNIQUE_TEXT_BELOW_GAP_PX,
   TIE_REACH_PX,
   TIME_SIG_GLYPH_CENTER_X_PX,
   TIME_SIG_Y_TRANSLATE,
@@ -430,9 +439,11 @@ import { restInkBottomPx, restInkTopPx } from './utils/svgCreator/rest';
 import {
   createTechniqueLabel,
   type TechniqueLabel,
+  techniqueLabelHangPx,
   techniqueLabelHeightPx,
   techniqueLabels,
   techniqueLabelWidthPx,
+  techniqueTextLabel,
   wrapTechniqueLabel,
 } from './utils/svgCreator/techniqueLabel';
 import {
@@ -616,6 +627,11 @@ function breathMarkOf(element: NoteChordOrRestElementType): BreathMark | null {
 const outermost = (ys: readonly number[], above: boolean): number =>
   above ? Math.min(...ys) : Math.max(...ys);
 
+const outermostOrNull = (
+  ys: readonly number[],
+  above: boolean
+): number | null => (ys.length === 0 ? null : outermost(ys, above));
+
 const isUnpitchedNote = (element: Element): boolean =>
   isNoteNodeName(element.nodeName) &&
   (element as NoteElementType).unpitched !== null;
@@ -656,19 +672,57 @@ type PlacedAboveStaffRect = {
 
 type PlacedTechniqueLabel = PlacedAboveStaffRect & {
   voiceKey: VoiceKey;
+  element: NoteChordOrRestElementType;
   label: TechniqueLabel;
+  // Where its lines start; hanging punctuation reaches left of it.
+  margin: number;
 };
+
+/**
+ * Set by the ancestor <music-composition> for each technique text: how far
+ * right it may run on over later bars of its row, and the outermost ink
+ * under it there toward its side (both local), or null with none.
+ */
+export type TechniqueTextRunOn = { maxRight: number; inkY: number | null };
+
+/**
+ * A technique text of an earlier bar running on over this staff (local), set
+ * by the ancestor <music-composition>; this staff's own labels clear it.
+ */
+export type CarriedTechniqueText = PlacedAboveStaffRect & { above: boolean };
+
+/** A placed technique text, reported to the ancestor <music-composition>. */
+export type TechniqueTextPlacement = PlacedAboveStaffRect & {
+  element: Element;
+  above: boolean;
+};
+
+const techniqueTextOf = (
+  element: NoteChordOrRestElementType
+): TechniqueLabel | null =>
+  techniqueTextLabel(
+    element.techniqueText ?? null,
+    element.techniqueTextStyle ?? 'normal'
+  );
+
+const hasTechniqueTextBelow = (element: NoteChordOrRestElementType): boolean =>
+  element.techniqueTextPlacement === 'below' &&
+  techniqueTextOf(element) !== null;
 
 function techniqueLabelsOf(
   element: NoteChordOrRestElementType
 ): TechniqueLabel[] {
+  const text =
+    element.techniqueTextPlacement === 'below'
+      ? null
+      : techniqueTextOf(element);
   if (element.nodeName === MUSIC_REST_NODE) {
-    return [];
+    return text === null ? [] : [text];
   }
   const { tremoloLabel, glissandoLabel } = element as
     | NoteElementType
     | ChordElementType;
-  return techniqueLabels(tremoloLabel ?? null, glissandoLabel ?? null);
+  return techniqueLabels(tremoloLabel ?? null, glissandoLabel ?? null, text);
 }
 
 type StaffBarSpacing = BarSpacing & {
@@ -907,6 +961,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   #octaveSignsContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #techniqueLabelContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #placedTechniqueLabels: PlacedTechniqueLabel[] = [];
+  #placedBelowTexts: PlacedTechniqueLabel[] = [];
+  #techniqueTextRunOn: ReadonlyMap<Element, TechniqueTextRunOn> | null = null;
+  #carriedTechniqueTexts: readonly CarriedTechniqueText[] = [];
+  // The right end of this staff's row in its composition (local px).
+  #rowRightX: number | null = null;
   #breathMarkContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #bendContainers: Map<VoiceKey, SVGSVGElement> = new Map();
   #warnedBends = new WeakSet<NoteOrChordElementType>();
@@ -1978,6 +2037,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       this.removeEventListener(type, listener);
     }
     this.#sharedDynamicsRows = {};
+    this.#techniqueTextRunOn = null;
+    this.#carriedTechniqueTexts = [];
+    this.#rowRightX = null;
   }
 
   override attributeChangedCallback(
@@ -2088,6 +2150,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
     if (reference.dynamicReminder) {
       chord.setAttribute('dynamic-reminder', '');
+    }
+    if ((reference.dynamicText ?? null) !== null) {
+      chord.setAttribute('dynamic-text', reference.dynamicText as string);
     }
     if (reference.crescendo !== null) {
       chord.setAttribute('crescendo', reference.crescendo);
@@ -4952,6 +5017,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     // they really are.
     this.#renderBends(remainingWidth);
     this.#layoutTechniqueLabels();
+    this.#layoutBelowTexts();
 
     // Conservative budgets, before anything above or below the notes is drawn.
     const aboveStaffBudget = this.#estimateAboveStaffBudget();
@@ -5140,7 +5206,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // it. Tremolo labels go first, so they stay nearest their notes.
   #layoutTechniqueLabels(): void {
     const placed: PlacedTechniqueLabel[] = [];
-    for (const kind of ['tremolo', 'glissando'] as const) {
+    const carried = this.#carriedTechniqueTexts.filter(({ above }) => above);
+    for (const kind of ['tremolo', 'glissando', 'text'] as const) {
       for (const [voiceKey, state] of this.#voiceRenderStates) {
         state.elements.forEach((element, i) => {
           const unwrapped = techniqueLabelsOf(element).find(
@@ -5149,18 +5216,24 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           if (unwrapped === undefined) {
             return;
           }
-          const label = wrapTechniqueLabel(unwrapped, this.#notesAreaEndX);
-          const span = this.#techniqueLabelSpan(state, i, label);
+          const { label, margin, left, right } = this.#techniqueLabelSpan(
+            state,
+            i,
+            unwrapped
+          );
+          const span = { left, right };
           const height = techniqueLabelHeightPx(label);
           const bottom = this.#clearOfPlaced(
             this.#techniqueLabelClearBaselineY(voiceKey, state, i, label, span),
             height,
             span,
-            placed
+            [...carried, ...placed]
           );
           placed.push({
             voiceKey,
+            element,
             label,
+            margin,
             ...span,
             top: bottom - height,
             bottom,
@@ -5183,22 +5256,33 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
     // Again, now the trills under them are lifted.
     this.#layoutTechniqueLabels();
-    for (const { voiceKey, label, left, bottom } of this
-      .#placedTechniqueLabels) {
+    this.#layoutBelowTexts();
+    for (const { voiceKey, label, margin, bottom } of [
+      ...this.#placedTechniqueLabels,
+      ...this.#placedBelowTexts,
+    ]) {
       this.#techniqueLabelContainers
         .get(voiceKey)
-        ?.appendChild(createTechniqueLabel(left, bottom, label));
+        ?.appendChild(createTechniqueLabel(margin, bottom, label));
     }
-    return [...this.#placedTechniqueLabels];
+    return [
+      ...this.#placedTechniqueLabels,
+      ...this.#carriedTechniqueTexts.filter(({ above }) => above),
+    ];
   }
 
-  // Where a label starts and ends (container px). A glissando label shifts left
-  // rather than run past the notes area, but not past its start.
+  // Where a label starts and ends (container px), wrapped to fit. A glissando
+  // label shifts left rather than run past the notes area, but not past its
+  // start.
   #techniqueLabelSpan(
     state: VoiceRenderState,
     i: number,
-    label: TechniqueLabel
-  ): { left: number; right: number } {
+    unwrapped: TechniqueLabel
+  ): { label: TechniqueLabel; margin: number; left: number; right: number } {
+    if (unwrapped.kind === 'text') {
+      return this.#techniqueTextSpan(state, i, unwrapped, true);
+    }
+    const label = wrapTechniqueLabel(unwrapped, this.#notesAreaEndX);
     const x = state.noteXPositions.get(i) ?? 0;
     const width = techniqueLabelWidthPx(label);
     let left = x + trillSignLeftX(state.stemDirections[i]);
@@ -5221,7 +5305,289 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     if (label.kind === 'glissando' && this.#notesAreaEndX > 0) {
       left = Math.max(0, Math.min(left, this.#notesAreaEndX - width));
     }
-    return { left, right: left + width };
+    return { label, margin: left, left, right: left + width };
+  }
+
+  // Technique text below the stave sits nearest it of the rows there, clear
+  // of the ink under it; one that would overlap an earlier one moves down
+  // past it. Dynamics, phonemes and lyrics go beneath.
+  #layoutBelowTexts(): void {
+    const entries: {
+      voiceKey: VoiceKey;
+      state: VoiceRenderState;
+      i: number;
+      text: TechniqueLabel;
+    }[] = [];
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      state.elements.forEach((element, i) => {
+        const text = techniqueTextOf(element);
+        if (text !== null && hasTechniqueTextBelow(element)) {
+          entries.push({ voiceKey, state, i, text });
+        }
+      });
+    }
+    entries.sort(
+      (a, b) =>
+        this.#techniqueTextAnchorX(a.state, a.i) -
+        this.#techniqueTextAnchorX(b.state, b.i)
+    );
+    const placed: PlacedTechniqueLabel[] = [];
+    const carried = this.#carriedTechniqueTexts.filter(({ above }) => !above);
+    for (const { voiceKey, state, i, text } of entries) {
+      const fitted = this.#techniqueTextSpan(state, i, text, false);
+      const { label } = fitted;
+      const height = techniqueLabelHeightPx(label);
+      const rowTop = this.#belowTextRowTop(state, i, fitted);
+      const own = this.#ownBelowInk(state, i);
+      const placement =
+        own === null
+          ? { left: fitted.margin, top: rowTop }
+          : belowTextPlacement({
+              anchorX: fitted.margin,
+              width: fitted.right - fitted.margin,
+              inkLeft: own.left,
+              inkBottom: own.bottom,
+              previousRight: this.#previousBelowInkRight(state, i, rowTop),
+              rowTop,
+            });
+      const shift = placement.left - fitted.margin;
+      const span = { left: fitted.left + shift, right: fitted.right + shift };
+      const top =
+        shift === 0
+          ? placement.top
+          : Math.max(placement.top, this.#belowTextRowTop(state, i, span));
+      const clearTop = this.#clearOfPlacedBelow(top, height, span, [
+        ...carried,
+        ...placed,
+      ]);
+      placed.push({
+        voiceKey,
+        element: state.elements[i],
+        label,
+        margin: fitted.margin + shift,
+        ...span,
+        top: clearTop,
+        bottom: clearTop + height,
+      });
+    }
+    this.#placedBelowTexts = placed;
+  }
+
+  // The top (container Y) of the row below the stave a text over `span`
+  // takes: clear of the stave, of every other entry's ink and of the curves
+  // under it, and of the ink in later bars it runs on over. Its own entry's
+  // ink is #ownBelowInk.
+  #belowTextRowTop(
+    state: VoiceRenderState,
+    i: number,
+    span: { left: number; right: number }
+  ): number {
+    let bottom =
+      STAFF_Y_PADDING + STAFF_BOTTOM_LINE_Y - NOTE_HEAD_Y_OFFSET_CORRECTION;
+    const consider = (y: number | null): void => {
+      if (y !== null) {
+        bottom = Math.max(bottom, y);
+      }
+    };
+    for (const [otherKey, otherState] of this.#voiceRenderStates) {
+      for (const j of otherState.noteXPositions.keys()) {
+        if (otherState === state && j === i) {
+          continue;
+        }
+        consider(this.#inkTopUnderLabel(otherKey, otherState, j, span, false));
+      }
+    }
+    consider(this.#connectorTopUnderLabel(span, false));
+    consider(this.#techniqueTextRunOn?.get(state.elements[i])?.inkY ?? null);
+    return bottom + TECHNIQUE_TEXT_BELOW_GAP_PX;
+  }
+
+  // Entry i's own ink below the stave that a text at its head may end
+  // before: its heads and ledger lines there, a down-stem with its beam or
+  // tail, and the ties it starts. Null for a rest or with nothing below.
+  #ownBelowInk(
+    state: VoiceRenderState,
+    i: number
+  ): { left: number; bottom: number } | null {
+    const element = state.elements[i];
+    if (element.nodeName === MUSIC_REST_NODE) {
+      return null;
+    }
+    const staffYs = getStaffYs(
+      element,
+      state.noteStaffYCoords,
+      state.chordStaffYCoords
+    );
+    const x = state.noteXPositions.get(i) ?? 0;
+    const { headLeftX } = this.#voicePartGeometry(
+      element as NoteElementType | ChordElementType,
+      staffYs
+    );
+    const bottom = Math.max(
+      ...[
+        this.#entryInkY(state, i, false),
+        this.#tieReachY(state, i, false),
+      ].filter((y): y is number => y !== null)
+    );
+    const staffBottom =
+      STAFF_Y_PADDING + STAFF_BOTTOM_LINE_Y - NOTE_HEAD_Y_OFFSET_CORRECTION;
+    return bottom <= staffBottom
+      ? null
+      : {
+          left:
+            x +
+            headLeftX -
+            ledgerLineOverhangPx([...staffYs], state.stemDirections[i]),
+          bottom,
+        };
+  }
+
+  // The right edge (container px) of the nearest earlier entry, in any voice,
+  // whose ink reaches below `rowTop`; 0, the notes area's start, with none.
+  #previousBelowInkRight(
+    state: VoiceRenderState,
+    i: number,
+    rowTop: number
+  ): number {
+    const x = state.noteXPositions.get(i) ?? 0;
+    let right = 0;
+    for (const other of this.#voiceRenderStates.values()) {
+      for (const [j, otherX] of other.noteXPositions) {
+        if (otherX >= x || (other === state && j === i)) {
+          continue;
+        }
+        const element = other.elements[j];
+        const inkBottom =
+          element.nodeName === MUSIC_REST_NODE
+            ? this.#restInkY(other, j, false)
+            : this.#entryInkY(other, j, false);
+        if (inkBottom === null || inkBottom <= rowTop) {
+          continue;
+        }
+        right = Math.max(
+          right,
+          otherX +
+            (element.nodeName === MUSIC_REST_NODE
+              ? NOTE_SVG_WIDTH / 2 + REST_HALF_WIDTH_PX
+              : this.#voicePartGeometry(
+                  element as NoteElementType | ChordElementType,
+                  getStaffYs(
+                    element,
+                    other.noteStaffYCoords,
+                    other.chordStaffYCoords
+                  )
+                ).headRightX)
+        );
+      }
+    }
+    return right + TECHNIQUE_LABEL_GAP_PX;
+  }
+
+  // A text's top moved down past the placed texts it would overlap.
+  #clearOfPlacedBelow(
+    from: number,
+    height: number,
+    { left, right }: { left: number; right: number },
+    placed: readonly PlacedAboveStaffRect[]
+  ): number {
+    let top = from;
+    let moved = true;
+    while (moved) {
+      moved = false;
+      for (const other of placed) {
+        const overlapsAcross = other.left < right && left < other.right;
+        const overlapsDown =
+          top < other.bottom + TECHNIQUE_LABEL_GAP_PX &&
+          top + height + TECHNIQUE_LABEL_GAP_PX > other.top;
+        if (overlapsAcross && overlapsDown) {
+          top = other.bottom + TECHNIQUE_LABEL_GAP_PX;
+          moved = true;
+        }
+      }
+    }
+    return top;
+  }
+
+  // Where a technique text's margin stands: the head's left edge, the first
+  // grace head's with grace notes, or a rest's left edge.
+  #techniqueTextAnchorX(state: VoiceRenderState, i: number): number {
+    const x = state.noteXPositions.get(i) ?? 0;
+    if (state.elements[i].nodeName === MUSIC_REST_NODE) {
+      return x + NOTE_SVG_WIDTH / 2 - REST_HALF_WIDTH_PX;
+    }
+    const graceHeadX = state.firstGraceHeadXPositions.get(i);
+    return graceHeadX === undefined
+      ? x + trillSignLeftX(state.stemDirections[i])
+      : graceHeadX - GRACE_SCALE * NOTE_HEAD_RADIUS_PX;
+  }
+
+  // The margin of the next technique text on one side of this staff, in any
+  // voice, or null.
+  #nextTechniqueTextX(
+    state: VoiceRenderState,
+    i: number,
+    above: boolean
+  ): number | null {
+    const anchorX = this.#techniqueTextAnchorX(state, i);
+    let next: number | null = null;
+    for (const other of this.#voiceRenderStates.values()) {
+      other.elements.forEach((element, j) => {
+        if (
+          (other === state && j === i) ||
+          techniqueTextOf(element) === null ||
+          hasTechniqueTextBelow(element) === above
+        ) {
+          return;
+        }
+        const x = this.#techniqueTextAnchorX(other, j);
+        if (x > anchorX && (next === null || x < next)) {
+          next = x;
+        }
+      });
+    }
+    return next;
+  }
+
+  // A technique text's margin and extent: from its anchor, shifted left and
+  // then wrapped to stay inside the row (see TechniqueTextRunOn), or the notes
+  // area without a composition.
+  #techniqueTextSpan(
+    state: VoiceRenderState,
+    i: number,
+    unwrapped: TechniqueLabel,
+    above: boolean
+  ): { label: TechniqueLabel; margin: number; left: number; right: number } {
+    const anchorX = this.#techniqueTextAnchorX(state, i);
+    const runOn = this.#techniqueTextRunOn?.get(state.elements[i]);
+    const fit = (label: TechniqueLabel) => {
+      const width = techniqueLabelWidthPx(label);
+      return {
+        width,
+        ...techniqueTextSpan({
+          anchorX,
+          width,
+          minX: 0,
+          rowRight: Math.max(
+            this.#notesAreaEndX,
+            runOn?.maxRight ?? this.#notesAreaEndX
+          ),
+          nextTextX: this.#nextTechniqueTextX(state, i, above),
+          ownBarRight: this.#notesAreaEndX,
+        }),
+      };
+    };
+    let label = unwrapped;
+    let span = fit(label);
+    if (span.left + span.width > span.maxRight + 0.5) {
+      label = wrapTechniqueLabel(label, span.maxRight - span.left);
+      span = fit(label);
+    }
+    return {
+      label,
+      margin: span.left,
+      left: span.left - techniqueLabelHangPx(label),
+      right: span.left + span.width,
+    };
   }
 
   // A label's baseline clear of its own entry and of the ink under it: other
@@ -5234,6 +5600,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     span: { left: number; right: number }
   ): number {
     let baseline = this.#techniqueLabelBaselineY(voiceKey, state, i);
+    const runOnInkY =
+      label.kind === 'text'
+        ? this.#techniqueTextRunOn?.get(state.elements[i])?.inkY ?? null
+        : null;
+    if (runOnInkY !== null) {
+      baseline = Math.min(baseline, runOnInkY - TECHNIQUE_LABEL_GAP_PX);
+    }
     const connectorTop = this.#connectorTopUnderLabel(span);
     if (connectorTop !== null) {
       baseline = Math.min(baseline, connectorTop - TECHNIQUE_LABEL_GAP_PX);
@@ -5259,9 +5632,10 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   }
 
   // The top (container Y) of the slurs, ties and glissando lines under a
-  // label's span, or null with none. They are drawn after the labels, so these
+  // label's span (the bottom, for text below), or null with none. They are
+  // drawn after the labels, so these
   // are where they are expected; a line to another staff isn't.
-  #connectorTopUnderLabel(span: LabelSpan): number | null {
+  #connectorTopUnderLabel(span: LabelSpan, above = true): number | null {
     const tops: number[] = [];
     const consider = (top: number | null): void => {
       if (top !== null) {
@@ -5271,7 +5645,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     for (const state of this.#voiceRenderStates.values()) {
       for (const { startIndex, endIndex, y } of this.#slurReaches(
         state,
-        true
+        above
       )) {
         const slurOf = (index: number): ConnectorRole | null =>
           (state.elements[index] as NoteOrChordElementType).slur ?? null;
@@ -5282,24 +5656,25 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
             {
               from: {
                 x: openStart ? 0 : this.#headCenterX(state, startIndex),
-                y: this.#entryInkY(state, startIndex, true) ?? y,
+                y: this.#entryInkY(state, startIndex, above) ?? y,
               },
               to: {
                 x: openEnd
                   ? this.#notesAreaEndX
                   : this.#headCenterX(state, endIndex),
-                y: this.#entryInkY(state, endIndex, true) ?? y,
+                y: this.#entryInkY(state, endIndex, above) ?? y,
               },
               reachY: y,
               openStart,
               openEnd,
             },
-            span
+            span,
+            above
           )
         );
       }
       state.elements.forEach((element, i) => {
-        const y = this.#tieReachY(state, i, true);
+        const y = this.#tieReachY(state, i, above);
         if (y === null || (element as NoteOrChordElementType).tie !== 'start') {
           return;
         }
@@ -5318,9 +5693,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
     for (const { from, to, shape, hint } of this.#glissandoLines()) {
       const amplitude = shape === 'wave' ? GLISSANDO_WAVE_AMPLITUDE_PX : 0;
-      const lineTop = lineTopUnder(from, to, span);
-      consider(lineTop === null ? null : lineTop - amplitude);
-      if (hint !== null) {
+      const lineTop = lineTopUnder(from, to, span, above);
+      consider(
+        lineTop === null ? null : lineTop + (above ? -amplitude : amplitude)
+      );
+      if (hint !== null && above) {
         const box = lineLabelBox(
           from,
           to,
@@ -5332,7 +5709,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         );
       }
     }
-    return tops.length === 0 ? null : Math.min(...tops);
+    return outermostOrNull(tops, above);
   }
 
   // How far (container Y) entry i's ties are expected to reach toward one side:
@@ -5545,14 +5922,15 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     return x <= right && x + NOTE_SVG_WIDTH >= left;
   }
 
-  // The top (container Y) of what entry j draws under a label's span: its
-  // note, decorations, accidentals, grace notes and bend. Null with nothing
-  // there.
+  // The top (container Y) of what entry j draws under a label's span, or the
+  // bottom for text below: its note, decorations, accidentals, grace notes
+  // and bend. Null with nothing there.
   #inkTopUnderLabel(
     voiceKey: VoiceKey,
     state: VoiceRenderState,
     j: number,
-    span: { left: number; right: number }
+    span: { left: number; right: number },
+    above = true
   ): number | null {
     const tops: number[] = [];
     const consider = (
@@ -5576,25 +5954,31 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           left: x + NOTE_SVG_WIDTH / 2 - REST_HALF_WIDTH_PX,
           right: x + NOTE_SVG_WIDTH / 2 + REST_HALF_WIDTH_PX,
         },
-        this.#restInkY(state, j, true)
+        this.#restInkY(state, j, above)
       );
-      return tops.length === 0 ? null : Math.min(...tops);
+      return outermostOrNull(tops, above);
     }
     const { headLeftX, headRightX } = this.#voicePartGeometry(
       element as NoteElementType | ChordElementType,
       getStaffYs(element, state.noteStaffYCoords, state.chordStaffYCoords)
     );
     const heads = { left: x + headLeftX, right: x + headRightX };
-    consider(heads, this.#entryInkY(state, j, true));
-    consider(heads, this.#aboveStaffDecorationTopY(voiceKey, state, j));
+    consider(heads, this.#entryInkY(state, j, above));
+    consider(
+      heads,
+      above
+        ? this.#aboveStaffDecorationTopY(voiceKey, state, j)
+        : this.#belowTupletBottomY(state, j)
+    );
     const column = this.#accidentalColumn(state, j);
     for (const { accidental, headCenterY } of this.#shownAccidentals(
       state,
       j
     )) {
+      const extent = accidentalVerticalExtent(accidental);
       consider(
         column,
-        headCenterY - accidentalVerticalExtent(accidental).above
+        above ? headCenterY - extent.above : headCenterY + extent.below
       );
     }
     const graceRight = x + this.#graceShiftX(state, j);
@@ -5603,11 +5987,30 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         left: graceRight - this.#entryLeftwardExtent(element),
         right: graceRight,
       },
-      this.#graceInkY(state, j, true)
+      this.#graceInkY(state, j, above)
     );
-    const bendInk = this.#bendInk.get(element) ?? null;
-    consider(bendInk, bendInk?.top ?? null);
-    return tops.length === 0 ? null : Math.min(...tops);
+    if (above) {
+      const bendInk = this.#bendInk.get(element) ?? null;
+      consider(bendInk, bendInk?.top ?? null);
+    }
+    return outermostOrNull(tops, above);
+  }
+
+  // The bottom (container Y) of a tuplet bracket below the stave over entry
+  // i, or null.
+  #belowTupletBottomY(state: VoiceRenderState, i: number): number | null {
+    let bottom: number | null = null;
+    for (const group of state.tupletGroups) {
+      if (
+        group.indices.includes(i) &&
+        !this.#isTupletSuppressed(group) &&
+        !this.#tupletBracketAbove(state, group)
+      ) {
+        const y = this.#tupletGroupExtremeY(state, group, false);
+        bottom = bottom === null ? y : Math.max(bottom, y);
+      }
+    }
+    return bottom;
   }
 
   // How far (px) right of the room reserved for them an entry's grace notes
@@ -5966,6 +6369,29 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     });
   }
 
+  // A marking's centre moved left so its `dynamic-text` ends by the row's
+  // end (the notes area's without a composition), but not past the notes
+  // area's start.
+  #dynamicCenterClearOfRowEnd(
+    centerX: number,
+    marking: DynamicMarking,
+    bracketed: boolean,
+    text: string | null
+  ): number {
+    if (text === null) {
+      return centerX;
+    }
+    const halfWidth = dynamicTextHalfWidth(marking, bracketed);
+    const limit = Math.max(
+      this.#notesAreaEndX,
+      this.#rowRightX ?? this.#notesAreaEndX
+    );
+    const overflow = centerX + halfWidth + dynamicTextTrailingPx(text) - limit;
+    return overflow > 0
+      ? Math.max(Math.min(centerX, halfWidth), centerX - overflow)
+      : centerX;
+  }
+
   // Entry i's swell, from its start to just before the next entry (or the
   // end of the notes area), clear of both entries' dynamics. Null when it
   // has no room.
@@ -5994,6 +6420,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
             HAIRPIN_DYNAMIC_GAP_PX,
       startMarking: element.dynamic,
       startBracketed: element.dynamicReminder,
+      startDynamicText: element.dynamicText ?? null,
       startTextCenterX: x + NOTE_SVG_WIDTH / 2 + entryCenterShiftPx(element),
       endMarking: nextDynamic,
       endBracketed:
@@ -6253,6 +6680,17 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     return headCenterY + sign * reach;
   }
 
+  // Topmost Y (container) a technique text of an earlier bar reaches over
+  // this staff. Null with none.
+  #carriedTextTopY(): number | null {
+    return outermostOrNull(
+      this.#carriedTechniqueTexts
+        .filter(({ above }) => above)
+        .map(({ top }) => top),
+      true
+    );
+  }
+
   // Topmost Y (container) any of this voice's technique labels reaches. Null
   // without labels.
   #techniqueLabelTopY(voiceKey: VoiceKey): number | null {
@@ -6297,16 +6735,33 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         markingSide !== 'measure'
       ) {
         const noteX = state.noteXPositions.get(i) ?? 0;
-        const centerX =
-          noteX + NOTE_SVG_WIDTH / 2 + entryCenterShiftPx(element);
+        const bracketed = noteOrChord.dynamicReminder;
+        const text = noteOrChord.dynamicText ?? null;
+        const centerX = this.#dynamicCenterClearOfRowEnd(
+          noteX + NOTE_SVG_WIDTH / 2 + entryCenterShiftPx(element),
+          noteOrChord.dynamic,
+          bracketed,
+          text
+        );
         container.appendChild(
           createDynamicMarkingSvg(
             noteOrChord.dynamic,
             centerX,
             baselineFor(markingSide),
-            { bracketed: noteOrChord.dynamicReminder }
+            { bracketed }
           )
         );
+        if (text !== null) {
+          container.appendChild(
+            createDynamicTextSvg(
+              text,
+              noteOrChord.dynamic,
+              centerX,
+              baselineFor(markingSide),
+              { bracketed }
+            )
+          );
+        }
       }
 
       // A grace-dynamic is independent of the host's `dynamic` (both can
@@ -7287,9 +7742,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
     }
 
-    const techniqueLabelTop = this.#techniqueLabelTopY(voiceKey);
-    if (techniqueLabelTop !== null && techniqueLabelTop < 0) {
-      budget = Math.max(budget, Math.ceil(-techniqueLabelTop) + 2);
+    for (const labelTop of [
+      this.#techniqueLabelTopY(voiceKey),
+      this.#carriedTextTopY(),
+    ]) {
+      if (labelTop !== null && labelTop < 0) {
+        budget = Math.max(budget, Math.ceil(-labelTop) + 2);
+      }
     }
 
     const breathMarkTop = this.#breathMarkTopY(voiceKey, state);
@@ -7363,6 +7822,17 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // lower letter isn't counted.
   #estimateBelowStaffBudget(): number {
     let budget = 0;
+    for (const { bottom } of [
+      ...this.#placedBelowTexts,
+      ...this.#carriedTechniqueTexts.filter(({ above }) => !above),
+    ]) {
+      if (bottom > STAFF_TRANSCRIPTION_HEIGHT) {
+        budget = Math.max(
+          budget,
+          Math.ceil(bottom - STAFF_TRANSCRIPTION_HEIGHT) + 2
+        );
+      }
+    }
     for (const [voiceKey, state] of this.#voiceRenderStates) {
       budget = Math.max(budget, this.#tupletVerticalOverflow(state, false));
       budget = Math.max(
@@ -7640,6 +8110,10 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         }
       }
     }
+    const carriedTop = this.#carriedTextTopY();
+    if (carriedTop !== null) {
+      consider(carriedTop);
+    }
 
     if (this.#dynamicsSidesInUse(voiceKey, state).has('above')) {
       consider(
@@ -7667,6 +8141,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     const arrowBottom = this.#arrowAndBendReachY(state, false);
     if (arrowBottom !== null) {
       bottom = bottom === null ? arrowBottom : Math.max(bottom, arrowBottom);
+    }
+
+    for (const text of [
+      ...this.#placedBelowTexts,
+      ...this.#carriedTechniqueTexts.filter(({ above }) => !above),
+    ]) {
+      bottom = bottom === null ? text.bottom : Math.max(bottom, text.bottom);
     }
 
     if (this.#dynamicsSidesInUse(voiceKey, state).has('below')) {
@@ -7891,6 +8372,167 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     this.#renderNotes();
   }
 
+  // Container px to client px and back, through the technique-label layer.
+  #labelMatrix(): { a: number; d: number; e: number; f: number } {
+    const container = this.#techniqueLabelContainers.values().next().value;
+    const matrix = container?.getScreenCTM?.();
+    if (matrix) {
+      return matrix;
+    }
+    const rect = this.transcribeContainer.getBoundingClientRect();
+    return { a: 1, d: 1, e: rect.left + this.describeEndX, f: rect.top };
+  }
+
+  #rectToClient<T extends PlacedAboveStaffRect>(rect: T): T {
+    const { a, d, e, f } = this.#labelMatrix();
+    return {
+      ...rect,
+      left: a * rect.left + e,
+      right: a * rect.right + e,
+      top: d * rect.top + f,
+      bottom: d * rect.bottom + f,
+    };
+  }
+
+  #rectToLocal<T extends PlacedAboveStaffRect>(rect: T): T {
+    const { a, d, e, f } = this.#labelMatrix();
+    return {
+      ...rect,
+      left: (rect.left - e) / a,
+      right: (rect.right - e) / a,
+      top: (rect.top - f) / d,
+      bottom: (rect.bottom - f) / d,
+    };
+  }
+
+  /**
+   * This staff's technique texts as placed (client px), for the ancestor
+   * <music-composition>'s run-on pass.
+   */
+  techniqueTextPlacements(): TechniqueTextPlacement[] {
+    return [
+      ...this.#placedTechniqueLabels
+        .filter(({ label }) => label.kind === 'text')
+        .map((placed) => ({ ...placed, above: true })),
+      ...this.#placedBelowTexts.map((placed) => ({ ...placed, above: false })),
+    ].map(({ element, above, left, right, top, bottom }) =>
+      this.#rectToClient({ element, above, left, right, top, bottom })
+    );
+  }
+
+  /** The right end (client px) of this staff's notes area. */
+  get notesAreaClientRight(): number {
+    const { a, e } = this.#labelMatrix();
+    return a * this.#notesAreaEndX + e;
+  }
+
+  /**
+   * The outermost ink (client Y) toward one side under a client span, or
+   * null with none: what a technique text of an earlier bar clears.
+   */
+  techniqueTextInkY(
+    span: { left: number; right: number },
+    above: boolean
+  ): number | null {
+    const local = this.#rectToLocal({ ...span, top: 0, bottom: 0 });
+    const ys: number[] = [];
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      for (const j of state.noteXPositions.keys()) {
+        const y = this.#inkTopUnderLabel(voiceKey, state, j, local, above);
+        if (y !== null) {
+          ys.push(y);
+        }
+      }
+    }
+    const connector = this.#connectorTopUnderLabel(local, above);
+    if (connector !== null) {
+      ys.push(connector);
+    }
+    const y = outermostOrNull(ys, above);
+    if (y === null) {
+      return null;
+    }
+    const { d, f } = this.#labelMatrix();
+    return d * y + f;
+  }
+
+  /**
+   * Called by the ancestor <music-composition> (client px): how far each
+   * technique text may run on over later bars of its row and the ink under it
+   * there, the texts of earlier bars running on over this staff, and the
+   * row's right end, which a `dynamic-text` runs on to. Compared by content in
+   * local px; re-lays out and returns true on a change.
+   */
+  applyTechniqueTextRunOn(
+    runOn: ReadonlyMap<Element, TechniqueTextRunOn> | null,
+    carried: readonly CarriedTechniqueText[],
+    rowRight: number | null = null
+  ): boolean {
+    const { a, d, e, f } = this.#labelMatrix();
+    const localRowRight = rowRight === null ? null : (rowRight - e) / a;
+    const localRunOn =
+      runOn === null || runOn.size === 0
+        ? null
+        : new Map(
+            [...runOn].map(([element, { maxRight, inkY }]) => [
+              element,
+              {
+                maxRight: (maxRight - e) / a,
+                inkY: inkY === null ? null : (inkY - f) / d,
+              },
+            ])
+          );
+    const localCarried = carried.map((rect) => this.#rectToLocal(rect));
+    const near = (x: number | null, y: number | null): boolean =>
+      x === null || y === null ? x === y : Math.abs(x - y) < 0.5;
+    const current = this.#techniqueTextRunOn;
+    const sameRunOn =
+      (current?.size ?? 0) === (localRunOn?.size ?? 0) &&
+      [...(current ?? [])].every(([element, entry]) => {
+        const next = localRunOn?.get(element);
+        return (
+          next !== undefined &&
+          near(next.maxRight, entry.maxRight) &&
+          near(next.inkY, entry.inkY)
+        );
+      });
+    const sameCarried =
+      this.#carriedTechniqueTexts.length === localCarried.length &&
+      this.#carriedTechniqueTexts.every(
+        (rect, k) =>
+          rect.above === localCarried[k].above &&
+          (['left', 'right', 'top', 'bottom'] as const).every((edge) =>
+            near(rect[edge], localCarried[k][edge])
+          )
+      );
+    // The row's end only moves a `dynamic-text`, so a staff with none keeps
+    // it without re-laying out.
+    const rowRightMatters =
+      !near(localRowRight, this.#rowRightX) && this.#hasDynamicText();
+    this.#rowRightX = localRowRight;
+    if (sameRunOn && sameCarried && !rowRightMatters) {
+      return false;
+    }
+    this.#techniqueTextRunOn = localRunOn;
+    this.#carriedTechniqueTexts = localCarried;
+    this.#renderNotes();
+    return true;
+  }
+
+  #hasDynamicText(): boolean {
+    return [...this.#voiceRenderStates.values()].some((state) =>
+      state.elements.some(
+        (element) =>
+          element.nodeName !== MUSIC_REST_NODE &&
+          ((element as NoteOrChordElementType).dynamicText ?? null) !== null
+      )
+    );
+  }
+
+  protected override get borrowedInkBands(): readonly VerticalBand[] {
+    return this.#carriedTechniqueTexts.map((rect) => this.#rectToClient(rect));
+  }
+
   #dynamicsLocalToClientY(voiceKey: VoiceKey, y: number): number {
     const matrix = this.#dynamicsContainers.get(voiceKey)?.getScreenCTM?.();
     if (matrix) {
@@ -7984,13 +8626,21 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   #dynamicsBaselineFor(state: VoiceRenderState, above: boolean): number {
     return dynamicsRowY({
       above,
-      inkYs: state.elements.flatMap((_, i) =>
-        [
-          this.#entryInkY(state, i, above),
-          this.#restInkY(state, i, above),
-          ...this.#entryLeftInkYs(state, i, above),
-        ].filter((y): y is number => y !== null)
-      ),
+      inkYs: [
+        ...state.elements.flatMap((_, i) =>
+          [
+            this.#entryInkY(state, i, above),
+            this.#restInkY(state, i, above),
+            ...this.#entryLeftInkYs(state, i, above),
+          ].filter((y): y is number => y !== null)
+        ),
+        ...(above
+          ? []
+          : [
+              ...this.#placedBelowTexts,
+              ...this.#carriedTechniqueTexts.filter((text) => !text.above),
+            ].map(({ bottom }) => bottom)),
+      ],
       curveYs: [
         this.#slurReachY(state, above),
         this.#tupletExtremeY(state, above, true),

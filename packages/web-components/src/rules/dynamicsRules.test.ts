@@ -16,6 +16,9 @@ import {
   MUSIC_REST_NODE,
 } from '../utils/consts';
 import {
+  DYNAMIC_TEXT_FONT_SIZE_PX,
+  DYNAMIC_TEXT_GAP_PX,
+  DYNAMIC_TEXT_PUNCTUATION_GAP_PX,
   DYNAMICS_ABOVE_BASELINE_Y,
   DYNAMICS_BASELINE_Y,
   DYNAMICS_CHAR_WIDTH_PX,
@@ -27,6 +30,7 @@ import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
 import {
   computeHairpinXSpan,
   dynamicsRowY,
+  dynamicTextTrailingPx,
   pairHairpins,
   pairHairpinsWithLeftovers,
   pairSharedHairpinsAcrossStaves,
@@ -37,6 +41,7 @@ import {
   swellConflicts,
   type PositionedHairpinEndpoint,
 } from './dynamicsRules';
+import { estimateTextWidthPx } from './techniqueTextRules';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -476,6 +481,26 @@ describe('computeHairpinXSpan', () => {
     });
   });
 
+  it("starts past the start dynamic's text", () => {
+    const input = {
+      rawStartX: 10,
+      rawEndX: 400,
+      startTextCenterX: 26,
+      endTextCenterX: 384,
+      startMarking: 'p' as const,
+      endMarking: null,
+    };
+    const plain = computeHairpinXSpan(input);
+    const withText = computeHairpinXSpan({
+      ...input,
+      startDynamicText: 'sub.',
+    });
+    expect(withText.startX - plain.startX).toBeCloseTo(
+      dynamicTextTrailingPx('sub.')
+    );
+    expect(withText.endX).toBe(plain.endX);
+  });
+
   it('falls back to the raw ends and flags a collision when the shrunk ends cross', () => {
     expect(
       computeHairpinXSpan({
@@ -778,5 +803,24 @@ describe('dynamicsRowY', () => {
     expect(
       dynamicsRowY({ above: false, inkYs: [], curveYs: [90] })
     ).toBeLessThan(dynamicsRowY({ above: false, inkYs: [90], curveYs: [] }));
+  });
+});
+
+describe('dynamicTextTrailingPx', () => {
+  it('is the gap and the italic text, nothing without text', () => {
+    expect(dynamicTextTrailingPx(null)).toBe(0);
+    expect(dynamicTextTrailingPx('sub.')).toBeCloseTo(
+      DYNAMIC_TEXT_GAP_PX +
+        estimateTextWidthPx('sub.', DYNAMIC_TEXT_FONT_SIZE_PX)
+    );
+  });
+
+  it('leaves a smaller gap before a comma or bracket', () => {
+    for (const text of [', ma distinto', '(sotto voce)', '[sic]']) {
+      expect(dynamicTextTrailingPx(text)).toBeCloseTo(
+        DYNAMIC_TEXT_PUNCTUATION_GAP_PX +
+          estimateTextWidthPx(text, DYNAMIC_TEXT_FONT_SIZE_PX)
+      );
+    }
   });
 });

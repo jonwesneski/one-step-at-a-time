@@ -35,6 +35,8 @@ import type {
   StemDirection,
   StemMark,
   StressType,
+  TextPlacement,
+  TextStyle,
   TieStyle,
   TimeSignature,
   TremoloBeamAttach,
@@ -480,6 +482,10 @@ export const ACCIDENTAL_REMINDERS: AccidentalReminder[] = [
   'bracketed',
   'plain',
 ];
+
+export const TEXT_PLACEMENTS: TextPlacement[] = ['above', 'below'];
+
+export const TEXT_STYLES: TextStyle[] = ['normal', 'italic'];
 
 export const TREMOLO_BEAM_ATTACHES: TremoloBeamAttach[] = ['all', 'outer'];
 

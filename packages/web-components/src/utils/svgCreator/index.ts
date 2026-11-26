@@ -41,6 +41,7 @@ export { createDoubleStemmedBeamPolygon } from './doubleStemmedBeams';
 export {
   createAngledHairpinSvg,
   createDynamicMarkingSvg,
+  createDynamicTextSvg,
   createHairpinSvg,
   createSwellSvg,
   createVerticalHairpinSvg,

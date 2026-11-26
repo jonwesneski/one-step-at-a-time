@@ -37,6 +37,8 @@ import type {
   StemDirection,
   StemMark,
   StressType,
+  TextPlacement,
+  TextStyle,
   TieStyle,
   TimeSignature,
   TremoloBeamAttach,
@@ -181,6 +183,12 @@ export interface INoteElement {
   dynamicShared: boolean;
   /** Draws `dynamic` in brackets, as a reminder (e.g. for a repeat's return). */
   dynamicReminder: boolean;
+  /** Text after `dynamic`, on its baseline. */
+  dynamicText: string | null;
+  /** Technique text over (or under) this entry, `|` starting a new line. */
+  techniqueText: string | null;
+  techniqueTextPlacement: TextPlacement;
+  techniqueTextStyle: TextStyle;
   /**
    * Shows the accidental in force as a reminder, in parentheses or plain.
    * Null when unset.
@@ -428,6 +436,12 @@ export interface IChordElement {
   dynamicShared: boolean;
   /** Draws `dynamic` in brackets, as a reminder (e.g. for a repeat's return). */
   dynamicReminder: boolean;
+  /** Text after `dynamic`, on its baseline. */
+  dynamicText: string | null;
+  /** Technique text over (or under) this entry, `|` starting a new line. */
+  techniqueText: string | null;
+  techniqueTextPlacement: TextPlacement;
+  techniqueTextStyle: TextStyle;
   /**
    * Shows the accidental in force as a reminder, in parentheses or plain.
    * Null when unset.
@@ -597,6 +611,10 @@ export interface IRestElement {
   // ancestor <music-measure> from the rest's position among its group's
   // members, re-derived on every render rather than persisted here.
   restStaffSide: RestStaffSide | null;
+  /** Technique text over (or under) this rest, `|` starting a new line. */
+  techniqueText: string | null;
+  techniqueTextPlacement: TextPlacement;
+  techniqueTextStyle: TextStyle;
 }
 
 export interface IClefElement {

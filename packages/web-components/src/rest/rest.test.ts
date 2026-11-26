@@ -251,3 +251,49 @@ describe('augmentation dots', () => {
     expect(glyph(dotted)).toBe(glyph(plain));
   });
 });
+
+describe('technique-text on a rest', () => {
+  it('draws its text standalone, above or below, upright or italic', () => {
+    const rest = document.createElement(MUSIC_REST) as RestElementType;
+    rest.setAttribute('technique-text', 'spoken');
+    document.body.appendChild(rest);
+    const textOf = () => rest.shadowRoot!.querySelector('.technique-text');
+    expect(textOf()?.textContent).toBe('spoken');
+    const aboveY = Number(textOf()?.getAttribute('y'));
+    rest.techniqueTextPlacement = 'below';
+    rest.techniqueTextStyle = 'italic';
+    expect(Number(textOf()?.getAttribute('y'))).toBeGreaterThan(aboveY);
+    expect(textOf()?.getAttribute('font-style')).toBe('italic');
+  });
+
+  it('leaves its text to the staff, which draws it on a hidden rest too', () => {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    document.body.appendChild(staff);
+    const rest = document.createElement(MUSIC_REST) as RestElementType;
+    rest.setAttribute('duration', 'whole');
+    rest.setAttribute('hidden', '');
+    rest.setAttribute('technique-text', 'hum');
+    staff.appendChild(rest);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => [rest];
+    slot.dispatchEvent(new Event('slotchange'));
+    expect(rest.shadowRoot!.querySelector('.technique-text')).toBeNull();
+    expect(
+      staff.shadowRoot.querySelector(
+        '.technique-labels-container .technique-text'
+      )?.textContent
+    ).toBe('hum');
+  });
+
+  it('asks the staff to re-lay out when its text changes', () => {
+    const rest = document.createElement(MUSIC_REST) as RestElementType;
+    document.body.appendChild(rest);
+    const changes = jest.fn();
+    document.body.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, changes);
+    rest.setAttribute('technique-text', 'hum');
+    rest.setAttribute('technique-text-placement', 'below');
+    expect(changes).toHaveBeenCalledTimes(2);
+    document.body.removeEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, changes);
+  });
+});

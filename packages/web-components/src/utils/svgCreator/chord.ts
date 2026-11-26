@@ -96,7 +96,11 @@ import {
   type NoteProps,
 } from './note';
 import { createStemCrossSvg } from './stemMark';
-import { appendTechniqueLabels, techniqueLabels } from './techniqueLabel';
+import {
+  appendTechniqueLabels,
+  appendTechniqueTextBelow,
+  techniqueLabels,
+} from './techniqueLabel';
 import { createTremoloNumeral, createTremoloStrokes } from './tremolo';
 import { createTrillSignSvg } from './trill';
 
@@ -168,6 +172,8 @@ export const createChordSvg = ({
   articulationRepeatCount = 1,
   tremoloLabel = null,
   glissandoLabel = null,
+  techniqueText = null,
+  techniqueTextBelow = false,
   breathMark = null,
   bends = [],
 }: ChordProps): [SVGElement | SVGGElement, number] => {
@@ -295,6 +301,25 @@ export const createChordSvg = ({
   if (stemUp && !stemless && !noStem) {
     inkTopY = Math.min(inkTopY, stemOuterY);
   }
+  // Lowest ink (px), for a standalone text below.
+  const bottomHeadCenterY = chordToneHeadCenterY(
+    Math.max(...staffYCoordinates),
+    stemUp,
+    base,
+    noFlags
+  );
+  let inkBottomY =
+    bottomHeadCenterY +
+    noteHeadGeometry(stemUp, base, noFlags).halfHeight * NOTE_SCALE;
+  if (stemUp) {
+    inkBottomY = Math.max(
+      inkBottomY,
+      bottomHeadCenterY +
+        articulationStackDepth(articulation, stress) * NOTE_SCALE
+    );
+  } else if (!stemless && !noStem) {
+    inkBottomY = Math.max(inkBottomY, stemOuterY);
+  }
   if ((tremoloStrokeCount > 0 || stemCross) && (stemless || !noStem)) {
     const { centerYs, crossCenterY } = resolveStrokePlacement({
       headY: nearestHeadY,
@@ -344,12 +369,20 @@ export const createChordSvg = ({
     }
   }
   const labelHead = noteHeadGeometry(stemUp, base, noFlags);
+  const labelLeftX = (labelHead.cx - labelHead.halfWidth) * NOTE_SCALE;
   appendTechniqueLabels(
     svg,
-    (labelHead.cx - labelHead.halfWidth) * NOTE_SCALE,
+    labelLeftX,
     inkTopY,
-    techniqueLabels(tremoloLabel, glissandoLabel)
+    techniqueLabels(
+      tremoloLabel,
+      glissandoLabel,
+      techniqueTextBelow ? null : techniqueText
+    )
   );
+  if (techniqueTextBelow && techniqueText !== null) {
+    appendTechniqueTextBelow(svg, labelLeftX, inkBottomY, techniqueText);
+  }
 
   const dotLayout = chordAugmentationDotLayout({
     duration,

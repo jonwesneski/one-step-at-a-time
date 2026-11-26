@@ -11,9 +11,12 @@ import {
 import {
   appendTechniqueLabels,
   createTechniqueLabel,
+  techniqueLabelHangPx,
   techniqueLabelHeightPx,
   techniqueLabels,
   techniqueLabelWidthPx,
+  techniqueTextLabel,
+  textWidthPx,
   wrapTechniqueLabel,
 } from './techniqueLabel';
 
@@ -111,5 +114,46 @@ describe('wrapTechniqueLabel', () => {
     ]);
     const [tremolo] = techniqueLabels('non-trem', null);
     expect(wrapTechniqueLabel(tremolo, 10)).toBe(tremolo);
+  });
+});
+
+describe('technique text', () => {
+  it('stacks above a glissando label, upright unless italic', () => {
+    const text = techniqueTextLabel('hum', 'normal');
+    expect(techniqueLabels(null, 'lip', text).map(({ kind }) => kind)).toEqual([
+      'glissando',
+      'text',
+    ]);
+    expect(techniqueTextLabel(' | ', 'normal')).toBeNull();
+    const svg = createTechniqueLabel(
+      0,
+      0,
+      techniqueTextLabel('legato', 'italic')!
+    );
+    expect(svg.classList.contains('technique-text')).toBe(true);
+    expect(svg.getAttribute('font-style')).toBe('italic');
+  });
+
+  it('hangs an opening bracket left of the margin', () => {
+    const label = techniqueTextLabel(
+      'blow air|(pitches sound higher)',
+      'normal'
+    )!;
+    const [first, second] = Array.from(
+      createTechniqueLabel(40, 50, label).querySelectorAll('tspan')
+    );
+    expect(Number(first.getAttribute('x'))).toBe(40);
+    expect(Number(second.getAttribute('x'))).toBeCloseTo(40 - textWidthPx('('));
+    expect(techniqueLabelHangPx(label)).toBeCloseTo(textWidthPx('('));
+    expect(techniqueLabelWidthPx(label)).toBeCloseTo(
+      textWidthPx('(pitches sound higher)') - textWidthPx('(')
+    );
+  });
+
+  it('wraps at spaces', () => {
+    const label = techniqueTextLabel('one two three four', 'normal')!;
+    expect(
+      wrapTechniqueLabel(label, textWidthPx('three four') + 1).lines
+    ).toEqual(['one two', 'three four']);
   });
 });

@@ -88,9 +88,9 @@ function hasQuarterTone(element: NoteOrChordElementType): boolean {
 
 /**
  * Combine-eligible only when none of these is set: the synthetic chord
- * doesn't copy them, so they'd vanish (a reminder on a tone
- * included). A non-normal notehead or a quarter-tone is excluded too, since
- * merged tones dedupe by pitch.
+ * doesn't copy them, so they'd vanish (a reminder on a tone or a technique
+ * text included). A non-normal notehead or a quarter-tone is excluded too,
+ * since merged tones dedupe by pitch.
  */
 function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
   if (voice.tupletsByIndex.has(index)) {
@@ -119,6 +119,7 @@ function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
     element.trillFinish === null &&
     element.glissando === null &&
     (element.glissandoLabel ?? null) === null &&
+    (element.techniqueText ?? null) === null &&
     !hasBend(element) &&
     element.stress === null &&
     !element.dynamicShared &&
@@ -139,6 +140,7 @@ function combineKey(element: NoteOrChordElementType): string {
     element.crescendo,
     element.decrescendo,
     element.dynamicReminder,
+    element.dynamicText ?? null,
     element.tremolo ?? null,
     element.tremoloTuplet ?? null,
     element.tremoloLabel ?? null,

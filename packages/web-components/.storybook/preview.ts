@@ -47,6 +47,7 @@ const preview: Preview = {
             'Clef Changes',
             'Key Changes',
             'Quarter-Tones',
+            'Technique Text',
             'Repeats',
             'Beams',
             'Voices',

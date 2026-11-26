@@ -125,6 +125,7 @@ import {
   createBracketSvg,
   createDoubleStemmedBeamPolygon,
   createDynamicMarkingSvg,
+  createDynamicTextSvg,
   createEndingSegmentSvg,
   createHairpinSvg,
   createSharedStemLine,
@@ -267,6 +268,7 @@ type MeasureDynamicsPlan = {
     centerX: number;
     y: number;
     bracketed?: boolean;
+    text?: string | null;
   }[];
 };
 
@@ -1695,6 +1697,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             bracketed: marking.bracketed,
           })
         );
+        if (marking.text) {
+          overlay.appendChild(
+            createDynamicTextSvg(
+              marking.text,
+              marking.marking,
+              marking.centerX,
+              marking.y,
+              { bracketed: marking.bracketed }
+            )
+          );
+        }
       }
       const rect = this.getBoundingClientRect();
       const [overflow] = computeBandOverflow(
@@ -1798,7 +1811,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           stems,
           gap,
           awayDirection,
-          bracketed
+          bracketed,
+          element.dynamicText ?? null
         );
       };
       const leftX = (element: NoteOrChordElementType) =>
@@ -1812,6 +1826,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           ? {
               marking: start.dynamic,
               bracketed: start.dynamicReminder,
+              text: start.dynamicText ?? null,
               centerX: textCenterX(start, start.dynamic, -1, gap),
             }
           : null;
@@ -1819,6 +1834,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           ? {
               marking: end.dynamic,
               bracketed: end.dynamicReminder,
+              text: end.dynamicText ?? null,
               centerX: textCenterX(end, end.dynamic, 1, gap),
             }
           : null;
@@ -1831,6 +1847,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           endMarking: endText?.marking ?? null,
           startBracketed: startText?.bracketed,
           endBracketed: endText?.bracketed,
+          startDynamicText: startText?.text ?? null,
         });
         return { startX: span.startX, endX: span.endX, startText, endText };
       };
@@ -1862,7 +1879,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
               text.marking,
               text.centerX,
               y,
-              text.bracketed
+              text.bracketed,
+              text.text ?? null
             )
           );
         }
@@ -1980,6 +1998,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             ? {
                 marking: element.dynamic,
                 bracketed: element.dynamicReminder,
+                text: element.dynamicText ?? null,
                 centerX: textCenterX(element, element.dynamic, -1, gap),
               }
             : null;
@@ -1988,6 +2007,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             rawEndX: swell.rawEndClientX - measureRect.left,
             startMarking: startText?.marking ?? null,
             startBracketed: startText?.bracketed,
+            startDynamicText: startText?.text ?? null,
             startTextCenterX: startText?.centerX ?? 0,
             endMarking: null,
             endTextCenterX: 0,
@@ -2081,6 +2101,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             : {
                 marking: element.dynamic,
                 bracketed: element.dynamicReminder,
+                text: element.dynamicText ?? null,
                 centerX: textCenterX(element, element.dynamic, direction, gap),
               };
         // Each chain is placed as one; `handOver` and `moveOutside` set the
@@ -2156,6 +2177,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             rawEndX: swell.rawEndClientX - measureRect.left,
             startMarking: startText?.marking ?? null,
             startBracketed: startText?.bracketed,
+            startDynamicText: startText?.text ?? null,
             startTextCenterX: startText?.centerX ?? 0,
             endMarking: null,
             endTextCenterX: 0,
@@ -2287,6 +2309,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           const text = {
             marking: element.dynamic,
             bracketed: element.dynamicReminder,
+            text: element.dynamicText ?? null,
             centerX,
           };
           const y =

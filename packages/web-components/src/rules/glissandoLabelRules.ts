@@ -46,11 +46,15 @@ export function resolveGlissandoLabel(
 
 export type LabelSpan = { left: number; right: number };
 
-/** The top of a line where it passes under a label, or null where it doesn't. */
+/**
+ * The top of a line where it passes under a label, or its bottom for a label
+ * below (`above` false); null where it doesn't.
+ */
 export function lineTopUnder(
   from: LinePoint,
   to: LinePoint,
-  { left, right }: LabelSpan
+  { left, right }: LabelSpan,
+  above = true
 ): number | null {
   const start = Math.max(left, from.x);
   const end = Math.min(right, to.x);
@@ -61,14 +65,17 @@ export function lineTopUnder(
     to.x === from.x
       ? Math.min(from.y, to.y)
       : from.y + ((to.y - from.y) * (x - from.x)) / (to.x - from.x);
-  return Math.min(yAt(start), yAt(end));
+  return above
+    ? Math.min(yAt(start), yAt(end))
+    : Math.max(yAt(start), yAt(end));
 }
 
 // A slur bulges a little more at its ends than a parabola.
 const ARC_FULLNESS = 1.25;
 
 /**
- * The top of an arc where it passes under a label, or null where it doesn't:
+ * The top of an arc where it passes under a label (its bottom for a label
+ * below, `above` false), or null where it doesn't:
  * a parabola between its ends that reaches `reachY`. An end the arc only
  * passes (it carries on into another bar) is already at full height.
  */
@@ -86,9 +93,10 @@ export function arcTopUnder(
     openStart: boolean;
     openEnd: boolean;
   },
-  span: LabelSpan
+  span: LabelSpan,
+  above = true
 ): number | null {
-  const chordTop = lineTopUnder(from, to, span);
+  const chordTop = lineTopUnder(from, to, span, above);
   if (chordTop === null) {
     return null;
   }

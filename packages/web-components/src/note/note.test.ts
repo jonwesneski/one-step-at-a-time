@@ -3360,3 +3360,92 @@ describe('unpitched, stem-mark and plain reminders', () => {
     expect(inStaff.shadowRoot!.querySelector('.stem-cross')).not.toBeNull();
   });
 });
+
+describe('technique-text and dynamic-text', () => {
+  const textOf = (note: Element): Element | null =>
+    note.shadowRoot!.querySelector('.technique-text');
+
+  it('reads above and upright by default; parses placement and style', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    expect(note.techniqueText).toBeNull();
+    expect(note.techniqueTextPlacement).toBe('above');
+    expect(note.techniqueTextStyle).toBe('normal');
+    note.techniqueText = 'hum';
+    note.techniqueTextPlacement = 'below';
+    note.techniqueTextStyle = 'italic';
+    expect(note.getAttribute('technique-text')).toBe('hum');
+    expect(note.techniqueTextPlacement).toBe('below');
+    expect(note.techniqueTextStyle).toBe('italic');
+    note.setAttribute('dynamic-text', '  ');
+    expect(note.dynamicText).toBeNull();
+    note.dynamicText = ', ma distinto';
+    expect(note.dynamicText).toBe(', ma distinto');
+  });
+
+  it('warns about an unknown placement or style and draws the default', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('technique-text-placement', 'left');
+    note.setAttribute('technique-text-style', 'bold');
+    note.setAttribute('technique-text', ' | ');
+    expect(note.techniqueTextPlacement).toBe('above');
+    expect(note.techniqueTextStyle).toBe('normal');
+    expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
+      expect.stringContaining('above or below'),
+      expect.stringContaining('normal or italic'),
+      expect.stringContaining('technique-text is empty'),
+    ]);
+    warn.mockRestore();
+  });
+
+  it('draws its text standalone, above or below its own ink', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('note', 'F');
+    note.setAttribute('octave', '5');
+    note.setAttribute('technique-text', 'key slaps|(without air)');
+    document.body.appendChild(note);
+    const above = textOf(note)!;
+    expect(
+      Array.from(above.querySelectorAll('tspan'), (span) => span.textContent)
+    ).toEqual(['key slaps', '(without air)']);
+    const [first, second] = Array.from(above.querySelectorAll('tspan'));
+    expect(Number(second.getAttribute('x'))).toBeLessThan(
+      Number(first.getAttribute('x'))
+    );
+    const aboveY = Number(above.getAttribute('y'));
+    note.setAttribute('technique-text-placement', 'below');
+    note.setAttribute('technique-text-style', 'italic');
+    const below = textOf(note)!;
+    expect(Number(below.getAttribute('y'))).toBeGreaterThan(aboveY);
+    expect(below.getAttribute('font-style')).toBe('italic');
+  });
+
+  it('leaves its text to the staff', () => {
+    const staff = makeStaff();
+    const note = renderNote(staff, 'C', 5);
+    note.setAttribute('technique-text', 'hum');
+    expect(textOf(note)).toBeNull();
+    expect(
+      staff.shadowRoot!.querySelector(
+        '.technique-labels-container .technique-text'
+      )?.textContent
+    ).toBe('hum');
+  });
+
+  it('warns once when dynamic-text has no dynamic to follow', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(note);
+    note.setAttribute('dynamic-text', 'sub.');
+    note.setAttribute('duration', 'half');
+    const missing = () =>
+      warn.mock.calls.filter(([message]) =>
+        String(message).includes('dynamic-text needs a dynamic')
+      ).length;
+    expect(missing()).toBe(1);
+    note.setAttribute('dynamic', 'p');
+    note.removeAttribute('dynamic');
+    expect(missing()).toBe(2);
+    warn.mockRestore();
+  });
+});

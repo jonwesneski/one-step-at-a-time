@@ -34,6 +34,7 @@ import {
   triangleUnsupportedWarning,
   unpitchedWarnings,
 } from '../rules/noteheadRules';
+import { textAttributeWarning } from '../rules/techniqueTextRules';
 import {
   articulationRepeatCount,
   drawnTremoloTuplet,
@@ -83,6 +84,8 @@ import type {
   StemDirection,
   StemMark,
   StressType,
+  TextPlacement,
+  TextStyle,
   TieStyle,
   TremoloLabel,
   TremoloValue,
@@ -159,6 +162,8 @@ import {
   parseAccidentalReminder,
   parseDuration,
   parseStemMark,
+  parseTextPlacement,
+  parseTextStyle,
   parseUnpitched,
   warnIfInvalidDuration,
 } from '../utils/parsers';
@@ -166,6 +171,7 @@ import {
   NOTE_SVG_WIDTH,
   noteAugmentationDotLayout,
 } from '../utils/svgCreator/note';
+import { techniqueTextLabel } from '../utils/svgCreator/techniqueLabel';
 import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
 
 /**
@@ -186,6 +192,10 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {'white-key' | 'black-key' | 'gliss'} glissando-hint - Text above the line of a `glissando="start"`: which keys it slides across ("white-note gliss." / "black-note gliss."), or plain "gliss.".
  * @attr {'straight' | 'dip' | 'wave'} glissando-shape - Contour of the line a `glissando="start"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`.
  * @attr {string} glissando-label - Text above the stave over this note: `gliss` ("gliss.", for a passage with no line), `quasi-gliss` ("quasi gliss."), `chrom` / `chromatic` (above the first grace note when there are grace notes), `lip`, `bend`, or any other text drawn as written, `|` starting a new line. It shifts left rather than run past the bar.
+ * @attr {string} technique-text - Technique text over the note (`sing`, `hum`, `key slaps`, any instruction), `|` starting a new line. It starts at the head (the first grace note's, with grace notes) and may run on over later bars of its row, up to the next technique text of the staff; past the row's end it shifts left, then wraps. In text of several lines an opening quote or bracket hangs left of the margin.
+ * @attr {TextPlacement} technique-text-placement - `below` draws the technique text under the stave, beneath what is drawn there but above the dynamics (and a vocal staff's lyrics). Defaults to `above`.
+ * @attr {TextStyle} technique-text-style - `italic` sets the technique text in italics. Defaults to `normal` (upright).
+ * @attr {string} dynamic-text - Italic text straight after the dynamic, on its baseline (", ma distinto"). It moves with the marking and runs on over later bars of its row. Needs `dynamic`.
  * @attr {'up' | 'down' | 'dip' | 'wave'} bend - A pitch bend: a line after this note, ending inside its own duration. `up` / `down` slide away, `dip` sinks a little and returns, `wave` oscillates. Ignored, with a warning, beside `glissando="start"`, on a `<music-tremolo>` member and on a triangle notehead. On a note slotted in a chord it bends just that tone, whatever the chord's own `bend`.
  * @attr {Note} bend-to - The pitch the bend runs to, in the octave nearest this note: a small notehead in parentheses at the end of the line. Alone, it draws a straight line there.
  * @attr {QuarterTone} bend-to-quarter-tone - `up` / `down`: raises or lowers `bend-to` by a quarter-tone.
@@ -266,6 +276,10 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       'glissando-hint',
       'glissando-shape',
       'glissando-label',
+      'technique-text',
+      'technique-text-placement',
+      'technique-text-style',
+      'dynamic-text',
       'bend',
       'bend-to',
       'bend-to-quarter-tone',
@@ -634,6 +648,48 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       this.removeAttribute('glissando-label');
     } else {
       this.setAttribute('glissando-label', value);
+    }
+  }
+
+  get techniqueText(): string | null {
+    return this.readAttribute('technique-text');
+  }
+  set techniqueText(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('technique-text');
+    } else {
+      this.setAttribute('technique-text', value);
+    }
+  }
+
+  get techniqueTextPlacement(): TextPlacement {
+    return (
+      parseTextPlacement(this.readAttribute('technique-text-placement')) ??
+      'above'
+    );
+  }
+  set techniqueTextPlacement(value: TextPlacement) {
+    this.setAttribute('technique-text-placement', value);
+  }
+
+  get techniqueTextStyle(): TextStyle {
+    return (
+      parseTextStyle(this.readAttribute('technique-text-style')) ?? 'normal'
+    );
+  }
+  set techniqueTextStyle(value: TextStyle) {
+    this.setAttribute('technique-text-style', value);
+  }
+
+  get dynamicText(): string | null {
+    const value = this.readAttribute('dynamic-text')?.trim() ?? '';
+    return value === '' ? null : value;
+  }
+  set dynamicText(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('dynamic-text');
+    } else {
+      this.setAttribute('dynamic-text', value);
     }
   }
 
@@ -1494,9 +1550,10 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
   }
 
   #warnedDynamicReminder = false;
+  #warnedDynamicText = false;
 
-  // A bracketed reminder needs a dynamic to bracket; warns once until one
-  // is set.
+  // A bracketed reminder needs a dynamic to bracket, and a dynamic-text a
+  // dynamic to follow; each warns once until one is set.
   #warnAboutDynamicReminder(): void {
     const missing = this.dynamicReminder && this.dynamic === null;
     if (missing && this.isConnected && !this.#warnedDynamicReminder) {
@@ -1505,6 +1562,11 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       );
     }
     this.#warnedDynamicReminder = missing && this.isConnected;
+    const textMissing = this.dynamicText !== null && this.dynamic === null;
+    if (textMissing && this.isConnected && !this.#warnedDynamicText) {
+      console.warn(`[music-note] dynamic-text needs a dynamic to follow`);
+    }
+    this.#warnedDynamicText = textMissing && this.isConnected;
   }
 
   connectedCallback(): void {
@@ -1575,6 +1637,10 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       resolveGlissandoLabel(newValue) === null
     ) {
       console.warn(`[music-note] glissando-label is empty; drawing no label`);
+    }
+    const textWarning = textAttributeWarning(name, newValue);
+    if (textWarning !== null) {
+      console.warn(`[music-note] ${textWarning}`);
     }
     if (
       name === 'breath-mark' &&
@@ -1647,7 +1713,8 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       name === 'decrescendo' ||
       name === 'grace-dynamic' ||
       name === 'dynamic-shared' ||
-      name === 'dynamic-reminder'
+      name === 'dynamic-reminder' ||
+      name === 'dynamic-text'
     ) {
       this.#warnAboutDynamicReminder();
       this.dispatchEvent(
@@ -1793,6 +1860,9 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       name === 'breath-mark' ||
       name === 'swell' ||
       name === 'glissando-label' ||
+      name === 'technique-text' ||
+      name === 'technique-text-placement' ||
+      name === 'technique-text-style' ||
       name === 'bend' ||
       name === 'bend-to' ||
       name === 'bend-to-quarter-tone' ||
@@ -2125,6 +2195,10 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       articulationRepeatCount: this.#repeatCount(),
       tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,
       glissandoLabel: this.closest(STAFF_TAGS) ? null : this.glissandoLabel,
+      techniqueText: this.closest(STAFF_TAGS)
+        ? null
+        : techniqueTextLabel(this.techniqueText, this.techniqueTextStyle),
+      techniqueTextBelow: this.techniqueTextPlacement === 'below',
       breathMark: this.closest(STAFF_TAGS) ? null : this.breathMark,
       bend: this.#standaloneBend(),
     });

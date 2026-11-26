@@ -58,6 +58,10 @@ const DRUM_SHARED_ATTRIBUTES = [
   'tremolo',
   'tremolo-tuplet',
   'tremolo-label',
+  'technique-text',
+  'technique-text-placement',
+  'technique-text-style',
+  'dynamic-text',
 ];
 
 // Attributes <music-note>/<music-chord> have and the drum elements withhold:

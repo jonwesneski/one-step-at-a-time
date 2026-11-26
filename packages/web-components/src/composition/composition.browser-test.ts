@@ -4539,3 +4539,152 @@ test.describe('rows level across a system', () => {
     expect(back.textTops[1]).toBeCloseTo(before.textTops[1], 0);
   });
 });
+
+test.describe('technique text over a row', () => {
+  const setHost = async (page: Page, width: number, html: string) => {
+    await page.evaluate(
+      ({ hostWidth, markup }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.style.width = `${hostWidth}px`;
+        host.innerHTML = markup;
+      },
+      { hostWidth: width, markup: html }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const setWidth = async (page: Page, width: number) => {
+    await page.evaluate((hostWidth) => {
+      const host = document.getElementById('host');
+      if (host !== null) {
+        host.style.width = `${hostWidth}px`;
+      }
+    }, width);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const bar = (content: string) =>
+    `<music-measure><music-staff clef="treble">${content}</music-staff></music-measure>`;
+  const quarter = (attrs = '') =>
+    `<music-note note="C" octave="5" duration="quarter" ${attrs}></music-note>`;
+  const readText = (page: Page) =>
+    page.evaluate(() => {
+      const staves = Array.from(document.querySelectorAll('music-staff'));
+      const text = staves
+        .map((staff) => staff.shadowRoot?.querySelector('.technique-text'))
+        .find((found) => found !== null && found !== undefined);
+      const rect = text?.getBoundingClientRect();
+      const owner = staves.find((staff) =>
+        staff.shadowRoot?.contains(text ?? null)
+      );
+      const head = document
+        .getElementById('labelled')
+        ?.shadowRoot?.querySelector('.head')
+        ?.getBoundingClientRect();
+      const high = document
+        .getElementById('next')
+        ?.shadowRoot?.querySelector('.head')
+        ?.getBoundingClientRect();
+      return {
+        left: rect?.left ?? 0,
+        right: rect?.right ?? 0,
+        bottom: rect?.bottom ?? 0,
+        lines: text?.querySelectorAll('tspan').length || 1,
+        headLeft: head?.left ?? 0,
+        nextHeadTop: high?.top ?? 0,
+        ownStaffRight: owner?.getBoundingClientRect().right ?? 0,
+      };
+    });
+
+  test('shifts left at the row end, then wraps, as the composition narrows, and returns', async ({
+    page,
+  }) => {
+    await setHost(
+      page,
+      900,
+      `<music-composition time="4/4">${bar(
+        quarter() +
+          quarter() +
+          quarter() +
+          quarter(
+            'id="labelled" technique-text="blow air through the instrument fingering the given pitches"'
+          )
+      )}</music-composition>`
+    );
+    const wide = await readText(page);
+    expect(wide.lines).toBe(1);
+    expect(wide.left).toBeLessThan(wide.headLeft);
+
+    await setWidth(page, 260);
+    const narrow = await readText(page);
+    expect(narrow.lines).toBeGreaterThan(1);
+
+    await setWidth(page, 900);
+    const back = await readText(page);
+    expect(back.lines).toBe(1);
+    expect(back.left).toBeCloseTo(wide.left, 0);
+  });
+
+  test('a run-on text rises over a high note added in the next bar', async ({
+    page,
+  }) => {
+    await setHost(
+      page,
+      700,
+      `<music-composition time="4/4">${bar(
+        `<music-note note="C" octave="5" duration="whole" id="labelled" technique-text="${'a long instruction '
+          .repeat(5)
+          .trim()}"></music-note>`
+      )}${bar(
+        `<music-note note="C" octave="5" duration="half" id="next"></music-note>${quarter()}${quarter()}`
+      )}</music-composition>`
+    );
+    const before = await readText(page);
+    expect(before.right).toBeGreaterThan(before.ownStaffRight);
+
+    await page.evaluate(() =>
+      document.getElementById('next')?.setAttribute('octave', '6')
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const high = await readText(page);
+    expect(high.bottom).toBeLessThan(before.bottom);
+    expect(high.bottom).toBeLessThanOrEqual(high.nextHeadTop);
+
+    await page.evaluate(() =>
+      document.getElementById('next')?.setAttribute('octave', '5')
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    expect((await readText(page)).bottom).toBeCloseTo(before.bottom, 0);
+  });
+
+  test('stays in its own row when the bars wrap onto two', async ({ page }) => {
+    await setHost(
+      page,
+      700,
+      `<music-composition time="4/4">${bar(
+        `<music-note note="C" octave="5" duration="whole" id="labelled" technique-text="${'a long instruction '
+          .repeat(3)
+          .trim()}"></music-note>`
+      )}${bar(quarter().repeat(4))}${bar(
+        quarter().repeat(4)
+      )}</music-composition>`
+    );
+    const oneRow = await readText(page);
+    expect(oneRow.right).toBeGreaterThan(oneRow.ownStaffRight);
+
+    await setWidth(page, 240);
+    const wrapped = await readText(page);
+    expect(wrapped.right).toBeLessThanOrEqual(wrapped.ownStaffRight + 1);
+
+    await setWidth(page, 700);
+    expect((await readText(page)).right).toBeCloseTo(oneRow.right, 0);
+  });
+});

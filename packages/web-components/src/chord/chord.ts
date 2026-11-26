@@ -17,6 +17,7 @@ import {
   resolveChordToneNoteheads,
   triangleUnsupportedWarning,
 } from '../rules/noteheadRules';
+import { textAttributeWarning } from '../rules/techniqueTextRules';
 import { durationToDotCount } from '../rules/theoryConsts';
 import { generateYCoordinates, getChordNotes } from '../rules/theoryHelpers';
 import {
@@ -71,6 +72,8 @@ import type {
   StemDirection,
   StemMark,
   StressType,
+  TextPlacement,
+  TextStyle,
   TieStyle,
   TremoloLabel,
   TremoloValue,
@@ -145,6 +148,8 @@ import {
   parseAccidentalReminder,
   parseDuration,
   parseStemMark,
+  parseTextPlacement,
+  parseTextStyle,
   warnIfInvalidDuration,
 } from '../utils/parsers';
 import type { LedgerHeadExtent } from '../utils/svgCreator';
@@ -154,6 +159,7 @@ import {
   chordHeadLeftOverhangPx,
   chordToneHeadExtentPx,
 } from '../utils/svgCreator/chord';
+import { techniqueTextLabel } from '../utils/svgCreator/techniqueLabel';
 import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
 
 /**
@@ -173,6 +179,10 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {'white-key' | 'black-key' | 'gliss'} glissando-hint - Text above the line of a `glissando="start"`: which keys it slides across ("white-note gliss." / "black-note gliss."), or plain "gliss.".
  * @attr {'straight' | 'dip' | 'wave'} glissando-shape - Contour of the line a `glissando="start"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`.
  * @attr {string} glissando-label - Text above the stave over this chord: `gliss` ("gliss.", for a passage with no line), `quasi-gliss` ("quasi gliss."), `chrom` / `chromatic` (above the first grace note when there are grace notes), `lip`, `bend`, or any other text drawn as written, `|` starting a new line. It shifts left rather than run past the bar.
+ * @attr {string} technique-text - Technique text over the chord, `|` starting a new line (see `<music-note>`).
+ * @attr {TextPlacement} technique-text-placement - `below` draws the technique text under the stave. Defaults to `above`.
+ * @attr {TextStyle} technique-text-style - `italic` sets the technique text in italics. Defaults to `normal`.
+ * @attr {string} dynamic-text - Italic text straight after the dynamic, on its baseline. Needs `dynamic`.
  * @attr {'up' | 'down' | 'dip' | 'wave'} bend - A pitch bend: a line after each of this chord's heads, ending inside its own duration. A slotted note's own `bend` / `bend-to` replaces it for that tone. Ignored, with a warning, beside `glissando="start"` and on a `<music-tremolo>` member.
  * @attr {Note} bend-to - Notes only, slotted ones included: ignored, with a warning, on a chord.
  * @attr {QuarterTone} bend-to-quarter-tone - Applies to `bend-to`.
@@ -255,6 +265,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'glissando-hint',
       'glissando-shape',
       'glissando-label',
+      'technique-text',
+      'technique-text-placement',
+      'technique-text-style',
+      'dynamic-text',
       'bend',
       'bend-to',
       'bend-to-quarter-tone',
@@ -638,6 +652,48 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       this.removeAttribute('glissando-label');
     } else {
       this.setAttribute('glissando-label', value);
+    }
+  }
+
+  get techniqueText(): string | null {
+    return this.readAttribute('technique-text');
+  }
+  set techniqueText(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('technique-text');
+    } else {
+      this.setAttribute('technique-text', value);
+    }
+  }
+
+  get techniqueTextPlacement(): TextPlacement {
+    return (
+      parseTextPlacement(this.readAttribute('technique-text-placement')) ??
+      'above'
+    );
+  }
+  set techniqueTextPlacement(value: TextPlacement) {
+    this.setAttribute('technique-text-placement', value);
+  }
+
+  get techniqueTextStyle(): TextStyle {
+    return (
+      parseTextStyle(this.readAttribute('technique-text-style')) ?? 'normal'
+    );
+  }
+  set techniqueTextStyle(value: TextStyle) {
+    this.setAttribute('technique-text-style', value);
+  }
+
+  get dynamicText(): string | null {
+    const value = this.readAttribute('dynamic-text')?.trim() ?? '';
+    return value === '' ? null : value;
+  }
+  set dynamicText(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('dynamic-text');
+    } else {
+      this.setAttribute('dynamic-text', value);
     }
   }
 
@@ -1493,9 +1549,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
   }
 
   #warnedDynamicReminder = false;
+  #warnedDynamicText = false;
 
-  // A bracketed reminder needs a dynamic to bracket; warns once until one
-  // is set.
+  // A bracketed reminder needs a dynamic to bracket, and a dynamic-text a
+  // dynamic to follow; each warns once until one is set.
   #warnAboutDynamicReminder(): void {
     const missing = this.dynamicReminder && this.dynamic === null;
     if (missing && this.isConnected && !this.#warnedDynamicReminder) {
@@ -1504,6 +1561,11 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       );
     }
     this.#warnedDynamicReminder = missing && this.isConnected;
+    const textMissing = this.dynamicText !== null && this.dynamic === null;
+    if (textMissing && this.isConnected && !this.#warnedDynamicText) {
+      console.warn(`[music-chord] dynamic-text needs a dynamic to follow`);
+    }
+    this.#warnedDynamicText = textMissing && this.isConnected;
   }
 
   connectedCallback(): void {
@@ -1596,6 +1658,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     ) {
       console.warn(`[music-chord] glissando-label is empty; drawing no label`);
     }
+    const textWarning = textAttributeWarning(name, newValue);
+    if (textWarning !== null) {
+      console.warn(`[music-chord] ${textWarning}`);
+    }
     if (
       name === 'breath-mark' &&
       newValue !== null &&
@@ -1646,7 +1712,8 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       name === 'decrescendo' ||
       name === 'grace-dynamic' ||
       name === 'dynamic-shared' ||
-      name === 'dynamic-reminder'
+      name === 'dynamic-reminder' ||
+      name === 'dynamic-text'
     ) {
       this.#warnAboutDynamicReminder();
       this.dispatchEvent(
@@ -1805,6 +1872,9 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       name === 'breath-mark' ||
       name === 'swell' ||
       name === 'glissando-label' ||
+      name === 'technique-text' ||
+      name === 'technique-text-placement' ||
+      name === 'technique-text-style' ||
       name === 'bend' ||
       name === 'bend-to' ||
       name === 'bend-to-quarter-tone' ||
@@ -2074,6 +2144,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         articulationRepeatCount: this.#repeatCount(),
         tremoloLabel: this.#drawnByStaff ? null : this.tremoloLabel,
         glissandoLabel: this.#drawnByStaff ? null : this.glissandoLabel,
+        techniqueText: this.#drawnByStaff
+          ? null
+          : techniqueTextLabel(this.techniqueText, this.techniqueTextStyle),
+        techniqueTextBelow: this.techniqueTextPlacement === 'below',
         breathMark: this.#drawnByStaff ? null : this.breathMark,
         bends: this.#standaloneBends(),
       });
@@ -2177,6 +2251,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         articulationRepeatCount: this.#repeatCount(),
         tremoloLabel: this.#drawnByStaff ? null : this.tremoloLabel,
         glissandoLabel: this.#drawnByStaff ? null : this.glissandoLabel,
+        techniqueText: this.#drawnByStaff
+          ? null
+          : techniqueTextLabel(this.techniqueText, this.techniqueTextStyle),
+        techniqueTextBelow: this.techniqueTextPlacement === 'below',
         breathMark: this.#drawnByStaff ? null : this.breathMark,
         bends: this.#standaloneBends(),
       });

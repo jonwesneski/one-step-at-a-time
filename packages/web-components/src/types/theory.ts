@@ -473,6 +473,12 @@ export type StemMark = 'cross';
  */
 export type AccidentalReminder = 'bracketed' | 'plain';
 
+/** Which side of the stave text goes: `above` or `below`. */
+export type TextPlacement = 'above' | 'below';
+
+/** How text is set: `normal` (upright) or `italic`. */
+export type TextStyle = 'normal' | 'italic';
+
 /**
  * Which of a minim two-note tremolo's beams join its stems: `all` of them, or
  * only the `outer` one. Unset leaves every beam detached.

@@ -8,6 +8,9 @@ import type { DynamicMarking, HairpinKind } from '../types/theory';
 import { HAIRPIN_KINDS, MUSIC_REST_NODE } from '../utils/consts';
 import {
   DYNAMIC_REMINDER_BRACKET_WIDTH_PX,
+  DYNAMIC_TEXT_FONT_SIZE_PX,
+  DYNAMIC_TEXT_GAP_PX,
+  DYNAMIC_TEXT_PUNCTUATION_GAP_PX,
   DYNAMICS_ABOVE_BASELINE_Y,
   DYNAMICS_BASELINE_Y,
   DYNAMICS_CHAR_WIDTH_PX,
@@ -26,6 +29,7 @@ import {
   noteHeadCenterShiftPx,
 } from '../utils/svgCreator/note';
 import type { HairpinEndpointText } from './hairpinPlacementRules';
+import { estimateTextWidthPx } from './techniqueTextRules';
 
 const ROW_TOLERANCE_PX = 5;
 
@@ -242,6 +246,7 @@ function buildHairpinPair(
     endMarking: end.element.dynamic,
     startBracketed: start.element.dynamicReminder,
     endBracketed: end.element.dynamicReminder,
+    startDynamicText: start.element.dynamicText ?? null,
   });
   if (span.collided) {
     errors.push(
@@ -304,6 +309,27 @@ export function pairSharedHairpinsAcrossStaves(
   return pairs;
 }
 
+/**
+ * How far (px) a `dynamic-text` reaches right of its dynamic's letters: a
+ * gap, smaller before a comma or bracket, and the text. 0 with none.
+ */
+export function dynamicTextTrailingPx(text: string | null | undefined): number {
+  if (text === null || text === undefined) {
+    return 0;
+  }
+  return (
+    dynamicTextGapPx(text) +
+    estimateTextWidthPx(text, DYNAMIC_TEXT_FONT_SIZE_PX)
+  );
+}
+
+/** The gap (px) between a dynamic's letters and its `dynamic-text`. */
+export function dynamicTextGapPx(text: string): number {
+  return /^[,([]/.test(text)
+    ? DYNAMIC_TEXT_PUNCTUATION_GAP_PX
+    : DYNAMIC_TEXT_GAP_PX;
+}
+
 /** Half the estimated width of a dynamic, with its brackets for a reminder. */
 export function dynamicTextHalfWidth(
   marking: DynamicMarking,
@@ -325,6 +351,8 @@ export type HairpinXSpanInput = {
   endMarking: DynamicMarking | null;
   startBracketed?: boolean;
   endBracketed?: boolean;
+  // The start dynamic's `dynamic-text`, which the wedge starts after.
+  startDynamicText?: string | null;
 };
 
 // Pulls each end inward past its endpoint dynamic's estimated text edge, so
@@ -339,6 +367,7 @@ export function computeHairpinXSpan({
   endMarking,
   startBracketed = false,
   endBracketed = false,
+  startDynamicText = null,
 }: HairpinXSpanInput): { startX: number; endX: number; collided: boolean } {
   let startX = rawStartX;
   let endX = rawEndX;
@@ -347,6 +376,7 @@ export function computeHairpinXSpan({
       startX,
       startTextCenterX +
         dynamicTextHalfWidth(startMarking, startBracketed) +
+        dynamicTextTrailingPx(startDynamicText) +
         HAIRPIN_DYNAMIC_GAP_PX
     );
   }
@@ -389,6 +419,7 @@ export function resolveChainSpans(
       endMarking: endText?.marking ?? null,
       startBracketed: startText?.bracketed,
       endBracketed: endText?.bracketed,
+      startDynamicText: startText?.text,
     });
     return { startX: span.startX, endX: span.endX, startText, endText };
   });
@@ -480,6 +511,7 @@ export function resolveSwellSpan(input: {
   rawEndX: number;
   startMarking: DynamicMarking | null;
   startBracketed?: boolean;
+  startDynamicText?: string | null;
   startTextCenterX: number;
   endMarking: DynamicMarking | null;
   endBracketed?: boolean;

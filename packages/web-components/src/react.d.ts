@@ -48,6 +48,8 @@ import type {
   StemDirection,
   StemMark,
   StressType,
+  TextPlacement,
+  TextStyle,
   TieStyle,
   TieValue,
   TimeSignature,
@@ -81,6 +83,12 @@ type DrumNotationProps = {
   dynamic?: DynamicMarking;
   'dynamic-shared'?: boolean;
   'dynamic-reminder'?: boolean;
+  // Italic text after `dynamic`.
+  'dynamic-text'?: string;
+  // Technique text, `|` starting a new line.
+  'technique-text'?: string;
+  'technique-text-placement'?: TextPlacement;
+  'technique-text-style'?: TextStyle;
   swell?: boolean;
   crescendo?: HairpinRole;
   decrescendo?: HairpinRole;
@@ -184,6 +192,10 @@ declare module 'react' {
         'beam-group'?: string;
         'rest-staff-side'?: RestStaffSide;
         hidden?: boolean;
+        // Technique text, `|` starting a new line.
+        'technique-text'?: string;
+        'technique-text-placement'?: TextPlacement;
+        'technique-text-style'?: TextStyle;
       };
       'music-voice': WebComponentProps;
       'music-tremolo': WebComponentProps & {
@@ -220,6 +232,12 @@ declare module 'react' {
         dynamic?: DynamicMarking;
         'dynamic-shared'?: boolean;
         'dynamic-reminder'?: boolean;
+        // Italic text after `dynamic`.
+        'dynamic-text'?: string;
+        // Technique text, `|` starting a new line.
+        'technique-text'?: string;
+        'technique-text-placement'?: TextPlacement;
+        'technique-text-style'?: TextStyle;
         'accidental-reminder'?: boolean | AccidentalReminder;
         'stem-mark'?: StemMark;
         crescendo?: HairpinRole;
@@ -298,6 +316,12 @@ declare module 'react' {
         dynamic?: DynamicMarking;
         'dynamic-shared'?: boolean;
         'dynamic-reminder'?: boolean;
+        // Italic text after `dynamic`.
+        'dynamic-text'?: string;
+        // Technique text, `|` starting a new line.
+        'technique-text'?: string;
+        'technique-text-placement'?: TextPlacement;
+        'technique-text-style'?: TextStyle;
         unpitched?: boolean | UnpitchedPlacement;
         'accidental-reminder'?: boolean | AccidentalReminder;
         'stem-mark'?: StemMark;

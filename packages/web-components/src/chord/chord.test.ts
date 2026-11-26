@@ -2558,3 +2558,37 @@ describe('unpitched tones and stem marks', () => {
     expect(chord.shadowRoot!.querySelector('.stem-cross')).not.toBeNull();
   });
 });
+
+describe('technique-text and dynamic-text', () => {
+  it('draws its text standalone, above or below, and leaves it to a staff', () => {
+    const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
+    chord.setAttribute('chord', 'C');
+    chord.setAttribute('technique-text', 'jet whistle');
+    document.body.appendChild(chord);
+    const textOf = () => chord.shadowRoot!.querySelector('.technique-text');
+    const aboveY = Number(textOf()?.getAttribute('y'));
+    chord.setAttribute('technique-text-placement', 'below');
+    expect(Number(textOf()?.getAttribute('y'))).toBeGreaterThan(aboveY);
+
+    const staff = makeStaff();
+    const inStaff = renderChordByAttribute(staff, 'C');
+    inStaff.setAttribute('technique-text', 'hum');
+    expect(inStaff.shadowRoot!.querySelector('.technique-text')).toBeNull();
+  });
+
+  it('reads defaults and warns when dynamic-text has no dynamic', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
+    expect(chord.techniqueTextPlacement).toBe('above');
+    expect(chord.techniqueTextStyle).toBe('normal');
+    document.body.appendChild(chord);
+    chord.setAttribute('dynamic-text', 'sub.');
+    expect(chord.dynamicText).toBe('sub.');
+    expect(
+      warn.mock.calls.some(([message]) =>
+        String(message).includes('dynamic-text needs a dynamic')
+      )
+    ).toBe(true);
+    warn.mockRestore();
+  });
+});

@@ -1774,6 +1774,31 @@ export const TECHNIQUE_LABEL_LINE_HEIGHT_PX =
  */
 export const TECHNIQUE_LABEL_GAP_PX = STAFF_LINE_SPACING * 0.5;
 
+/**
+ * Gap (px) a run-on technique text leaves before the next technique text of
+ * its staff. = 1 sp
+ */
+export const TECHNIQUE_TEXT_NEXT_GAP_PX = STAFF_LINE_SPACING;
+
+/**
+ * Clearance (px) of technique text below the stave: from the stave and the
+ * ink under it, and from its own entry's stem, tail or ledger lines it ends
+ * before. = 1 sp
+ */
+export const TECHNIQUE_TEXT_BELOW_GAP_PX = STAFF_LINE_SPACING;
+
+/** Font size (px) of a `dynamic-text`: the technique label size. = 1.1 sp */
+export const DYNAMIC_TEXT_FONT_SIZE_PX = STAFF_LINE_SPACING * 1.1;
+
+/** Gap (px) between a dynamic's letters and its `dynamic-text`. = 0.3 sp */
+export const DYNAMIC_TEXT_GAP_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
+ * Gap (px) before a `dynamic-text` opening with a comma or bracket, which
+ * carries its own space. = 0.1 sp
+ */
+export const DYNAMIC_TEXT_PUNCTUATION_GAP_PX = STAFF_LINE_SPACING * 0.1;
+
 // ─── Breath marks ─────────────────────────────────────────────────────────────
 
 /**

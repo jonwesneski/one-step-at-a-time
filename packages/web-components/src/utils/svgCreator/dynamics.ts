@@ -1,4 +1,8 @@
-import type { SwellSpan } from '../../rules/dynamicsRules';
+import {
+  dynamicTextGapPx,
+  dynamicTextHalfWidth,
+  type SwellSpan,
+} from '../../rules/dynamicsRules';
 import {
   hairpinWedgeEdges,
   type HairpinPoint,
@@ -9,6 +13,7 @@ import { SVG_NS } from '../consts';
 import {
   ARPEGGIO_HAIRPIN_OPEN_WIDTH_PX,
   DYNAMICS_FONT_SIZE,
+  DYNAMIC_TEXT_FONT_SIZE_PX,
   HAIRPIN_OPEN_HEIGHT,
   HAIRPIN_STROKE_WIDTH,
 } from '../notationDimensions';
@@ -48,6 +53,37 @@ export function createDynamicMarkingSvg(
   text.classList.add('dynamic-reminder');
   text.append(bracket('('), markingSpan, bracket(')'));
   return text;
+}
+
+/**
+ * A `dynamic-text`: italic, on the baseline of the marking centred at
+ * markingCenterX, straight after its letters (and a reminder's brackets).
+ */
+export function createDynamicTextSvg(
+  text: string,
+  marking: DynamicMarking,
+  markingCenterX: number,
+  y: number,
+  { bracketed = false }: { bracketed?: boolean } = {}
+): SVGTextElement {
+  const element = document.createElementNS(SVG_NS, 'text');
+  element.classList.add('dynamic-text');
+  element.setAttribute(
+    'x',
+    `${
+      markingCenterX +
+      dynamicTextHalfWidth(marking, bracketed) +
+      dynamicTextGapPx(text)
+    }`
+  );
+  element.setAttribute('y', `${y}`);
+  element.setAttribute('text-anchor', 'start');
+  element.setAttribute('font-size', `${DYNAMIC_TEXT_FONT_SIZE_PX}`);
+  element.setAttribute('font-style', 'italic');
+  element.setAttribute('font-family', 'serif');
+  element.setAttribute('fill', 'currentColor');
+  element.textContent = text;
+  return element;
 }
 
 /**

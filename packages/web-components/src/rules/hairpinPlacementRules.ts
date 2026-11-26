@@ -17,7 +17,11 @@ import {
   type ObstacleRect,
   segmentIntersectsRect,
 } from './connectorPlacementRules';
-import { dynamicTextHalfWidth, type HairpinEndpoint } from './dynamicsRules';
+import {
+  dynamicTextHalfWidth,
+  dynamicTextTrailingPx,
+  type HairpinEndpoint,
+} from './dynamicsRules';
 
 export type BarSpan = { from: number; to: number };
 
@@ -141,6 +145,8 @@ export type HairpinEndpointText = {
   centerX: number;
   /** A reminder, drawn in brackets. */
   bracketed?: boolean;
+  /** A `dynamic-text` after the marking. */
+  text?: string | null;
 };
 
 // A dynamic's text baseline sits on the hairpin's own centre line, matching
@@ -149,12 +155,13 @@ export function estimateDynamicTextBox(
   marking: DynamicMarking,
   centerX: number,
   baselineY: number,
-  bracketed = false
+  bracketed = false,
+  text: string | null = null
 ): ObstacleRect {
   const halfWidth = dynamicTextHalfWidth(marking, bracketed);
   return {
     left: centerX - halfWidth,
-    right: centerX + halfWidth,
+    right: centerX + halfWidth + dynamicTextTrailingPx(text),
     top: baselineY - DYNAMICS_FONT_SIZE * DYNAMICS_TEXT_ASCENT_RATIO,
     bottom: baselineY + DYNAMICS_FONT_SIZE * DYNAMICS_TEXT_DESCENT_RATIO,
   };
@@ -169,9 +176,11 @@ export function dynamicTextCenterClearOfStems(
   stems: readonly ObstacleRect[],
   gap: { topGapEdgeY: number; bottomGapEdgeY: number },
   awayDirection: -1 | 1,
-  bracketed = false
+  bracketed = false,
+  text: string | null = null
 ): number {
   const halfWidth = dynamicTextHalfWidth(marking, bracketed);
+  const rightReach = halfWidth + dynamicTextTrailingPx(text);
   const gapStems = stems
     .filter(
       (stem) => stem.bottom > gap.topGapEdgeY && stem.top < gap.bottomGapEdgeY
@@ -183,14 +192,14 @@ export function dynamicTextCenterClearOfStems(
   let x = centerX;
   for (let step = 0; step <= gapStems.length; step++) {
     const blocking = gapStems.find(
-      (stem) => x + halfWidth > stem.left && x - halfWidth < stem.right
+      (stem) => x + rightReach > stem.left && x - halfWidth < stem.right
     );
     if (blocking === undefined) {
       return x;
     }
     x =
       awayDirection < 0
-        ? blocking.left - halfWidth
+        ? blocking.left - rightReach
         : blocking.right + halfWidth;
   }
   return x;
@@ -243,7 +252,8 @@ const endpointTextBoxes = (
         startText.marking,
         startText.centerX,
         startY,
-        startText.bracketed
+        startText.bracketed,
+        startText.text ?? null
       )
     );
   }
@@ -253,7 +263,8 @@ const endpointTextBoxes = (
         endText.marking,
         endText.centerX,
         endY,
-        endText.bracketed
+        endText.bracketed,
+        endText.text ?? null
       )
     );
   }

@@ -87,7 +87,12 @@ import {
   type NoteheadPlacement,
 } from './noteheads';
 import { createStemCrossSvg } from './stemMark';
-import { appendTechniqueLabels, techniqueLabels } from './techniqueLabel';
+import {
+  appendTechniqueLabels,
+  appendTechniqueTextBelow,
+  techniqueLabels,
+  type TechniqueLabel,
+} from './techniqueLabel';
 import { createTremoloNumeral, createTremoloStrokes } from './tremolo';
 import { createTrillSignSvg } from './trill';
 
@@ -233,6 +238,8 @@ export type NoteProps = {
   // Drawn above the note only standalone; a staff draws its own row.
   tremoloLabel?: TremoloLabel | null;
   glissandoLabel?: string | null;
+  techniqueText?: TechniqueLabel | null;
+  techniqueTextBelow?: boolean;
   // Drawn just after the note only standalone; a staff places it in the gap
   // before the next entry.
   breathMark?: BreathMark | null;
@@ -301,6 +308,8 @@ export const createNoteSvg = ({
   articulationRepeatCount = 1,
   tremoloLabel = null,
   glissandoLabel = null,
+  techniqueText = null,
+  techniqueTextBelow = false,
   breathMark = null,
   bend = null,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
@@ -517,6 +526,16 @@ export const createNoteSvg = ({
   if (stemUp && !stemless && !noStem) {
     inkTopY = Math.min(inkTopY, stemTipY * NOTE_SCALE);
   }
+  // Lowest ink (px), for a standalone text below.
+  let inkBottomY = headCenterPxY + headGeometry.halfHeight * NOTE_SCALE;
+  if (stemUp) {
+    inkBottomY = Math.max(
+      inkBottomY,
+      headCenterPxY + articulationStackDepth(articulation, stress) * NOTE_SCALE
+    );
+  } else if (!stemless && !noStem) {
+    inkBottomY = Math.max(inkBottomY, stemTipY * NOTE_SCALE);
+  }
   if ((tremoloStrokeCount > 0 || stemCross) && (stemless || !noStem)) {
     // Standalone, the head stands in for staff Y 0 and nothing snaps to lines.
     const headStaffY = staffY ?? 0;
@@ -573,12 +592,20 @@ export const createNoteSvg = ({
   }
 
   if (qualifiedElementName === 'svg') {
+    const headLeftX = (headGeometry.cx - headGeometry.halfWidth) * NOTE_SCALE;
     appendTechniqueLabels(
       svg,
-      (headGeometry.cx - headGeometry.halfWidth) * NOTE_SCALE,
+      headLeftX,
       inkTopY,
-      techniqueLabels(tremoloLabel, glissandoLabel)
+      techniqueLabels(
+        tremoloLabel,
+        glissandoLabel,
+        techniqueTextBelow ? null : techniqueText
+      )
     );
+    if (techniqueTextBelow && techniqueText !== null) {
+      appendTechniqueTextBelow(svg, headLeftX, inkBottomY, techniqueText);
+    }
   }
 
   const dotLayout = noteAugmentationDotLayout({

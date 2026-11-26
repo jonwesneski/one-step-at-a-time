@@ -33,6 +33,8 @@ import type {
   StemDirection,
   StemMark,
   StressType,
+  TextPlacement,
+  TextStyle,
   TieStyle,
   TimeSignature,
   TremoloBeamAttach,
@@ -76,6 +78,8 @@ import {
   STEM_DIRECTIONS,
   STEM_MARKS,
   STRESSES,
+  TEXT_PLACEMENTS,
+  TEXT_STYLES,
   TIE_STYLES,
   TIMES,
   TREMOLO_BEAM_ATTACHES,
@@ -443,6 +447,18 @@ export const isAccidentalReminder = (value: string | null): boolean =>
   value === null ||
   value === '' ||
   (ACCIDENTAL_REMINDERS as string[]).includes(value);
+
+export const parseTextPlacement = (
+  value: string | null
+): TextPlacement | null =>
+  value !== null && (TEXT_PLACEMENTS as string[]).includes(value)
+    ? (value as TextPlacement)
+    : null;
+
+export const parseTextStyle = (value: string | null): TextStyle | null =>
+  value !== null && (TEXT_STYLES as string[]).includes(value)
+    ? (value as TextStyle)
+    : null;
 
 export const parseBreathMark = (value: string | null): BreathMark | null =>
   value !== null && VALID_BREATH_MARKS.has(value)

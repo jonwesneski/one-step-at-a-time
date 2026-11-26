@@ -658,6 +658,34 @@
             },
             {
               "kind": "field",
+              "name": "techniqueText",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "techniqueTextPlacement",
+              "type": {
+                "text": "TextPlacement"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "techniqueTextStyle",
+              "type": {
+                "text": "TextStyle"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamicText",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "bend",
               "type": {
                 "text": "BendShape | null"
@@ -1215,6 +1243,15 @@
               "default": "false"
             },
             {
+              "kind": "field",
+              "name": "#warnedDynamicText",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
               "kind": "method",
               "name": "#warnAboutDynamicReminder",
               "privacy": "private",
@@ -1557,6 +1594,34 @@
                 "text": "string"
               },
               "description": "Text above the stave over this chord: `gliss` (\"gliss.\", for a passage with no line), `quasi-gliss` (\"quasi gliss.\"), `chrom` / `chromatic` (above the first grace note when there are grace notes), `lip`, `bend`, or any other text drawn as written, `|` starting a new line. It shifts left rather than run past the bar."
+            },
+            {
+              "name": "technique-text",
+              "type": {
+                "text": "string"
+              },
+              "description": "Technique text over the chord, `|` starting a new line (see `<music-note>`)."
+            },
+            {
+              "name": "technique-text-placement",
+              "type": {
+                "text": "TextPlacement"
+              },
+              "description": "`below` draws the technique text under the stave. Defaults to `above`."
+            },
+            {
+              "name": "technique-text-style",
+              "type": {
+                "text": "TextStyle"
+              },
+              "description": "`italic` sets the technique text in italics. Defaults to `normal`."
+            },
+            {
+              "name": "dynamic-text",
+              "type": {
+                "text": "string"
+              },
+              "description": "Italic text straight after the dynamic, on its baseline. Needs `dynamic`."
             },
             {
               "name": "bend",
@@ -2225,6 +2290,34 @@
                   "text": "boolean"
                 }
               }
+            },
+            {
+              "kind": "method",
+              "name": "#updateTechniqueTextRunOn",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#runOnTechniqueTexts",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "staves",
+                  "type": {
+                    "text": "readonly TechniqueTextStaff[]"
+                  }
+                }
+              ]
             },
             {
               "kind": "method",
@@ -3444,6 +3537,50 @@
             },
             {
               "kind": "field",
+              "name": "techniqueText",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "techniqueTextPlacement",
+              "type": {
+                "text": "TextPlacement"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "techniqueTextStyle",
+              "type": {
+                "text": "TextStyle"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamicText",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "bend",
               "type": {
                 "text": "BendShape | null"
@@ -4301,6 +4438,19 @@
               }
             },
             {
+              "kind": "field",
+              "name": "#warnedDynamicText",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "#warnAboutDynamicReminder",
               "privacy": "private",
@@ -4950,6 +5100,50 @@
                 "text": "string"
               },
               "description": "Text above the stave over this chord: `gliss` (\"gliss.\", for a passage with no line), `quasi-gliss` (\"quasi gliss.\"), `chrom` / `chromatic` (above the first grace note when there are grace notes), `lip`, `bend`, or any other text drawn as written, `|` starting a new line. It shifts left rather than run past the bar.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "technique-text",
+              "type": {
+                "text": "string"
+              },
+              "description": "Technique text over the chord, `|` starting a new line (see `<music-note>`).",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "technique-text-placement",
+              "type": {
+                "text": "TextPlacement"
+              },
+              "description": "`below` draws the technique text under the stave. Defaults to `above`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "technique-text-style",
+              "type": {
+                "text": "TextStyle"
+              },
+              "description": "`italic` sets the technique text in italics. Defaults to `normal`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "name": "dynamic-text",
+              "type": {
+                "text": "string"
+              },
+              "description": "Italic text straight after the dynamic, on its baseline. Needs `dynamic`.",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -6052,6 +6246,50 @@
             },
             {
               "kind": "field",
+              "name": "techniqueText",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "techniqueTextPlacement",
+              "type": {
+                "text": "TextPlacement"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "techniqueTextStyle",
+              "type": {
+                "text": "TextStyle"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamicText",
+              "type": {
+                "text": "string | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "bend",
               "type": {
                 "text": "BendShape | null"
@@ -6893,6 +7131,19 @@
               }
             },
             {
+              "kind": "field",
+              "name": "#warnedDynamicText",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "#warnAboutDynamicReminder",
               "privacy": "private",
@@ -7528,6 +7779,50 @@
                 "text": "string"
               },
               "description": "Text above the stave over this note: `gliss` (\"gliss.\", for a passage with no line), `quasi-gliss` (\"quasi gliss.\"), `chrom` / `chromatic` (above the first grace note when there are grace notes), `lip`, `bend`, or any other text drawn as written, `|` starting a new line. It shifts left rather than run past the bar.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "technique-text",
+              "type": {
+                "text": "string"
+              },
+              "description": "Technique text over the note (`sing`, `hum`, `key slaps`, any instruction), `|` starting a new line. It starts at the head (the first grace note's, with grace notes) and may run on over later bars of its row, up to the next technique text of the staff; past the row's end it shifts left, then wraps. In text of several lines an opening quote or bracket hangs left of the margin.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "technique-text-placement",
+              "type": {
+                "text": "TextPlacement"
+              },
+              "description": "`below` draws the technique text under the stave, beneath what is drawn there but above the dynamics (and a vocal staff's lyrics). Defaults to `above`.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "technique-text-style",
+              "type": {
+                "text": "TextStyle"
+              },
+              "description": "`italic` sets the technique text in italics. Defaults to `normal` (upright).",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "dynamic-text",
+              "type": {
+                "text": "string"
+              },
+              "description": "Italic text straight after the dynamic, on its baseline (\", ma distinto\"). It moves with the marking and runs on over later bars of its row. Needs `dynamic`.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -9807,6 +10102,34 @@
             },
             {
               "kind": "field",
+              "name": "techniqueText",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "techniqueTextPlacement",
+              "type": {
+                "text": "TextPlacement"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "techniqueTextStyle",
+              "type": {
+                "text": "TextStyle"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "dynamicText",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "bend",
               "type": {
                 "text": "BendShape | null"
@@ -10352,6 +10675,15 @@
               "default": "false"
             },
             {
+              "kind": "field",
+              "name": "#warnedDynamicText",
+              "privacy": "private",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false"
+            },
+            {
               "kind": "method",
               "name": "#warnAboutDynamicReminder",
               "privacy": "private",
@@ -10671,6 +11003,34 @@
                 "text": "string"
               },
               "description": "Text above the stave over this note: `gliss` (\"gliss.\", for a passage with no line), `quasi-gliss` (\"quasi gliss.\"), `chrom` / `chromatic` (above the first grace note when there are grace notes), `lip`, `bend`, or any other text drawn as written, `|` starting a new line. It shifts left rather than run past the bar."
+            },
+            {
+              "name": "technique-text",
+              "type": {
+                "text": "string"
+              },
+              "description": "Technique text over the note (`sing`, `hum`, `key slaps`, any instruction), `|` starting a new line. It starts at the head (the first grace note's, with grace notes) and may run on over later bars of its row, up to the next technique text of the staff; past the row's end it shifts left, then wraps. In text of several lines an opening quote or bracket hangs left of the margin."
+            },
+            {
+              "name": "technique-text-placement",
+              "type": {
+                "text": "TextPlacement"
+              },
+              "description": "`below` draws the technique text under the stave, beneath what is drawn there but above the dynamics (and a vocal staff's lyrics). Defaults to `above`."
+            },
+            {
+              "name": "technique-text-style",
+              "type": {
+                "text": "TextStyle"
+              },
+              "description": "`italic` sets the technique text in italics. Defaults to `normal` (upright)."
+            },
+            {
+              "name": "dynamic-text",
+              "type": {
+                "text": "string"
+              },
+              "description": "Italic text straight after the dynamic, on its baseline (\", ma distinto\"). It moves with the marking and runs on over later bars of its row. Needs `dynamic`."
             },
             {
               "name": "bend",
@@ -11152,6 +11512,27 @@
               }
             },
             {
+              "kind": "field",
+              "name": "techniqueText",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "techniqueTextPlacement",
+              "type": {
+                "text": "TextPlacement"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "techniqueTextStyle",
+              "type": {
+                "text": "TextStyle"
+              }
+            },
+            {
               "kind": "method",
               "name": "render",
               "privacy": "private",
@@ -11192,10 +11573,31 @@
               "description": "Placement relative to a double-stemmed beam this rest is a member of (`above`/`below` the beam itself, or `centered` in the real gap between staves) — meaningless outside an active `beam-group`. Unset = auto-classified by the ancestor `<music-measure>`."
             },
             {
+              "name": "technique-text",
+              "type": {
+                "text": "string"
+              },
+              "description": "Technique text over the rest, starting at its left edge, `|` starting a new line (see `<music-note>`)."
+            },
+            {
+              "name": "technique-text-placement",
+              "type": {
+                "text": "TextPlacement"
+              },
+              "description": "`below` draws the technique text under the stave. Defaults to `above`."
+            },
+            {
+              "name": "technique-text-style",
+              "type": {
+                "text": "TextStyle"
+              },
+              "description": "`italic` sets the technique text in italics. Defaults to `normal`."
+            },
+            {
               "type": {
                 "text": "boolean"
               },
-              "description": "Spacer rest: still occupies its beat time (bar-fit and spacing) but draws nothing — e.g. the empty staff's share of a single line passed between the hands.",
+              "description": "Spacer rest: still occupies its beat time (bar-fit and spacing) but draws nothing — e.g. the empty staff's share of a single line passed between the hands. In a staff its `technique-text` is still drawn.",
               "name": "hidden"
             }
           ],
@@ -11879,6 +12281,58 @@
                 "text": "PlacedTechniqueLabel[]"
               },
               "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#placedBelowTexts",
+              "privacy": "private",
+              "type": {
+                "text": "PlacedTechniqueLabel[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#techniqueTextRunOn",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<Element, TechniqueTextRunOn> | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#carriedTechniqueTexts",
+              "privacy": "private",
+              "type": {
+                "text": "readonly CarriedTechniqueText[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#rowRightX",
+              "privacy": "private",
+              "type": {
+                "text": "number | null"
+              },
+              "default": "null",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -14564,7 +15018,7 @@
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "{ left: number; right: number }"
+                  "text": "{ label: TechniqueLabel; margin: number; left: number; right: number }"
                 }
               },
               "parameters": [
@@ -14581,9 +15035,261 @@
                   }
                 },
                 {
-                  "name": "label",
+                  "name": "unwrapped",
                   "type": {
                     "text": "TechniqueLabel"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#layoutBelowTexts",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#belowTextRowTop",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "{ left: number; right: number }"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#ownBelowInk",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ left: number; bottom: number } | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#previousBelowInkRight",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "rowTop",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#clearOfPlacedBelow",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "from",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "height",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "{ left, right }",
+                  "type": {
+                    "text": "{ left: number; right: number }"
+                  }
+                },
+                {
+                  "name": "placed",
+                  "type": {
+                    "text": "readonly PlacedAboveStaffRect[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#techniqueTextAnchorX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#nextTechniqueTextX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#techniqueTextSpan",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ label: TechniqueLabel; margin: number; left: number; right: number }"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "unwrapped",
+                  "type": {
+                    "text": "TechniqueLabel"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
                   }
                 }
               ],
@@ -14653,6 +15359,10 @@
                   "type": {
                     "text": "LabelSpan"
                   }
+                },
+                {
+                  "name": "above",
+                  "default": "true"
                 }
               ],
               "inheritedFrom": {
@@ -14932,6 +15642,38 @@
                   "name": "span",
                   "type": {
                     "text": "{ left: number; right: number }"
+                  }
+                },
+                {
+                  "name": "above",
+                  "default": "true"
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#belowTupletBottomY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
                   }
                 }
               ],
@@ -15298,6 +16040,46 @@
             },
             {
               "kind": "method",
+              "name": "#dynamicCenterClearOfRowEnd",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "centerX",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "marking",
+                  "type": {
+                    "text": "DynamicMarking"
+                  }
+                },
+                {
+                  "name": "bracketed",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "text",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#swellSpan",
               "privacy": "private",
               "return": {
@@ -15529,6 +16311,20 @@
                   }
                 }
               ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#carriedTextTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -16740,6 +17536,168 @@
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#labelMatrix",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ a: number; d: number; e: number; f: number }"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#rectToClient",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "T"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "rect",
+                  "type": {
+                    "text": "T"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#rectToLocal",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "T"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "rect",
+                  "type": {
+                    "text": "T"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "techniqueTextPlacements",
+              "return": {
+                "type": {
+                  "text": "TechniqueTextPlacement[]"
+                }
+              },
+              "description": "This staff's technique texts as placed (client px), for the ancestor\n<music-composition>'s run-on pass.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "notesAreaClientRight",
+              "type": {
+                "text": "number"
+              },
+              "description": "The right end (client px) of this staff's notes area.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "techniqueTextInkY",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "{ left: number; right: number }"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "description": "The outermost ink (client Y) toward one side under a client span, or\nnull with none: what a technique text of an earlier bar clears.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "applyTechniqueTextRunOn",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "runOn",
+                  "type": {
+                    "text": "ReadonlyMap<Element, TechniqueTextRunOn> | null"
+                  }
+                },
+                {
+                  "name": "carried",
+                  "type": {
+                    "text": "readonly CarriedTechniqueText[]"
+                  }
+                },
+                {
+                  "name": "rowRight",
+                  "default": "null",
+                  "type": {
+                    "text": "number | null"
+                  }
+                }
+              ],
+              "description": "Called by the ancestor <music-composition> (client px): how far each\ntechnique text may run on over later bars of its row and the ink under it\nthere, the texts of earlier bars running on over this staff, and the\nrow's right end, which a `dynamic-text` runs on to. Compared by content in\nlocal px; re-lays out and returns true on a change.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "borrowedInkBands",
+              "type": {
+                "text": "readonly VerticalBand[]"
+              },
+              "privacy": "protected",
+              "description": "Ink (client px) drawn over this staff by another, counted as its own.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
               }
             },
             {
@@ -19170,6 +20128,20 @@
               }
             },
             {
+              "kind": "field",
+              "name": "borrowedInkBands",
+              "type": {
+                "text": "readonly VerticalBand[]"
+              },
+              "privacy": "protected",
+              "description": "Ink (client px) drawn over this staff by another, counted as its own.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
+              }
+            },
+            {
               "kind": "method",
               "name": "#inkExtent",
               "privacy": "private",
@@ -20319,6 +21291,58 @@
                 "text": "PlacedTechniqueLabel[]"
               },
               "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#placedBelowTexts",
+              "privacy": "private",
+              "type": {
+                "text": "PlacedTechniqueLabel[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#techniqueTextRunOn",
+              "privacy": "private",
+              "type": {
+                "text": "ReadonlyMap<Element, TechniqueTextRunOn> | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#carriedTechniqueTexts",
+              "privacy": "private",
+              "type": {
+                "text": "readonly CarriedTechniqueText[]"
+              },
+              "default": "[]",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#rowRightX",
+              "privacy": "private",
+              "type": {
+                "text": "number | null"
+              },
+              "default": "null",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -22974,7 +23998,7 @@
               "privacy": "private",
               "return": {
                 "type": {
-                  "text": "{ left: number; right: number }"
+                  "text": "{ label: TechniqueLabel; margin: number; left: number; right: number }"
                 }
               },
               "parameters": [
@@ -22991,9 +24015,261 @@
                   }
                 },
                 {
-                  "name": "label",
+                  "name": "unwrapped",
                   "type": {
                     "text": "TechniqueLabel"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#layoutBelowTexts",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#belowTextRowTop",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "{ left: number; right: number }"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#ownBelowInk",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ left: number; bottom: number } | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#previousBelowInkRight",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "rowTop",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#clearOfPlacedBelow",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "from",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "height",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "{ left, right }",
+                  "type": {
+                    "text": "{ left: number; right: number }"
+                  }
+                },
+                {
+                  "name": "placed",
+                  "type": {
+                    "text": "readonly PlacedAboveStaffRect[]"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#techniqueTextAnchorX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#nextTechniqueTextX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#techniqueTextSpan",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ label: TechniqueLabel; margin: number; left: number; right: number }"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "unwrapped",
+                  "type": {
+                    "text": "TechniqueLabel"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
                   }
                 }
               ],
@@ -23063,6 +24339,10 @@
                   "type": {
                     "text": "LabelSpan"
                   }
+                },
+                {
+                  "name": "above",
+                  "default": "true"
                 }
               ],
               "inheritedFrom": {
@@ -23342,6 +24622,38 @@
                   "name": "span",
                   "type": {
                     "text": "{ left: number; right: number }"
+                  }
+                },
+                {
+                  "name": "above",
+                  "default": "true"
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#belowTupletBottomY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
                   }
                 }
               ],
@@ -23708,6 +25020,46 @@
             },
             {
               "kind": "method",
+              "name": "#dynamicCenterClearOfRowEnd",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "centerX",
+                  "type": {
+                    "text": "number"
+                  }
+                },
+                {
+                  "name": "marking",
+                  "type": {
+                    "text": "DynamicMarking"
+                  }
+                },
+                {
+                  "name": "bracketed",
+                  "type": {
+                    "text": "boolean"
+                  }
+                },
+                {
+                  "name": "text",
+                  "type": {
+                    "text": "string | null"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#swellSpan",
               "privacy": "private",
               "return": {
@@ -23939,6 +25291,20 @@
                   }
                 }
               ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#carriedTextTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -25136,6 +26502,168 @@
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#labelMatrix",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{ a: number; d: number; e: number; f: number }"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#rectToClient",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "T"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "rect",
+                  "type": {
+                    "text": "T"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#rectToLocal",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "T"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "rect",
+                  "type": {
+                    "text": "T"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "techniqueTextPlacements",
+              "return": {
+                "type": {
+                  "text": "TechniqueTextPlacement[]"
+                }
+              },
+              "description": "This staff's technique texts as placed (client px), for the ancestor\n<music-composition>'s run-on pass.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "notesAreaClientRight",
+              "type": {
+                "text": "number"
+              },
+              "description": "The right end (client px) of this staff's notes area.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "techniqueTextInkY",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "span",
+                  "type": {
+                    "text": "{ left: number; right: number }"
+                  }
+                },
+                {
+                  "name": "above",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "description": "The outermost ink (client Y) toward one side under a client span, or\nnull with none: what a technique text of an earlier bar clears.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "applyTechniqueTextRunOn",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "runOn",
+                  "type": {
+                    "text": "ReadonlyMap<Element, TechniqueTextRunOn> | null"
+                  }
+                },
+                {
+                  "name": "carried",
+                  "type": {
+                    "text": "readonly CarriedTechniqueText[]"
+                  }
+                },
+                {
+                  "name": "rowRight",
+                  "default": "null",
+                  "type": {
+                    "text": "number | null"
+                  }
+                }
+              ],
+              "description": "Called by the ancestor <music-composition> (client px): how far each\ntechnique text may run on over later bars of its row and the ink under it\nthere, the texts of earlier bars running on over this staff, and the\nrow's right end, which a `dynamic-text` runs on to. Compared by content in\nlocal px; re-lays out and returns true on a change.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "borrowedInkBands",
+              "type": {
+                "text": "readonly VerticalBand[]"
+              },
+              "privacy": "protected",
+              "description": "Ink (client px) drawn over this staff by another, counted as its own.",
+              "readonly": true,
+              "inheritedFrom": {
+                "name": "StaffElementBase",
+                "module": "src/staffBase.ts"
               }
             },
             {

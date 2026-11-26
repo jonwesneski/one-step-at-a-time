@@ -205,6 +205,24 @@ describe('detectCombinableGroups', () => {
     expect(groups).toHaveLength(0);
   });
 
+  it('combines a dynamic with its text only when the text matches', () => {
+    const marked = (pitch: string, text: string) => {
+      const element = note(pitch, 4);
+      element.setAttribute('dynamic', 'p');
+      element.setAttribute('dynamic-text', text);
+      return element;
+    };
+    const combine = (first: NoteElementType, second: NoteElementType): number =>
+      detectCombinableGroups(
+        new Map([
+          [1, voiceInput([first], [0])],
+          [2, voiceInput([second], [0])],
+        ])
+      ).length;
+    expect(combine(marked('C', 'sub.'), marked('E', 'sub.'))).toBe(1);
+    expect(combine(marked('C', 'sub.'), marked('E', 'dolce'))).toBe(0);
+  });
+
   it('combines a stem cross only with another, never an unpitched note', () => {
     const crossed = (pitch: string) => {
       const element = note(pitch, 4);
@@ -404,11 +422,12 @@ describe('detectCombinableGroups', () => {
     expect(groups).toHaveLength(0);
   });
 
-  it('excludes a bend, free or to a target, and a glissando label', () => {
+  it('excludes a bend, free or to a target, a glissando label and technique text', () => {
     for (const [name, value] of [
       ['bend', 'down'],
       ['bend-to', 'D'],
       ['glissando-label', 'lip'],
+      ['technique-text', 'hum'],
     ]) {
       const bent = note('E', 5);
       bent.setAttribute(name, value);

@@ -9,6 +9,8 @@ import {
 } from '../rules/barlineRules';
 import type { ObstacleRect } from '../rules/connectorPlacementRules';
 import {
+  dynamicTextHalfWidth,
+  dynamicTextTrailingPx,
   type HairpinEndpoint,
   pairHairpinsWithLeftovers,
   pairSharedHairpinsAcrossStaves,
@@ -57,6 +59,7 @@ import {
   resolveRepeatWarnings,
 } from '../rules/repeatWarningRules';
 import type { MarkerBeat } from '../rules/streamMarkerRules';
+import { techniqueTextMaxRight } from '../rules/techniqueTextRules';
 import {
   resolveTrillContinuationSegments,
   resolveTrillSpans,
@@ -86,6 +89,7 @@ import type {
 } from '../types/theory';
 import {
   createDynamicMarkingSvg,
+  createDynamicTextSvg,
   createHairpinSvg,
   createOctaveContinuationSignSvg,
   createOctaveCornerSvg,
@@ -132,6 +136,7 @@ import {
 import {
   COMPOSITION_MAX_WIDTH_PX,
   CONTINUED_CONNECTOR_LEAD_PX,
+  HAIRPIN_DYNAMIC_GAP_PX,
   HAIRPIN_OPEN_HEIGHT,
   OCTAVE_LOCO_GAP_PX,
   OCTAVE_SIGN_ABOVE_STAFF_Y,
@@ -274,6 +279,31 @@ type DynamicsRowStaff = HTMLElement & {
   ownDynamicsRowY?: (side: DynamicsSide) => number;
   dynamicsRowToClientY?: (y: number) => number;
   sharedDynamicsRows?: SharedDynamicsRows;
+};
+
+// A notation staff's technique texts, duck-typed like the octave hooks above
+// (client px).
+type TechniqueTextBox = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  above: boolean;
+};
+type TechniqueTextStaff = HTMLElement & {
+  techniqueTextPlacements?: () => readonly (TechniqueTextBox & {
+    element: Element;
+  })[];
+  notesAreaClientRight?: number;
+  techniqueTextInkY?: (
+    span: { left: number; right: number },
+    above: boolean
+  ) => number | null;
+  applyTechniqueTextRunOn?: (
+    runOn: ReadonlyMap<Element, { maxRight: number; inkY: number | null }>,
+    carried: readonly TechniqueTextBox[],
+    rowRight: number
+  ) => boolean;
 };
 
 // A vocal staff's lyric line, duck-typed the same way.
@@ -652,6 +682,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         )) {
           staff.respaceToCurrentWidth();
         }
+        if (this.#updateTechniqueTextRunOn()) {
+          this.#alignRowStaffSpace();
+          this.#updateTechniqueTextRunOn();
+        }
         const octaveContinuations = this.#resolveOctaveContinuations();
         this.#applyOctaveRowHeights(octaveContinuations);
         this.#applyOctaveContinuationCoverage(octaveContinuations);
@@ -770,6 +804,99 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             ) || changed;
         }
       }
+      return changed;
+    }
+
+    // Technique texts run on over later bars of their row, one track per
+    // staff position: each staff learns how far its texts may reach and the
+    // ink under them there, and the texts running on over it. A text changing
+    // moves what later bars clear, so this repeats until nothing changes.
+    // Returns whether any staff re-laid out.
+    #updateTechniqueTextRunOn(): boolean {
+      let changedAtAll = false;
+      for (let pass = 0; pass < 3; pass++) {
+        let changed = false;
+        for (const track of this.#buildStaffTracks()) {
+          const rows = new Map<number, TechniqueTextStaff[]>();
+          for (const { staff, rowIndex } of track) {
+            const textStaff = staff as TechniqueTextStaff;
+            if (typeof textStaff.applyTechniqueTextRunOn === 'function') {
+              rows.set(rowIndex, [...(rows.get(rowIndex) ?? []), textStaff]);
+            }
+          }
+          for (const staves of rows.values()) {
+            changed = this.#runOnTechniqueTexts(staves) || changed;
+          }
+        }
+        changedAtAll = changedAtAll || changed;
+        if (!changed) {
+          break;
+        }
+      }
+      return changedAtAll;
+    }
+
+    // One row of one staff position's bars, in order.
+    #runOnTechniqueTexts(staves: readonly TechniqueTextStaff[]): boolean {
+      const placements = staves.map(
+        (staff) => staff.techniqueTextPlacements?.() ?? []
+      );
+      const rowRight = staves[staves.length - 1].notesAreaClientRight ?? 0;
+      const runOns = staves.map(
+        () => new Map<Element, { maxRight: number; inkY: number | null }>()
+      );
+      const carried = staves.map((): TechniqueTextBox[] => []);
+      staves.forEach((staff, p) => {
+        const ownBarRight = staff.notesAreaClientRight ?? 0;
+        for (const text of placements[p]) {
+          const nextTextX =
+            placements
+              .slice(p + 1)
+              .map((later) =>
+                later
+                  .filter(({ above }) => above === text.above)
+                  .map(({ left }) => left)
+              )
+              .find((xs) => xs.length > 0)
+              ?.reduce((x, y) => Math.min(x, y)) ?? null;
+          const inkYs: number[] = [];
+          for (let q = p + 1; q < staves.length; q++) {
+            if (staves[q].getBoundingClientRect().left >= text.right) {
+              break;
+            }
+            const inkY = staves[q].techniqueTextInkY?.(text, text.above);
+            if (inkY !== null && inkY !== undefined) {
+              inkYs.push(inkY);
+            }
+            carried[q].push({
+              left: text.left,
+              right: text.right,
+              top: text.top,
+              bottom: text.bottom,
+              above: text.above,
+            });
+          }
+          runOns[p].set(text.element, {
+            maxRight: techniqueTextMaxRight({
+              rowRight,
+              nextTextX,
+              ownBarRight,
+            }),
+            inkY:
+              inkYs.length === 0
+                ? null
+                : text.above
+                ? Math.min(...inkYs)
+                : Math.max(...inkYs),
+          });
+        }
+      });
+      let changed = false;
+      staves.forEach((staff, p) => {
+        changed =
+          staff.applyTechniqueTextRunOn?.(runOns[p], carried[p], rowRight) ||
+          changed;
+      });
       return changed;
     }
 
@@ -1170,7 +1297,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             .top - rootRect.top;
         const startBounds = {
           left: startRect.left - rootRect.left,
-          right: startRect.right - rootRect.left,
+          right: Math.max(
+            startRect.right - rootRect.left,
+            startElement.dynamic === null ||
+              (startElement.dynamicText ?? null) === null
+              ? -Infinity
+              : this.#headCenterX(startElement, rootRect) +
+                  dynamicTextHalfWidth(
+                    startElement.dynamic,
+                    startElement.dynamicReminder
+                  ) +
+                  dynamicTextTrailingPx(startElement.dynamicText) +
+                  HAIRPIN_DYNAMIC_GAP_PX
+          ),
           top: rowTop(startElement, startRect),
         };
         const endBounds = {
@@ -1217,16 +1356,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             return null;
           }
           stems ??= collectStemRects(this, rootRect);
+          const text = element.dynamicText ?? null;
           return {
             marking: element.dynamic,
             bracketed: element.dynamicReminder,
+            text,
             centerX: dynamicTextCenterClearOfStems(
               this.#headCenterX(element, rootRect),
               element.dynamic,
               stems,
               gap,
               awayDirection,
-              element.dynamicReminder
+              element.dynamicReminder,
+              text
             ),
           };
         };
@@ -1283,6 +1425,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
                     bracketed: text.bracketed,
                   })
                 );
+                if (text.text) {
+                  overlay.appendChild(
+                    createDynamicTextSvg(
+                      text.text,
+                      text.marking,
+                      text.centerX,
+                      centerY,
+                      { bracketed: text.bracketed }
+                    )
+                  );
+                }
               }
             }
           }

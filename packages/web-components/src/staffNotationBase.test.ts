@@ -2502,6 +2502,221 @@ describe('glissando labels', () => {
   });
 });
 
+describe('technique text', () => {
+  const WIDTH = 400;
+
+  function renderStaff(markup: string): any {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    document.body.appendChild(staff);
+    staff.shadowRoot.querySelector(
+      '.transcribe-container'
+    ).getBoundingClientRect = () => ({
+      width: WIDTH,
+      left: 0,
+      right: WIDTH,
+      top: 0,
+      bottom: 0,
+      height: 0,
+    });
+    staff.innerHTML = markup;
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+  const quarter = (attributes: string, pitch = 'note="C" octave="5"') =>
+    `<music-note ${pitch} duration="quarter" ${attributes}></music-note>`;
+  const at = (element: Element | null | undefined, name: string) =>
+    Number(element?.getAttribute(name));
+  const textsOf = (staff: any): Element[] =>
+    Array.from(
+      staff.shadowRoot.querySelectorAll(
+        '.technique-labels-container .technique-text'
+      )
+    );
+  const staffBottomY =
+    STAFF_Y_PADDING + STAFF_BOTTOM_LINE_Y - NOTE_HEAD_Y_OFFSET_CORRECTION;
+
+  it('stacks above a glissando label on its note', () => {
+    const staff = renderStaff(
+      quarter('glissando-label="lip" technique-text="hum"')
+    );
+    const gliss = staff.shadowRoot.querySelector('.glissando-label');
+    const [text] = textsOf(staff);
+    expect(at(gliss, 'y') - at(text, 'y')).toBeGreaterThanOrEqual(
+      TECHNIQUE_LABEL_FONT_SIZE_PX + TECHNIQUE_LABEL_GAP_PX
+    );
+  });
+
+  it('moves the second of two overlapping texts in a bar up', () => {
+    const staff = renderStaff(
+      quarter('technique-text="a much longer instruction"') +
+        quarter('technique-text="next"')
+    );
+    const [first, second] = textsOf(staff);
+    expect(at(second, 'y')).toBeLessThan(at(first, 'y'));
+  });
+
+  it('starts over a rest at its left edge, a hidden one included', () => {
+    const staff = renderStaff(
+      '<music-rest duration="quarter" hidden technique-text="spoken"></music-rest>' +
+        quarter('')
+    );
+    expect(textsOf(staff).map(({ textContent }) => textContent)).toEqual([
+      'spoken',
+    ]);
+  });
+
+  it('goes below the stave, beneath its ink and above the dynamics', () => {
+    const staff = renderStaff(
+      quarter(
+        'technique-text="legato" technique-text-placement="below" dynamic="p"',
+        'note="F" octave="5"'
+      )
+    );
+    const [text] = textsOf(staff);
+    const marking = staff.shadowRoot.querySelector('.dynamic-marking');
+    expect(at(text, 'y') - TECHNIQUE_LABEL_FONT_SIZE_PX).toBeCloseTo(
+      staffBottomY + STAFF_LINE_SPACING
+    );
+    expect(at(marking, 'y')).toBeGreaterThan(at(text, 'y'));
+  });
+
+  it('ends before its own ledger lines below, or drops under them', () => {
+    const ledgered = (before: string, placement = 'below') => {
+      const staff = renderStaff(
+        before +
+          quarter(
+            `technique-text="hum" technique-text-placement="${placement}"`,
+            'note="A" octave="3"'
+          )
+      );
+      const text = textsOf(staff)[0];
+      const result = { x: at(text, 'x'), y: at(text, 'y') };
+      document.body.innerHTML = '';
+      return result;
+    };
+    const roomy = ledgered(quarter('').repeat(2));
+    const crowded = ledgered('');
+    expect(crowded.y).toBeGreaterThan(roomy.y);
+    expect(roomy.x).toBeLessThan(ledgered(quarter('').repeat(2), 'above').x);
+    expect(crowded.x).toBe(ledgered('', 'above').x);
+  });
+
+  it('keeps room above and below the stave for its lines', () => {
+    const margins = (markup: string) => {
+      const staff = renderStaff(markup);
+      const result = {
+        top: parseFloat(staff.style.marginTop || '0'),
+        bottom: parseFloat(staff.style.marginBottom || '0'),
+      };
+      document.body.innerHTML = '';
+      return result;
+    };
+    const one = margins(quarter('technique-text="hum"'));
+    expect(margins(quarter('technique-text="hum|softly"')).top).toBeGreaterThan(
+      one.top
+    );
+    expect(
+      margins(
+        quarter('technique-text="hum|softly" technique-text-placement="below"')
+      ).bottom
+    ).toBeGreaterThan(
+      margins(quarter('technique-text="hum" technique-text-placement="below"'))
+        .bottom
+    );
+  });
+
+  it('runs on to the limit the composition gives, and clears the ink there', () => {
+    const long = 'm'.repeat(30);
+    const staff = renderStaff(
+      quarter('').repeat(3) + quarter(`technique-text="${long}"`)
+    );
+    const [shifted] = textsOf(staff);
+    const [placement] = staff.techniqueTextPlacements();
+
+    const runOn = new Map([
+      [
+        placement.element,
+        { maxRight: staff.notesAreaClientRight + 1000, inkY: null },
+      ],
+    ]);
+    expect(staff.applyTechniqueTextRunOn(runOn, [], null)).toBe(true);
+    expect(staff.applyTechniqueTextRunOn(runOn, [], null)).toBe(false);
+    const [runningOn] = textsOf(staff);
+    const freeY = at(runningOn, 'y');
+    expect(at(runningOn, 'x')).toBeGreaterThan(at(shifted, 'x'));
+
+    staff.applyTechniqueTextRunOn(
+      new Map([
+        [
+          placement.element,
+          {
+            maxRight: staff.notesAreaClientRight + 1000,
+            inkY: placement.top - 30,
+          },
+        ],
+      ]),
+      [],
+      null
+    );
+    expect(at(textsOf(staff)[0], 'y')).toBeLessThan(freeY);
+  });
+
+  it("re-lays out for the row's end only when it has a dynamic-text", () => {
+    const plain = renderStaff(quarter('dynamic="p"'));
+    expect(plain.applyTechniqueTextRunOn(null, [], 900)).toBe(false);
+    expect(plain.applyTechniqueTextRunOn(null, [], 950)).toBe(false);
+    document.body.innerHTML = '';
+    const withText = renderStaff(quarter('dynamic="p" dynamic-text="sub."'));
+    expect(withText.applyTechniqueTextRunOn(null, [], 900)).toBe(true);
+    expect(withText.applyTechniqueTextRunOn(null, [], 900)).toBe(false);
+  });
+
+  it('moves its own labels above a text running on over it', () => {
+    const staff = renderStaff(quarter('technique-text="hum"'));
+    const [own] = staff.techniqueTextPlacements();
+    const before = at(textsOf(staff)[0], 'y');
+    const marginBefore = parseFloat(staff.style.marginTop || '0');
+    staff.applyTechniqueTextRunOn(
+      null,
+      [{ ...own, above: true, left: own.left - 50, right: own.right + 50 }],
+      null
+    );
+    expect(at(textsOf(staff)[0], 'y')).toBeLessThan(before);
+    expect(parseFloat(staff.style.marginTop || '0')).toBeGreaterThan(
+      marginBefore
+    );
+  });
+
+  it('draws a dynamic-text after its marking, shifting both left at the end', () => {
+    const marked = (before: string, text: string) => {
+      const staff = renderStaff(
+        before + quarter(`dynamic="mp" dynamic-text="${text}"`)
+      );
+      const marking = staff.shadowRoot.querySelector('.dynamic-marking');
+      const after = staff.shadowRoot.querySelector('.dynamic-text');
+      const result = {
+        markingX: at(marking, 'x'),
+        textX: at(after, 'x'),
+        textY: at(after, 'y'),
+        markingY: at(marking, 'y'),
+        italic: after?.getAttribute('font-style'),
+      };
+      document.body.innerHTML = '';
+      return result;
+    };
+    const short = marked('', 'sub.');
+    expect(short.textX).toBeGreaterThan(short.markingX);
+    expect(short.textY).toBe(short.markingY);
+    expect(short.italic).toBe('italic');
+    const atEnd = marked(quarter('').repeat(3), 'sub.');
+    const pushed = marked(quarter('').repeat(3), 'm'.repeat(20));
+    expect(pushed.markingX).toBeLessThan(atEnd.markingX);
+  });
+});
+
 describe('key changes and end-of-measure warnings', () => {
   const D_TO_C = {
     from: { keySig: 'D', mode: 'major' },
