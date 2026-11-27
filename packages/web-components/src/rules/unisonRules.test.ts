@@ -72,6 +72,30 @@ describe('canShareNotehead', () => {
     );
   });
 
+  it('never shares a head between a cue and a full-size part', () => {
+    expect(
+      canShareNotehead(
+        part(1, 'up', 'quarter', { scale: 0.75 }),
+        part(2, 'down', 'quarter')
+      )
+    ).toBe(false);
+    expect(
+      canShareNotehead(
+        part(1, 'up', 'quarter', { scale: 0.75 }),
+        part(2, 'down', 'quarter', { scale: 0.75 })
+      )
+    ).toBe(true);
+  });
+
+  it('never shares an unpitched head', () => {
+    expect(
+      canShareNotehead(
+        part(1, 'up', 'quarter', { unpitched: true }),
+        part(2, 'down', 'quarter')
+      )
+    ).toBe(false);
+  });
+
   it('shares a head between a chord and a note, but never between two chords', () => {
     expect(
       canShareNotehead(
@@ -311,6 +335,25 @@ describe('accidentalChromaticRank', () => {
     expect(accidentalChromaticRank(null)).toBe(
       accidentalChromaticRank('natural')
     );
+  });
+
+  it('puts quarter-tones between their neighbors', () => {
+    const ascending: AccidentalType[] = [
+      'double-flat-down',
+      'double-flat',
+      'double-flat-up',
+      'flat',
+      'flat-up',
+      'natural',
+      'natural-up',
+      'sharp',
+      'sharp-up',
+      'double-sharp',
+      'double-sharp-up',
+    ];
+    const ranks = ascending.map(accidentalChromaticRank);
+    expect([...ranks].sort((a, b) => a - b)).toEqual(ranks);
+    expect(new Set(ranks).size).toBe(ranks.length);
   });
 });
 

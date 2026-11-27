@@ -150,22 +150,25 @@ function spacesCoveredByChord(topHead: number, bottomHead: number): number[] {
 /** Centre x of each dot in a row that starts (left ink edge) at `leftX`. */
 export function augmentationDotCentersX(
   leftX: number,
-  dotCount: number
+  dotCount: number,
+  scale = 1
 ): number[] {
-  const pitch = AUGMENTATION_DOT_DIAMETER_PX + AUGMENTATION_DOT_SPACING_GAP_PX;
+  const pitch =
+    scale * (AUGMENTATION_DOT_DIAMETER_PX + AUGMENTATION_DOT_SPACING_GAP_PX);
   return Array.from(
     { length: dotCount },
-    (_, i) => leftX + AUGMENTATION_DOT_DIAMETER_PX / 2 + i * pitch
+    (_, i) => leftX + (scale * AUGMENTATION_DOT_DIAMETER_PX) / 2 + i * pitch
   );
 }
 
 /** Horizontal ink extent of a row of `dotCount` dots. */
-export function augmentationDotRowWidthPx(dotCount: number): number {
+export function augmentationDotRowWidthPx(dotCount: number, scale = 1): number {
   if (dotCount === 0) {
     return 0;
   }
   return (
-    dotCount * AUGMENTATION_DOT_DIAMETER_PX +
-    (dotCount - 1) * AUGMENTATION_DOT_SPACING_GAP_PX
+    scale *
+    (dotCount * AUGMENTATION_DOT_DIAMETER_PX +
+      (dotCount - 1) * AUGMENTATION_DOT_SPACING_GAP_PX)
   );
 }

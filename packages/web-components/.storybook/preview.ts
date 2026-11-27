@@ -36,6 +36,7 @@ const preview: Preview = {
           [
             'Ties',
             'Slurs',
+            'Glissandos',
             'Dynamics & Hairpins',
             'Tuplets',
             'Arpeggio',
@@ -45,6 +46,8 @@ const preview: Preview = {
             'Octave Signs',
             'Clef Changes',
             'Key Changes',
+            'Quarter-Tones',
+            'Technique Text',
             'Repeats',
             'Beams',
             'Voices',

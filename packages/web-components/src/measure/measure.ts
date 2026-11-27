@@ -48,6 +48,7 @@ import {
   computeHairpinXSpan,
   pairSharedHairpinsAcrossStaves,
   resolveChainSpans,
+  resolveSwellRow,
 } from '../rules/dynamicsRules';
 import {
   type EndingSegment,
@@ -77,8 +78,12 @@ import {
   resolveSharedStemPairs,
   type SharedStemEntry,
 } from '../rules/sharedStemRules';
-import { resolveStaffGroups } from '../rules/staffGroupRules';
-import { measureFlexValue } from '../rules/staffWidth';
+import type { VoiceRooms } from '../rules/spacingRules';
+import {
+  connectedBarlineGaps,
+  resolveStaffGroups,
+} from '../rules/staffGroupRules';
+import { barMinWidthCss, measureFlexValue } from '../rules/staffWidth';
 import {
   barlineTypeConflicts,
   MARKER_BEAT_EPSILON,
@@ -94,8 +99,11 @@ import { acceptsBeamAttach, tremoloBeamCounts } from '../rules/tremoloRules';
 import {
   parseTupletRatio,
   type TupletBracketGeometry,
+  tupletDisplay,
+  tupletDisplayOf,
 } from '../rules/tupletRules';
 import { computeBandOverflow, VerticalBand } from '../rules/verticalSpaceRules';
+import type { StaffWidths } from '../staffBase';
 import type {
   NoteChordOrRestElementType,
   NoteOrChordElementType,
@@ -119,6 +127,7 @@ import {
   createBracketSvg,
   createDoubleStemmedBeamPolygon,
   createDynamicMarkingSvg,
+  createDynamicTextSvg,
   createEndingSegmentSvg,
   createHairpinSvg,
   createSharedStemLine,
@@ -133,6 +142,7 @@ import {
   MUSIC_REST,
   MUSIC_REST_NODE,
   MUSIC_STAFF_GUITAR_TAB_NODE,
+  MUSIC_STAFF_VOCAL_NODE,
   MUSIC_TREMOLO,
   MUSIC_TUPLET,
   MUSIC_VOICE,
@@ -146,19 +156,17 @@ import {
 } from '../utils';
 import {
   buildConnectorSvgs,
-  collectArpeggioTiePairs,
+  collectConnectorPairs,
   collectEntryObstacles,
-  collectNoteLikeElements,
-  collectPhraseSlurPairs,
   collectStemRects,
   isInnerVoiceMember,
-  pairConnectors,
-  partitionByVoice,
   resolveDoubleStemmedBeamConnectorContext,
   resolveSlurGroupPlacement,
 } from '../utils/connectorsBuilder';
+import { isRowFlexItem } from '../utils/isRowFlexItem';
 import {
   ARPEGGIO_CHORD_GAP_PX,
+  BARLINE_THIN_PX,
   BASE_STEM_LENGTH_PX,
   BEAM_GAP_PX,
   BEAM_STEP_PX,
@@ -191,7 +199,6 @@ import {
   STEM_OVERLAP_PX,
   TUPLET_HOOK_LENGTH_PX,
   TUPLET_NUMERAL_BEAM_GAP_PX,
-  TUPLET_NUMERAL_FONT_SIZE,
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from '../utils/notationDimensions';
 import {
@@ -201,6 +208,7 @@ import {
   parseMeasureNumberDisplay,
   parseTremoloBeamAttach,
   parseTremoloStrokes,
+  resolveNoteSize,
 } from '../utils/parsers';
 import { flattenSlotElements } from '../utils/slotElements';
 import {
@@ -262,6 +270,7 @@ type MeasureDynamicsPlan = {
     centerX: number;
     y: number;
     bracketed?: boolean;
+    text?: string | null;
   }[];
 };
 
@@ -294,9 +303,12 @@ function hangingTupletNumeralShapes(
     point: { x: number };
   }[]
 ): DoubleStemmedBeamAttachedShape[] {
-  const byTuplet = new Map<Element, { xs: number[]; stemUp: boolean }>();
+  const byTuplet = new Map<
+    TupletElementType,
+    { xs: number[]; stemUp: boolean }
+  >();
   for (const { element, stemUp, point } of memberGeometries) {
-    const tuplet = element.closest(MUSIC_TUPLET);
+    const tuplet = element.closest<TupletElementType>(MUSIC_TUPLET);
     if (tuplet === null) {
       continue;
     }
@@ -305,13 +317,19 @@ function hangingTupletNumeralShapes(
     byTuplet.set(tuplet, entry);
   }
   const near = BEAM_THICKNESS_PX + TUPLET_NUMERAL_BEAM_GAP_PX;
-  const far = near + TUPLET_NUMERAL_FONT_SIZE;
-  return Array.from(byTuplet.values(), ({ xs, stemUp }) => ({
-    left: Math.min(...xs),
-    right: Math.max(...xs),
-    topOffset: stemUp ? -far : near,
-    bottomOffset: stemUp ? -near : far,
-  }));
+  return Array.from(byTuplet, ([tuplet, { xs, stemUp }]) => {
+    const display = tupletDisplay(
+      parseTupletRatio(tuplet.ratio),
+      tuplet.noteValue
+    );
+    const far = near + display.ascent + display.descent;
+    return {
+      left: Math.min(...xs),
+      right: Math.max(...xs),
+      topOffset: stemUp ? -far : near,
+      bottomOffset: stemUp ? -near : far,
+    };
+  });
 }
 
 // A cross-staff tuplet's members with the share of their written value each
@@ -369,10 +387,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     }
 
     #staffConnectorObserver: ResizeObserver;
-    #staffWidths = new Map<
-      EventTarget,
-      { minWidth: number; naturalWidth: number }
-    >();
+    #staffWidths = new Map<EventTarget, StaffWidths>();
     // Elements #redrawSharedStems set noStem on, so a pair that stops
     // resolving gets its own stems back.
     #sharedStemSuppressedElements = new Set<NoteOrChordElementType>();
@@ -385,7 +400,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // Relative to each staff's top line (see applyOctaveContinuationRects).
     #octaveContinuationRects = new Map<Element, readonly ObstacleRect[]>();
     #boundSyncMarkerBeats = () => this.#syncMarkerBeats();
-    #boundSyncBarlineSlots = () => this.#syncBarlineSlots();
+    #boundSyncBarlineSlots = () => {
+      this.#syncVoiceRooms();
+      this.#syncBarlineSlots();
+    };
     #lastTabMirrorWarnings = new Set<string>();
     #lastBarlineWarnings = new Set<string>();
 
@@ -493,6 +511,28 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       });
     }
 
+    // Every staff places its beats from what every staff's entries need, so
+    // same-beat entries stay aligned.
+    #syncVoiceRooms(): void {
+      const staves = Array.from(this.children).filter(
+        (child) =>
+          isStaffNodeName(child.nodeName) && 'measureVoiceRooms' in child
+      ) as unknown as {
+        ownVoiceRooms: readonly VoiceRooms[] | null;
+        measureVoiceRooms: readonly VoiceRooms[];
+      }[];
+      const own = staves.map((staff) => staff.ownVoiceRooms);
+      // Wait for every staff, rather than lay each one out again per sibling.
+      if (own.includes(null)) {
+        return;
+      }
+      staves.forEach((staff, i) => {
+        staff.measureVoiceRooms = own.flatMap((rooms, k) =>
+          k === i ? [] : rooms ?? []
+        );
+      });
+    }
+
     // A mid-bar barline runs through every staff at one x: each staff places
     // its slot from its own entries, and every staff takes the furthest
     // right. A staff only moves a slot right, so the exchange settles.
@@ -546,18 +586,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           target.startRepeat = this.repeatStart ? 'full' : 'none';
         }
       }
+      this.refreshGroupBarlines();
     }
 
     #onStaffMinWidth = (event: Event): void => {
-      const customEvent = event as CustomEvent<{
-        minWidth: number;
-        naturalWidth: number;
-      }>;
+      const customEvent = event as CustomEvent<StaffWidths>;
       if (customEvent.target) {
-        this.#staffWidths.set(customEvent.target, {
-          minWidth: customEvent.detail.minWidth,
-          naturalWidth: customEvent.detail.naturalWidth,
-        });
+        this.#staffWidths.set(customEvent.target, customEvent.detail);
       }
       const widths = [...this.#staffWidths.values()];
       const maxMinWidth = Math.max(...widths.map((w) => w.minWidth));
@@ -567,7 +602,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       // below the absolute floor), set apart from the basis so a crowded measure
       // can still shrink toward it before the row wraps.
       this.style.flex = measureFlexValue(maxNaturalWidth);
-      this.style.minWidth = `${Math.max(maxMinWidth, MEASURE_MIN_WIDTH_PX)}px`;
+      const minWidth = Math.max(maxMinWidth, MEASURE_MIN_WIDTH_PX);
+      // In a row of measures the basis asks for the same room.
+      this.style.minWidth =
+        this.closest(MUSIC_COMPOSITION) !== null || isRowFlexItem(this)
+          ? `${minWidth}px`
+          : barMinWidthCss(
+              minWidth,
+              Math.max(...widths.map((w) => w.uncrowdedWidth)),
+              'calc(100% - var(--measure-decoration-width, 0px))'
+            );
       // Connectors run after double-stemmed beams: a slur reads the drawn
       // beam polygon to avoid crossing it.
       this.#pushBarlinesToStaves();
@@ -583,6 +627,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#redrawMeasureDynamics();
       this.#redrawConnectors();
       this.#redrawSharedStems();
+      this.refreshGroupBarlines();
     };
     #boundUpdateConnectorVisibility: () => void;
     #boundRedrawArpeggios = () => this.#redrawArpeggios(true);
@@ -612,6 +657,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     // tuplets this pass avoids, so each registration below follows theirs.
     #boundRedrawMeasureDynamics = () => this.#redrawMeasureDynamics();
     #boundRedrawGapPasses = () => this.#redrawGapPasses();
+    #boundRefreshGroupBarlines = () => this.refreshGroupBarlines();
 
     constructor() {
       super();
@@ -793,6 +839,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         // beam polygon to avoid crossing it, so connectors redraw after beams.
         [STAFF_EVENTS.NOTES_POSITIONED, this.#boundRedrawConnectors],
         [STAFF_EVENTS.NOTES_POSITIONED, this.#boundRedrawSharedStems],
+        [STAFF_EVENTS.NOTES_POSITIONED, this.#boundRefreshGroupBarlines],
         [
           STAFF_EVENTS.GROUP_ATTRIBUTE_CHANGE,
           this.#boundUpdateConnectorVisibility,
@@ -926,25 +973,32 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           }
 
           :host(.has-group-connector) {
-            margin-left: ${Math.max(
+            --measure-decoration-width: ${Math.max(
               BRACE_WIDTH_PX + BRACE_STAFF_GAP_PX,
               BRACKET_WIDTH_PX
             )}px;
           }
 
           :host(.has-staff-label) {
-            margin-left: ${STAFF_LABEL_WIDTH_PX + STAFF_LABEL_LEFT_MARGIN_PX}px;
+            --measure-decoration-width: ${
+              STAFF_LABEL_WIDTH_PX + STAFF_LABEL_LEFT_MARGIN_PX
+            }px;
           }
 
           /* Combined reservation is summed, not jointly tuned — a v1
              simplification when a measure has both a brace/bracket and a
              staff label (see packages/web-components/CLAUDE.md). */
           :host(.has-group-connector.has-staff-label) {
-            margin-left: ${
+            --measure-decoration-width: ${
               Math.max(BRACE_WIDTH_PX + BRACE_STAFF_GAP_PX, BRACKET_WIDTH_PX) +
               STAFF_LABEL_WIDTH_PX +
               STAFF_LABEL_LEFT_MARGIN_PX
             }px;
+          }
+
+          :host(.has-group-connector),
+          :host(.has-staff-label) {
+            margin-left: var(--measure-decoration-width);
           }
 
           /* A one-column grid so staves' vertical-space margins add up
@@ -1002,6 +1056,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             opacity: 0;
           }
 
+          .group-barlines {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+          }
+
+          .group-barlines > * {
+            position: absolute;
+            background-color: currentColor;
+          }
+
           .group-connectors {
             position: absolute;
             inset: 0;
@@ -1014,63 +1079,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             position: absolute;
           }
 
-          .arpeggio-connectors {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            overflow: visible;
-            color: currentColor;
-          }
-
-          .connectors-overlay {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            overflow: visible;
-            color: currentColor;
-          }
-
-          .shared-dynamics-overlay {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            overflow: visible;
-            color: currentColor;
-          }
-
-          .double-stemmed-beams-overlay {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            overflow: visible;
-            color: currentColor;
-          }
-
-          .cross-staff-tremolos-overlay {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            overflow: visible;
-            color: currentColor;
-          }
-
-          .cross-staff-tuplets-overlay {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            overflow: visible;
-            color: currentColor;
-          }
-
-          .shared-stems-overlay {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            overflow: visible;
-            color: currentColor;
-          }
-
-          .endings-overlay {
+          /* An svg with no size of its own is 300 x 150px, which would make
+             the page scroll past a narrow bar at the end of a row. */
+          .measure-content > svg {
             position: absolute;
             inset: 0;
             width: 100%;
@@ -1084,6 +1095,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           <div class="staff-connector"></div>
           <div class="group-connectors"></div>
           <div class="staff-labels"></div>
+          <!-- barlines between the staves of a brace or bracket; first, so
+               everything else in the gap is drawn over them -->
+          <div class="group-barlines"></div>
           <!-- must be <svg>: holds <g> arpeggio-sign nodes that share this
                element's coordinate space; inset:0 aligns that space 1:1 with
                the measure box so #redrawArpeggios can position with raw px -->
@@ -1177,6 +1191,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
       this.#renderGroupConnectors(this.#firstInRow);
       this.#renderStaffLabels(this.#firstInRow);
+      this.refreshGroupBarlines();
       this.#renderEnding();
     }
 
@@ -1594,13 +1609,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         overlay.removeChild(overlay.firstChild);
       }
 
-      const noteLikeElements = collectNoteLikeElements(this);
-      const byVoice = partitionByVoice(noteLikeElements);
-      const pairs = [
-        ...[...byVoice.values()].flatMap((notes) => pairConnectors(notes)),
-        ...collectArpeggioTiePairs(this),
-        ...collectPhraseSlurPairs(this),
-      ];
+      const { pairs } = collectConnectorPairs(this);
       if (pairs.length === 0) {
         this.#reserveOverlaySpace(overlay);
         return;
@@ -1619,7 +1628,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       const svgs = buildConnectorSvgs(pairs, {
         rootRect,
-        rowLeft: 0,
+        rowLeftOf: () => 0,
         beamRects,
         groupSlurStaves: resolveSlurGroupPlacement(pairs, elementToGroup),
         innerVoiceElements: innerVoiceStemAnchorElements,
@@ -1699,6 +1708,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             bracketed: marking.bracketed,
           })
         );
+        if (marking.text) {
+          overlay.appendChild(
+            createDynamicTextSvg(
+              marking.text,
+              marking.marking,
+              marking.centerX,
+              marking.y,
+              { bracketed: marking.bracketed }
+            )
+          );
+        }
       }
       const rect = this.getBoundingClientRect();
       const [overflow] = computeBandOverflow(
@@ -1737,6 +1757,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       const beamSlices = entryObstacles.beamSlices;
       const obstacles: ObstacleRect[] = [
         ...entryObstacles.entries.flatMap((entry) => entry.glyphRects),
+        ...entryObstacles.decorationRects,
         ...this.#crossStaffTupletRects(measureRect),
         ...staves.flatMap((staff, staffIndex) => [
           ...(staffIndex > 0
@@ -1801,11 +1822,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           stems,
           gap,
           awayDirection,
-          bracketed
+          bracketed,
+          element.dynamicText ?? null
         );
       };
       const leftX = (element: NoteOrChordElementType) =>
         element.getBoundingClientRect().left - measureRect.left;
+      // A swell's `dynamic-end`, from viewport px to this measure's.
+      const measureEndText = (
+        text: HairpinEndpointText | null
+      ): HairpinEndpointText | null =>
+        text === null
+          ? null
+          : { ...text, centerX: text.centerX - measureRect.left };
       const spanFor = (
         start: NoteOrChordElementType,
         end: NoteOrChordElementType,
@@ -1815,6 +1844,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           ? {
               marking: start.dynamic,
               bracketed: start.dynamicReminder,
+              text: start.dynamicText ?? null,
               centerX: textCenterX(start, start.dynamic, -1, gap),
             }
           : null;
@@ -1822,6 +1852,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           ? {
               marking: end.dynamic,
               bracketed: end.dynamicReminder,
+              text: end.dynamicText ?? null,
               centerX: textCenterX(end, end.dynamic, 1, gap),
             }
           : null;
@@ -1834,6 +1865,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           endMarking: endText?.marking ?? null,
           startBracketed: startText?.bracketed,
           endBracketed: endText?.bracketed,
+          startDynamicText: startText?.text ?? null,
         });
         return { startX: span.startX, endX: span.endX, startText, endText };
       };
@@ -1865,7 +1897,8 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
               text.marking,
               text.centerX,
               y,
-              text.bracketed
+              text.bracketed,
+              text.text ?? null
             )
           );
         }
@@ -1971,6 +2004,65 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         placeText(endText, y);
       }
 
+      // A shared swell over its tie chain, in the gap like a shared hairpin.
+      defaults.forEach((staffDefaults, staffIndex) => {
+        for (const swell of staffDefaults.swells) {
+          const element = swell.element;
+          if (!element.dynamicShared) {
+            continue;
+          }
+          const gap = gapBetween(staffIndex, partnerOf(staffIndex));
+          const startText = element.dynamic
+            ? {
+                marking: element.dynamic,
+                bracketed: element.dynamicReminder,
+                text: element.dynamicText ?? null,
+                centerX: textCenterX(element, element.dynamic, -1, gap),
+              }
+            : null;
+          const endText = measureEndText(swell.endText);
+          const segments = resolveSwellRow({
+            shape: swell.shape,
+            rawStartX: leftX(element),
+            endX: swell.endClientX - measureRect.left,
+            midX: swell.midClientX - measureRect.left,
+            centerY: 0,
+            startText,
+          });
+          if (segments === null) {
+            continue;
+          }
+          const y =
+            resolveSharedHairpinY({
+              kind: 'crescendo',
+              startX: segments[0].startX,
+              endX: segments[segments.length - 1].endX,
+              openHeight: HAIRPIN_OPEN_HEIGHT,
+              topGapEdgeY: gap.topGapEdgeY,
+              bottomGapEdgeY: gap.bottomGapEdgeY,
+              beamSlices,
+              obstacles,
+              startText,
+              endText,
+            }) ?? gap.belowSystemY;
+          override(staves[staffIndex], element, {
+            hairpin: 'measure',
+            marking: 'measure',
+          });
+          for (const segment of segments) {
+            placeHairpin(
+              segment.kind,
+              { x: segment.startX, y },
+              { x: segment.endX, y },
+              false
+            );
+          }
+          placedEndpoints.add(element);
+          placeText(startText, y);
+          placeText(endText, y);
+        }
+      });
+
       // A one-hand hairpin under a double-stemmed group. Hairpins linked end
       // to start on one staff (a crescendo into a diminuendo) form a chain
       // that is placed as one. A chain whose default row sits in the gap and
@@ -2014,7 +2106,28 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           (pair) =>
             !pairs.some((other) => other.endElement === pair.startElement)
         );
-        for (const head of heads) {
+        const endpointText = (
+          element: NoteOrChordElementType,
+          direction: -1 | 1
+        ): HairpinEndpointText | null =>
+          element.dynamic === null
+            ? null
+            : {
+                marking: element.dynamic,
+                bracketed: element.dynamicReminder,
+                text: element.dynamicText ?? null,
+                centerX: textCenterX(element, element.dynamic, direction, gap),
+              };
+        // Each chain is placed as one; `handOver` and `moveOutside` set the
+        // overrides for the angled route and the outside fallback.
+        const chains: {
+          kinds: HairpinKind[];
+          spans: ReturnType<typeof resolveChainSpans>;
+          side: DynamicsSide;
+          baselineClientY: number;
+          handOver: () => void;
+          moveOutside: () => void;
+        }[] = heads.map((head) => {
           const chain = [head];
           for (
             let next = byStart.get(head.endElement);
@@ -2027,28 +2140,95 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             head.startElement,
             ...chain.map((pair) => pair.endElement),
           ];
-          const spans = resolveChainSpans(
-            chain.map((pair) => ({
-              rawStartX: leftX(pair.startElement),
-              rawEndX:
-                pair.endElement.getBoundingClientRect().right -
-                measureRect.left,
+          return {
+            kinds: chain.map((pair) => pair.kind),
+            spans: resolveChainSpans(
+              chain.map((pair) => ({
+                rawStartX: leftX(pair.startElement),
+                rawEndX:
+                  pair.endElement.getBoundingClientRect().right -
+                  measureRect.left,
+              })),
+              chainElements.map((element, index) =>
+                endpointText(element, index === 0 ? -1 : 1)
+              ),
+              chain.slice(0, -1).map((pair) => {
+                const rect = pair.endElement.getBoundingClientRect();
+                return rect.left + rect.width / 2 - measureRect.left;
+              })
+            ),
+            side: head.side,
+            baselineClientY: head.baselineClientY,
+            handOver: () => {
+              override(staff, head.startElement, {
+                hairpin: 'measure',
+                marking: 'measure',
+              });
+              for (const pair of chain) {
+                override(staff, pair.startElement, { hairpin: 'measure' });
+                override(staff, pair.endElement, { marking: 'measure' });
+              }
+            },
+            moveOutside: () => {
+              for (const pair of chain) {
+                override(staff, pair.startElement, {
+                  hairpin: outsideSide,
+                  marking: outsideSide,
+                });
+                override(staff, pair.endElement, { marking: outsideSide });
+              }
+            },
+          };
+        });
+        for (const swell of defaults[staffIndex].swells) {
+          const element = swell.element;
+          if (element.dynamicShared) {
+            continue;
+          }
+          const startText = endpointText(element, -1);
+          const endText = measureEndText(swell.endText);
+          const segments = resolveSwellRow({
+            shape: swell.shape,
+            rawStartX: leftX(element),
+            endX: swell.endClientX - measureRect.left,
+            midX: swell.midClientX - measureRect.left,
+            centerY: 0,
+            startText,
+          });
+          if (segments === null) {
+            continue;
+          }
+          chains.push({
+            kinds: segments.map((segment) => segment.kind),
+            spans: segments.map((segment, index) => ({
+              startX: segment.startX,
+              endX: segment.endX,
+              startText: index === 0 ? startText : null,
+              endText: index === segments.length - 1 ? endText : null,
             })),
-            chainElements.map((element, index) =>
-              element.dynamic === null
-                ? null
-                : {
-                    marking: element.dynamic,
-                    bracketed: element.dynamicReminder,
-                    centerX: textCenterX(
-                      element,
-                      element.dynamic,
-                      index === 0 ? -1 : 1,
-                      gap
-                    ),
-                  }
-            )
-          );
+            side: swell.side,
+            baselineClientY: swell.baselineClientY,
+            handOver: () =>
+              override(staff, element, {
+                hairpin: 'measure',
+                marking: 'measure',
+              }),
+            moveOutside: () =>
+              override(staff, element, {
+                hairpin: outsideSide,
+                marking: outsideSide,
+              }),
+          });
+        }
+
+        for (const {
+          kinds,
+          spans,
+          side,
+          baselineClientY,
+          handOver,
+          moveOutside,
+        } of chains) {
           const overlapsGroup = spans.some((span) =>
             groupSlices.some(
               (slice) => slice.right > span.startX && slice.left < span.endX
@@ -2059,10 +2239,10 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           }
 
           const levelChainClear = (y: number, from: number) =>
-            chain.slice(from).every((pair, offset) => {
+            kinds.slice(from).every((kind, offset) => {
               const span = spans[from + offset];
               return isHorizontalHairpinClear({
-                kind: pair.kind,
+                kind,
                 startX: span.startX,
                 endX: span.endX,
                 y,
@@ -2073,12 +2253,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
                 endText: span.endText,
               });
             });
-          const defaultY = head.baselineClientY - measureRect.top;
+          const defaultY = baselineClientY - measureRect.top;
           const defaultInGap =
             defaultY - HAIRPIN_OPEN_HEIGHT / 2 > gap.topGapEdgeY &&
             defaultY + HAIRPIN_OPEN_HEIGHT / 2 < gap.bottomGapEdgeY;
           if (
-            head.side === gapSide &&
+            side === gapSide &&
             defaultInGap &&
             levelChainClear(defaultY, 0)
           ) {
@@ -2086,7 +2266,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           }
 
           const route = resolveAngledHairpinRoute({
-            kind: head.kind,
+            kind: kinds[0],
             startX: spans[0].startX,
             endX: spans[0].endX,
             openHeight: HAIRPIN_OPEN_HEIGHT,
@@ -2101,38 +2281,26 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             endText: spans[0].endText,
           });
           if (route !== null && levelChainClear(route.end.y, 1)) {
-            placeHairpin(head.kind, route.start, route.end, true);
+            placeHairpin(kinds[0], route.start, route.end, true);
             placeText(spans[0].startText, route.start.y);
             placeText(spans[0].endText, route.end.y);
-            override(staff, head.startElement, {
-              hairpin: 'measure',
-              marking: 'measure',
-            });
-            override(staff, head.endElement, { marking: 'measure' });
-            chain.slice(1).forEach((pair, offset) => {
+            kinds.slice(1).forEach((kind, offset) => {
               const span = spans[offset + 1];
               const y = route.end.y;
               placeHairpin(
-                pair.kind,
+                kind,
                 { x: span.startX, y },
                 { x: span.endX, y },
                 false
               );
               placeText(span.endText, y);
-              override(staff, pair.startElement, { hairpin: 'measure' });
-              override(staff, pair.endElement, { marking: 'measure' });
             });
+            handOver();
             continue;
           }
 
-          if (head.side === gapSide) {
-            for (const pair of chain) {
-              override(staff, pair.startElement, {
-                hairpin: outsideSide,
-                marking: outsideSide,
-              });
-              override(staff, pair.endElement, { marking: outsideSide });
-            }
+          if (side === gapSide) {
+            moveOutside();
           }
         }
       });
@@ -2156,6 +2324,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           const text = {
             marking: element.dynamic,
             bracketed: element.dynamicReminder,
+            text: element.dynamicText ?? null,
             centerX,
           };
           const y =
@@ -2350,6 +2519,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
                 isRest: element.nodeName === MUSIC_REST_NODE,
                 duration,
                 beatLength: durationToFactor[duration] * share,
+                cue:
+                  resolveNoteSize(element.getAttribute('size'), element) ===
+                  'cue',
               };
             }),
           });
@@ -2764,7 +2936,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         );
         const topNotesY = reachIntoGap(group.topTuplet, true);
         const bottomNotesY = reachIntoGap(group.bottomTuplet, false);
+        const tupletGroup = {
+          element: group.topTuplet,
+          indices: [],
+          parsedRatio: parseTupletRatio(group.topTuplet.ratio),
+          nestingLevel: 0,
+        };
+        const display = tupletDisplayOf(tupletGroup);
         const notesOnly = {
+          labelAscent: display.ascent,
+          labelDescent: display.descent,
           topGapEdgeY:
             this.#staffContainerRect(staves[group.topStaffIndex]).bottom -
             measureRect.top,
@@ -2811,12 +2992,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
 
         const geometry: TupletBracketGeometry = {
-          group: {
-            element: group.topTuplet,
-            indices: [],
-            parsedRatio: parseTupletRatio(group.topTuplet.ratio),
-            nestingLevel: 0,
-          },
+          group: tupletGroup,
           startX,
           endX,
           baseY,
@@ -2864,6 +3040,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             entryIndex,
             beamGroup: element.beamGroup,
             nodeName: element.nodeName,
+            cue:
+              element.nodeName !== MUSIC_REST_NODE &&
+              (element as NoteOrChordElementType).size === 'cue',
           }))
       );
 
@@ -3506,6 +3685,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             entryIndex,
             id: element.id || null,
             sharedStemFor: element.sharedStemFor,
+            cue: element.size === 'cue',
           });
         });
       });
@@ -3600,6 +3780,82 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
         overlay.appendChild(createSharedStemLine(x, topY, bottomY));
       }
+    }
+
+    /**
+     * Carries each group's barlines (end, start repeat, mid-bar) through the
+     * gaps between its staves, from where its upper staff drew them. Called
+     * by the composition once it has set them.
+     */
+    refreshGroupBarlines(): void {
+      const container =
+        this.shadowRoot?.querySelector<HTMLElement>('.group-barlines');
+      if (!container) {
+        return;
+      }
+      container.replaceChildren();
+      const staves = this.#staves();
+      const { groups } = resolveStaffGroups(
+        staves.map((staff) => ({
+          group: staff.group ?? null,
+          groupId: staff.groupId ?? null,
+        }))
+      );
+      if (groups.length === 0) {
+        return;
+      }
+      const bands = this.#staffLineBands(staves);
+      const isVocal = staves.map(
+        ({ nodeName }) => nodeName === MUSIC_STAFF_VOCAL_NODE
+      );
+      for (const [upper, lower] of connectedBarlineGaps(groups, isVocal)) {
+        for (const { left, width } of this.#barlineStrokes(staves[upper])) {
+          // A box rather than SVG, so it lands on the same device pixels as
+          // the staves' own barlines.
+          const line = document.createElement('div');
+          line.classList.add('group-barline');
+          line.style.left = `${left}px`;
+          line.style.width = `${width}px`;
+          line.style.top = `${bands[upper].bottom}px`;
+          line.style.height = `${bands[lower].top - bands[upper].bottom}px`;
+          container.appendChild(line);
+        }
+      }
+    }
+
+    #staves(): StaffElementBaseType[] {
+      return Array.from(this.children).filter((child) =>
+        isStaffNodeName(child.nodeName)
+      ) as StaffElementBaseType[];
+    }
+
+    // Every vertical line of a staff's barlines, as drawn.
+    #barlineStrokes(
+      staff: StaffElementBaseType
+    ): { left: number; width: number }[] {
+      const origin = this.getBoundingClientRect().left + this.clientLeft;
+      const strokes = Array.from(
+        staff.shadowRoot?.querySelectorAll<SVGRectElement>(
+          '.barline-thin, .barline-thick'
+        ) ?? []
+      ).map((line) => {
+        const { left, width } = line.getBoundingClientRect();
+        return { left: left - origin, width };
+      });
+      // A plain barline is the container's border.
+      return (staff as unknown as { endBarline: string }).endBarline ===
+        'single'
+        ? [
+            ...strokes,
+            {
+              left:
+                this.#staffContainerRect(staff).right -
+                BARLINE_THIN_PX -
+                origin,
+              width: BARLINE_THIN_PX,
+            },
+          ]
+        : strokes;
     }
 
     // A brace/bracket is a system-start decoration: only the first measure of

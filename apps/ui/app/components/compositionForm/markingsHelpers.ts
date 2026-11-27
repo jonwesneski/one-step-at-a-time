@@ -1,9 +1,9 @@
 import type {
-  AccidentalType,
   ArpeggioType,
   ArticulationType,
   BaseDurationType,
   ConnectorRole,
+  ConventionalAccidentalType,
   DurationType,
   DynamicMarking,
   HairpinKind,
@@ -184,7 +184,7 @@ export type MarkingAttributes = {
   trill?: boolean;
   'trill-line'?: TrillLineMode;
   'trill-stop'?: boolean;
-  'trill-accidental'?: AccidentalType;
+  'trill-accidental'?: ConventionalAccidentalType;
   'trill-note'?: Note;
   'trill-continuation'?: TrillContinuationMode;
   'trill-finish'?: string;

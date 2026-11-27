@@ -13,11 +13,14 @@ import {
   segmentIntersectsRect,
   sliceConvexPolygon,
 } from './connectorPlacementRules';
+import { dynamicTextTrailingPx } from './dynamicsRules';
 import {
   type AngledHairpinInput,
+  dynamicTextCenterClearOfStems,
   estimateDynamicTextBox,
   hairpinWedgeEdges,
   isHorizontalHairpinClear,
+  joinBarSpans,
   resolveAngledHairpinRoute,
   resolveSharedHairpinY,
   type SharedHairpinInput,
@@ -289,5 +292,49 @@ describe('resolveSharedHairpinY', () => {
         endText,
       })
     ).toBe(true);
+  });
+});
+
+describe('joinBarSpans', () => {
+  it('joins spans sharing a bar, not ones in neighbouring bars', () => {
+    expect(
+      joinBarSpans([
+        { from: 5, to: 6 },
+        { from: 0, to: 2 },
+        { from: 2, to: 4 },
+        { from: 1, to: 1 },
+      ])
+    ).toEqual([
+      { from: 0, to: 4 },
+      { from: 5, to: 6 },
+    ]);
+  });
+});
+
+describe('a dynamic with its dynamic-text', () => {
+  it('reaches right over its text in its box', () => {
+    const plain = estimateDynamicTextBox('mp', 100, 50);
+    const withText = estimateDynamicTextBox('mp', 100, 50, false, 'sub.');
+    expect(withText.left).toBe(plain.left);
+    expect(withText.right - plain.right).toBeCloseTo(
+      dynamicTextTrailingPx('sub.')
+    );
+  });
+
+  it('steps clear of a stem under its text', () => {
+    const stem = { left: 140, right: 141, top: 0, bottom: 200 };
+    const gap = { topGapEdgeY: 70, bottomGapEdgeY: 130 };
+    expect(dynamicTextCenterClearOfStems(100, 'mp', [stem], gap, -1)).toBe(100);
+    expect(
+      dynamicTextCenterClearOfStems(
+        100,
+        'mp',
+        [stem],
+        gap,
+        -1,
+        false,
+        'espressivo'
+      )
+    ).toBeLessThan(100);
   });
 });

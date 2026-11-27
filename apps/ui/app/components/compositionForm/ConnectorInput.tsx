@@ -248,10 +248,10 @@ export function ConnectorInput({
             )}
             {glissando && (
               <OptionalSelect<GlissandoHint>
-                label="Keys it slides across"
+                label="Text above the line"
                 options={GLISSANDO_HINTS}
                 value={glissando.hint}
-                noneLabel="unspecified"
+                noneLabel="none"
                 onChange={(hint) =>
                   editStructure((s) =>
                     setConnectorOptions(s, glissando.id, { hint })

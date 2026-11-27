@@ -5,6 +5,8 @@ import {
   type ResolvedEndBarline,
   type StartRepeatMode,
 } from './rules/barlineRules';
+import type { VoiceRooms } from './rules/spacingRules';
+import { barMinWidthCss } from './rules/staffWidth';
 import {
   MARKER_BEAT_EPSILON,
   type MarkerBeat,
@@ -20,11 +22,7 @@ import {
 import { SVG_NS } from './utils';
 import {
   buildConnectorSvgs,
-  collectArpeggioTiePairs,
-  collectNoteLikeElements,
-  collectPhraseSlurPairs,
-  pairConnectors,
-  partitionByVoice,
+  collectConnectorPairs,
 } from './utils/connectorsBuilder';
 import {
   CHORD_TAGS,
@@ -41,8 +39,8 @@ import {
   NOTE_TAGS,
   STAFF_EVENTS,
 } from './utils/consts';
+import { isRowFlexItem } from './utils/isRowFlexItem';
 import {
-  BARLINE_THIN_PX,
   STAFF_BOTTOM_MARGIN,
   STAFF_LINE_SPACING,
   STAFF_LINE_START,
@@ -73,12 +71,23 @@ export type BarlineSlotLeft = { beat: number; left: number };
 /** Px an end-of-measure warning area takes, and how much of it the strut counts. */
 export type EndWarningSpace = { width: number; reserved: number };
 
+/**
+ * A staff's collision floor, the width it would rather have, and the least at
+ * which none of its entries are moved to fit what follows them.
+ */
+export type StaffWidths = {
+  minWidth: number;
+  naturalWidth: number;
+  uncrowdedWidth: number;
+};
+
 const NO_END_WARNING_SPACE: EndWarningSpace = { width: 0, reserved: 0 };
 
 const INK_SELECTOR =
   'path, ellipse:not(.head-hit-zone), line, rect, polygon, polyline, circle, text';
+// Phonemes go under a vocal staff's lyrics, which clear this ink.
 const NON_ENTRY_INK =
-  '.describe-container, .end-warnings-container, .start-repeat-container, .mid-bar-barlines-container';
+  '.describe-container, .end-warnings-container, .start-repeat-container, .mid-bar-barlines-container, .phonemes-container';
 const ENTRY_SELECTOR = `${NOTE_TAGS}, ${CHORD_TAGS}, ${MUSIC_REST}:not([hidden]), ${MUSIC_CLEF}, ${MUSIC_GUITAR_NOTE}`;
 
 // Sub-pixel drift between passes must not count as a change, or the measure
@@ -98,6 +107,33 @@ function sameBarlineSlotLefts(
     )
   );
 }
+
+function sameVoiceRooms(
+  a: readonly VoiceRooms[],
+  b: readonly VoiceRooms[]
+): boolean {
+  const close = (x: number, y: number): boolean =>
+    Math.abs(x - y) <= BARLINE_SLOT_TOLERANCE_PX;
+  return (
+    a.length === b.length &&
+    a.every((voice, i) => {
+      const other = b[i];
+      return (
+        close(voice.lead, other.lead) &&
+        voice.rooms.length === other.rooms.length &&
+        voice.rooms.every((room, k) => close(room, other.rooms[k])) &&
+        voice.beatOffsets.every(
+          (beat, k) =>
+            Math.abs(beat - other.beatOffsets[k]) <= MARKER_BEAT_EPSILON
+        )
+      );
+    })
+  );
+}
+
+// What a staff with no <music-measure> around it needs, which sizes itself.
+const STRUT_WIDTH_PROPERTY = '--staff-strut-width';
+const UNCROWDED_WIDTH_PROPERTY = '--staff-uncrowded-width';
 
 const STANDALONE_OVERLAY_SOURCE = 'standalone-overlay';
 const ROW_ALIGNMENT_SOURCE = 'row-alignment';
@@ -271,6 +307,29 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
 
   protected sharedBarlineSlotLefts: readonly BarlineSlotLeft[] = [];
 
+  // The room each voice's entries need on this staff, null until it has laid
+  // them out. Own content only, and the same at any width, so the exchange
+  // through the ancestor <music-measure> ends on the next pass.
+  get ownVoiceRooms(): readonly VoiceRooms[] | null {
+    return null;
+  }
+
+  // The other staves' voices. Every staff places the measure's beats from all
+  // of them, so same-beat entries line up however crowded any one staff is.
+  get measureVoiceRooms(): readonly VoiceRooms[] {
+    return this.sharedVoiceRooms;
+  }
+
+  set measureVoiceRooms(value: readonly VoiceRooms[]) {
+    if (sameVoiceRooms(this.sharedVoiceRooms, value)) {
+      return;
+    }
+    this.sharedVoiceRooms = [...value];
+    this.onMeasureLayoutChange();
+  }
+
+  protected sharedVoiceRooms: readonly VoiceRooms[] = [];
+
   // The barline this staff draws at its right edge, set by its
   // <music-measure> (and adjusted by <music-composition> where two bars
   // meet). A plain barline stays the staff container's right border.
@@ -391,6 +450,42 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     };
   }
 
+  // The widths this staff's entries want, or null with none. The ancestor
+  // <music-measure> sizes itself to its widest staff. A staff without one keeps
+  // to its own minimum, and takes up to its container before squeezing its
+  // entries; as a flex item it asks through its basis, so it can still shrink
+  // beside other items.
+  protected reportStaffWidths(widths: StaffWidths | null): void {
+    const host = this as unknown as HTMLElement;
+    const { style } = host;
+    if (widths === null || this.closest(MUSIC_MEASURE) !== null) {
+      style.removeProperty(STRUT_WIDTH_PROPERTY);
+      style.removeProperty(UNCROWDED_WIDTH_PROPERTY);
+    } else {
+      const minWidth = Math.ceil(widths.minWidth);
+      const uncrowdedWidth = Math.ceil(widths.uncrowdedWidth);
+      if (isRowFlexItem(host)) {
+        style.setProperty(STRUT_WIDTH_PROPERTY, `${minWidth}px`);
+        style.setProperty(UNCROWDED_WIDTH_PROPERTY, `${uncrowdedWidth}px`);
+      } else {
+        style.setProperty(
+          STRUT_WIDTH_PROPERTY,
+          barMinWidthCss(minWidth, uncrowdedWidth, '100%')
+        );
+        style.removeProperty(UNCROWDED_WIDTH_PROPERTY);
+      }
+    }
+    if (widths !== null) {
+      this.dispatchEvent(
+        new CustomEvent(STAFF_EVENTS.STAFF_MIN_WIDTH, {
+          bubbles: true,
+          composed: false,
+          detail: widths,
+        })
+      );
+    }
+  }
+
   protected onMeasureLayoutChange(): void {
     // Staves that space notes override this to relayout.
   }
@@ -493,8 +588,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     this.shadowRoot!.innerHTML = `
       <style>
       :host {
-          flex: var(--flex-staff-basis, 1 1 280px);
-          min-width: var(--flex-staff-minw, 0);
+          flex: var(--flex-staff-basis, 1 1 max(280px, var(${UNCROWDED_WIDTH_PROPERTY}, 0px)));
+          min-width: var(--flex-staff-minw, var(${STRUT_WIDTH_PROPERTY}, 0));
           box-sizing: border-box;
           display: block;
         }
@@ -509,7 +604,6 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
           position: absolute;
           inset: 0;
           top: -1px;
-          width: 100%;
           height: ${this.staffHeight}px;
           display: block;
           border-top: ${STAFF_LINE_THICKNESS_PX}px solid currentColor;
@@ -560,9 +654,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     this.#endBarlineSvg.setAttribute('class', 'end-barline');
     this.#endBarlineSvg.setAttribute(
       'style',
-      // The plain barline is the container's 1px right border, just outside
-      // the wrapper, so a drawn end barline ends at the same edge.
-      `position: absolute; top: 0; right: -${BARLINE_THIN_PX}px; width: 0; height: 100%; overflow: visible; pointer-events: none; color: currentColor;`
+      'position: absolute; top: 0; right: 0; width: 0; height: 100%; overflow: visible; pointer-events: none; color: currentColor;'
     );
     wrapper.appendChild(this.#endBarlineSvg);
     this.#drawEndBarline();
@@ -704,8 +796,27 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
    * warnings. Measured from the line, so the staff's margin doesn't change it.
    */
   get inkAboveTopLine(): number {
-    const lineTop = this.staffContainer.getBoundingClientRect().top;
-    let top = lineTop;
+    const { top, bottom } = this.staffContainer.getBoundingClientRect();
+    return Math.max(0, top - this.#inkExtent({ top, bottom }).top);
+  }
+
+  /** As `inkAboveTopLine`, below the staff's bottom line. */
+  protected get inkBelowBottomLine(): number {
+    const { top, bottom } = this.staffContainer.getBoundingClientRect();
+    return Math.max(0, this.#inkExtent({ top, bottom }).bottom - bottom);
+  }
+
+  /** Ink (client px) drawn over this staff by another, counted as its own. */
+  protected get borrowedInkBands(): readonly VerticalBand[] {
+    return [];
+  }
+
+  #inkExtent(stave: VerticalBand): VerticalBand {
+    const extent = { ...stave };
+    for (const band of this.borrowedInkBands) {
+      extent.top = Math.min(extent.top, band.top);
+      extent.bottom = Math.max(extent.bottom, band.bottom);
+    }
     const visit = (root: ParentNode | null | undefined) => {
       for (const element of Array.from(
         root?.querySelectorAll<SVGGraphicsElement>(INK_SELECTOR) ?? []
@@ -715,7 +826,8 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
         }
         const rect = element.getBoundingClientRect();
         if (rect.width > 0 || rect.height > 0) {
-          top = Math.min(top, rect.top);
+          extent.top = Math.min(extent.top, rect.top);
+          extent.bottom = Math.max(extent.bottom, rect.bottom);
         }
       }
     };
@@ -732,7 +844,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     for (const entry of entries) {
       visit(entry.shadowRoot);
     }
-    return Math.max(0, lineTop - top);
+    return extent;
   }
 
   protected drawConnectorsWhenStandalone(): void {
@@ -753,13 +865,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     }
 
     const root = this as unknown as ParentNode;
-    const noteLikeElements = collectNoteLikeElements(root);
-    const byVoice = partitionByVoice(noteLikeElements);
-    const pairs = [
-      ...[...byVoice.values()].flatMap((notes) => pairConnectors(notes)),
-      ...collectArpeggioTiePairs(root),
-      ...collectPhraseSlurPairs(root),
-    ];
+    const { pairs } = collectConnectorPairs(root);
     if (pairs.length === 0) {
       this.#verticalSpace.release(STANDALONE_OVERLAY_SOURCE);
       return;
@@ -768,7 +874,7 @@ export abstract class StaffElementBase extends _MaybeHTMLElement {
     const rootRect = (this as unknown as HTMLElement).getBoundingClientRect();
     const svgs = buildConnectorSvgs(pairs, {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     for (const svg of svgs) {
       this.#standaloneConnectorsOverlay.appendChild(svg);

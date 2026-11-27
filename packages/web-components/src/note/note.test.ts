@@ -1,6 +1,7 @@
 /**
  * @jest-environment jsdom
  */
+import '../chord/index';
 import '../staff/index';
 import '../tuplet/index';
 import type { NoteElementType, NoteLetterOctave } from '../types/elements';
@@ -13,15 +14,19 @@ import type {
 } from '../types/theory';
 import {
   COMMON_ATTRIBUTES,
+  MUSIC_CHORD,
   MUSIC_NOTE,
   MUSIC_STAFF,
+  MUSIC_VOICE,
   NOTE_EVENTS,
 } from '../utils/consts';
 import {
+  ACCIDENTAL_NOTE_GAP,
   ARPEGGIO_FOOTPRINT_PX,
   ARPEGGIO_VERTICAL_OVERSHOOT_PX,
   FLAG_STEM_STEP_PX,
   GRACE_SCALE,
+  SIGN_CROSS_SIZE_PX,
   STAFF_LINE_SPACING,
   STAFF_LINE_THICKNESS_PX,
   TWO_TAILS_LENGTH_PX,
@@ -569,7 +574,7 @@ describe('grace notes', () => {
     expect(below[3]).toBeGreaterThan(Math.max(below[1], below[5]));
   });
 
-  it('routes the slur clear of the main accidental horizontally, without growing its gap to the notehead', () => {
+  it('lands the slur over the main head, past its accidental, without growing its gap to the head', () => {
     const endPoint = (element: NoteElementType): number[] => {
       const d =
         element.shadowRoot
@@ -603,23 +608,55 @@ describe('grace notes', () => {
 
     const [endXWithAccidental, endYWithAccidental] = endPoint(withAccidental);
     const [mainHeadCenterX, mainHeadCenterY] = headCenter(withAccidental);
-    // A sharp is 10px wide (ACCIDENTAL_SYMBOL_WIDTH), sat ACCIDENTAL_NOTE_GAP
-    // (-7px, i.e. overlapping) left of the head center — so its bounding box
-    // left edge sits accidentalWidth + gap px away.
-    const accidentalLeftEdgeX = mainHeadCenterX - (10 + -7);
+    expect(endXWithAccidental).toBeGreaterThan(-ACCIDENTAL_NOTE_GAP);
+    expect(endXWithAccidental).toBeCloseTo(mainHeadCenterX, 5);
 
-    // The slur's main-side endpoint must clear the accidental horizontally...
-    expect(endXWithAccidental).toBeLessThan(accidentalLeftEdgeX);
-
-    // ...but its *distance to the main notehead* must be the same constant
-    // whether or not an accidental is shown — the accidental should only
-    // ever push the endpoint further left (X), never further from the head
-    // (Y), no matter how tall/wide the accidental is.
+    // An ordinary accidental this close to the grace note needs no lift.
     const [, endYPlain] = endPoint(plain);
     const [, mainHeadCenterYPlain] = headCenter(plain);
     const gapWithAccidental = Math.abs(mainHeadCenterY - endYWithAccidental);
     const gapPlain = Math.abs(mainHeadCenterYPlain - endYPlain);
     expect(gapWithAccidental).toBeCloseTo(gapPlain, 5);
+  });
+
+  it("lifts the slur's end over a quarter-tone arrow and puts it back without one", () => {
+    const element = document.createElement(MUSIC_NOTE) as NoteElementType;
+    element.setAttribute('note', 'Bb' satisfies Note);
+    element.setAttribute('octave', '4');
+    element.setAttribute('grace', 'G');
+    element.setAttribute('grace-octave', '4');
+    element.setAttribute('grace-type', 'acciaccatura');
+    document.body.appendChild(element);
+    const slur = () =>
+      element.shadowRoot?.querySelector('.grace-slur path')?.getAttribute('d');
+    const endY = () => Number(slur()?.split(' ').at(-1));
+
+    const plain = slur();
+    const plainEndY = endY();
+    element.setAttribute('quarter-tone', 'up');
+    expect(endY()).toBeLessThan(plainEndY);
+    element.removeAttribute('quarter-tone');
+    expect(slur()).toBe(plain);
+  });
+
+  it('dips a slur below an inner grace note with a down-arrow', () => {
+    const element = document.createElement(MUSIC_NOTE) as NoteElementType;
+    element.setAttribute('note', 'B' satisfies Note);
+    element.setAttribute('octave', '4');
+    element.setAttribute('grace', 'F,G,A');
+    element.setAttribute('grace-octave', '4,4,4');
+    document.body.appendChild(element);
+    const controlY = () => {
+      const d =
+        element.shadowRoot
+          ?.querySelector('.grace-slur path')
+          ?.getAttribute('d') ?? '';
+      return Number(d.match(/-?\d+(\.\d+)?/g)?.[3]);
+    };
+
+    const plain = controlY();
+    element.setAttribute('grace-quarter-tone', ',down');
+    expect(controlY()).toBeGreaterThan(plain);
   });
 
   it('anchors the grace-side slur start at the stem/beam tip (not the notehead) when clearing a main accidental', () => {
@@ -745,9 +782,8 @@ describe('grace notes', () => {
       NOTE_HEAD_RADIUS_PX + SLUR_HEAD_CLEARANCE_PX
     );
 
-    // Only stemUp and accidental-shown vary. Stem-down without an accidental
-    // clears the main stem; with an accidental, the ~8.5px accidental pullback
-    // is the largest of the three.
+    // A stem-down main note's stem is out of the way of a slur that arrives
+    // above, over its accidental.
     const stemDownNoAccidental = document.createElement(
       MUSIC_NOTE
     ) as NoteElementType;
@@ -770,10 +806,27 @@ describe('grace notes', () => {
     stemDownWithAccidental.showAccidental = 'natural';
 
     const stemDownEnd = pathPoints(stemDownNoAccidental).at(-2) as number;
-    const stemDownAccidentalEnd = pathPoints(stemDownWithAccidental).at(
-      -2
-    ) as number;
-    expect(stemDownAccidentalEnd).toBeLessThanOrEqual(stemDownEnd);
+    const [accidentalEndX, accidentalEndY] = pathPoints(
+      stemDownWithAccidental
+    ).slice(-2);
+    const stemDownHead =
+      stemDownWithAccidental.shadowRoot?.querySelector('.head');
+    expect(
+      Number(
+        stemDownNoAccidental.shadowRoot
+          ?.querySelector('.head')
+          ?.getAttribute('cx')
+      ) *
+        NOTE_SCALE -
+        stemDownEnd
+    ).toBeGreaterThan(NOTE_HEAD_RADIUS_PX);
+    expect(accidentalEndX).toBeCloseTo(
+      Number(stemDownHead?.getAttribute('cx')) * NOTE_SCALE,
+      5
+    );
+    expect(accidentalEndY).toBeLessThan(
+      Number(stemDownHead?.getAttribute('cy')) * NOTE_SCALE
+    );
   });
 
   describe('descending grace group (stem-tip slur anchoring)', () => {
@@ -1671,6 +1724,383 @@ describe('slur group', () => {
   });
 });
 
+describe('slur-style', () => {
+  it('round-trips, defaulting to solid and ignoring a value that doesn’t parse with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('slur', 'start');
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.slurStyle).toBe('solid');
+    noteElement.slurStyle = 'dotted';
+    expect(noteElement.getAttribute('slur-style')).toBe('dotted');
+    noteElement.setAttribute('slur-style', 'wavy');
+    expect(noteElement.slurStyle).toBe('solid');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('slur-style="wavy"')
+    );
+    noteElement.slurStyle = 'solid';
+    expect(noteElement.hasAttribute('slur-style')).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('dispatches CONNECTOR_ATTRIBUTE_CHANGE', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    const handler = jest.fn();
+    noteElement.addEventListener(
+      NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE,
+      handler
+    );
+
+    noteElement.slurStyle = 'dotted';
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns once connected when a dotted style sits on a note that starts no slur', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('slur-style', 'dotted');
+    expect(warn).not.toHaveBeenCalled();
+
+    document.body.appendChild(noteElement);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('starts no slur')
+    );
+
+    warn.mockClear();
+    noteElement.setAttribute('slur', 'start');
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});
+
+describe('bend', () => {
+  it('round-trips, ignoring values that don’t parse with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.bend).toBeNull();
+    expect(noteElement.bendTo).toBeNull();
+    noteElement.bend = 'down';
+    noteElement.bendTo = 'Bb';
+    noteElement.bendToQuarterTone = 'down';
+    expect(noteElement.getAttribute('bend')).toBe('down');
+    expect(noteElement.getAttribute('bend-to')).toBe('Bb');
+    expect(noteElement.getAttribute('bend-to-quarter-tone')).toBe('down');
+
+    for (const [name, value] of [
+      ['bend', 'sideways'],
+      ['bend-to', 'H'],
+      ['bend-to-quarter-tone', 'sharp'],
+    ]) {
+      noteElement.setAttribute(name, value);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining(`${name}="${value}"`)
+      );
+    }
+    expect(noteElement.bend).toBeNull();
+    expect(noteElement.bendTo).toBeNull();
+    expect(noteElement.bendToQuarterTone).toBeNull();
+
+    noteElement.bend = null;
+    noteElement.bendTo = null;
+    noteElement.bendToQuarterTone = null;
+    expect(noteElement.attributes).toHaveLength(0);
+    warn.mockRestore();
+  });
+
+  it('draws a contour standalone, warning about bad pitches and a bend beside it', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('note', 'A');
+    noteElement.setAttribute('bend', 'down');
+    noteElement.bendContour = 'G5,H4,B4';
+    expect(noteElement.getAttribute('bend-contour')).toBe('G5,H4,B4');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"H4"'));
+    document.body.appendChild(noteElement);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('bend="down" is ignored beside bend-contour')
+    );
+    const contour = noteElement.shadowRoot!.querySelector('.bend-contour');
+    expect(contour?.getAttribute('d')).toMatch(/^M [^C]+ C [^C]+ C [^C]+$/);
+    warn.mockRestore();
+  });
+
+  it('warns once connected about a target that lies the other way', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('note', 'C');
+    noteElement.setAttribute('bend', 'down');
+    noteElement.setAttribute('bend-to', 'D');
+    expect(warn).not.toHaveBeenCalled();
+    document.body.appendChild(noteElement);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('disagrees'));
+    warn.mockRestore();
+  });
+
+  it('draws its own line and target standalone, and no line beside a glissando', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('bend-to', 'D');
+    document.body.appendChild(noteElement);
+    const drawn = (selector: string) =>
+      noteElement.shadowRoot!.querySelectorAll(selector).length;
+    expect(drawn('.bend-line')).toBe(1);
+    expect(drawn('.bend-target-note')).toBe(1);
+
+    noteElement.setAttribute('glissando', 'start');
+    noteElement.setAttribute('bend', 'up');
+    expect(drawn('.bend-line')).toBe(0);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('glissando="start"')
+    );
+    warn.mockRestore();
+  });
+
+  it('draws nothing on a triangle', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('notehead', 'triangle-up');
+    noteElement.setAttribute('bend', 'down');
+    document.body.appendChild(noteElement);
+    expect(noteElement.shadowRoot!.querySelector('.bend-line')).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('triangle'));
+    warn.mockRestore();
+  });
+
+  it('leaves the line to its staff, which it re-lays out', () => {
+    const staff = document.createElement(MUSIC_STAFF);
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    staff.appendChild(noteElement);
+    document.body.appendChild(staff);
+    const handler = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+    noteElement.bend = 'wave';
+    noteElement.bendTo = 'E';
+    noteElement.bendToQuarterTone = 'up';
+    expect(handler).toHaveBeenCalledTimes(3);
+    expect(noteElement.shadowRoot!.querySelector('.bend')).toBeNull();
+  });
+});
+
+describe('glissando-label', () => {
+  it('round-trips, and warns about one with no text', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    expect(noteElement.glissandoLabel).toBeNull();
+    noteElement.glissandoLabel = 'bend down|¼-tone';
+    expect(noteElement.getAttribute('glissando-label')).toBe(
+      'bend down|¼-tone'
+    );
+    expect(warn).not.toHaveBeenCalled();
+    noteElement.setAttribute('glissando-label', ' | ');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('glissando-label is empty')
+    );
+    expect(
+      noteElement.shadowRoot!.querySelector('.glissando-label')
+    ).toBeNull();
+    noteElement.glissandoLabel = null;
+    expect(noteElement.hasAttribute('glissando-label')).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('draws both labels standalone, its own above the tremolo label', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('tremolo', 'unmeasured');
+    noteElement.setAttribute('tremolo-label', 'flz');
+    noteElement.setAttribute('glissando-label', 'lip');
+    document.body.appendChild(noteElement);
+    const y = (selector: string) =>
+      Number(
+        noteElement.shadowRoot!.querySelector(selector)?.getAttribute('y')
+      );
+    expect(y('.glissando-label')).toBeLessThan(y('.tremolo-label'));
+  });
+
+  it('leaves the label to its staff, which it re-lays out', () => {
+    const staff = document.createElement(MUSIC_STAFF);
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    staff.appendChild(noteElement);
+    document.body.appendChild(staff);
+    const handler = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+    noteElement.glissandoLabel = 'lip';
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(
+      noteElement.shadowRoot!.querySelector('.glissando-label')
+    ).toBeNull();
+  });
+});
+
+describe('breath-mark', () => {
+  it('round-trips, ignoring a value that doesn’t parse with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+
+    expect(noteElement.breathMark).toBeNull();
+    noteElement.breathMark = 'tick';
+    expect(noteElement.getAttribute('breath-mark')).toBe('tick');
+    noteElement.setAttribute('breath-mark', 'gasp');
+    expect(noteElement.breathMark).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('breath-mark="gasp"')
+    );
+    noteElement.breathMark = null;
+    expect(noteElement.hasAttribute('breath-mark')).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('draws its own mark standalone, right of the head', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('breath-mark', 'comma');
+    document.body.appendChild(noteElement);
+    const marks = noteElement.shadowRoot!.querySelectorAll('.breath-mark');
+    expect(marks).toHaveLength(1);
+    expect(marks[0].classList.contains('breath-mark-comma')).toBe(true);
+  });
+
+  it('leaves the mark to its staff', () => {
+    const staff = document.createElement(MUSIC_STAFF);
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('breath-mark', 'tick');
+    staff.appendChild(noteElement);
+    document.body.appendChild(staff);
+    expect(noteElement.shadowRoot!.querySelector('.breath-mark')).toBeNull();
+  });
+
+  it('re-lays out its staff when it changes', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    const staff = document.createElement(MUSIC_STAFF);
+    staff.appendChild(noteElement);
+    document.body.appendChild(staff);
+    const handler = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+
+    noteElement.breathMark = 'tick';
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('swell', () => {
+  it('round-trips and re-lays out its staff', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    const staff = document.createElement(MUSIC_STAFF);
+    staff.appendChild(noteElement);
+    document.body.appendChild(staff);
+    const handler = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+
+    expect(noteElement.swell).toBeNull();
+    noteElement.swell = true;
+    expect(noteElement.getAttribute('swell')).toBe('');
+    expect(noteElement.swell).toBe('both');
+    expect(handler).toHaveBeenCalledTimes(1);
+    noteElement.swell = 'crescendo';
+    expect(noteElement.swell).toBe('crescendo');
+    noteElement.swell = false;
+    expect(noteElement.hasAttribute('swell')).toBe(false);
+  });
+
+  it('reads an unknown shape as none, with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('swell', 'louder');
+    expect(noteElement.swell).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/swell="louder"/));
+    warn.mockRestore();
+  });
+
+  it('round-trips dynamic-end and re-lays out its staff', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    const staff = document.createElement(MUSIC_STAFF);
+    staff.appendChild(noteElement);
+    document.body.appendChild(staff);
+    const handler = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+
+    expect(noteElement.dynamicEnd).toBeNull();
+    noteElement.dynamicEnd = 'f';
+    expect(noteElement.getAttribute('dynamic-end')).toBe('f');
+    expect(handler).toHaveBeenCalledTimes(1);
+    noteElement.dynamicEnd = null;
+    expect(noteElement.hasAttribute('dynamic-end')).toBe(false);
+  });
+});
+
+describe('phonemes', () => {
+  it('round-trips, warns about an empty part and draws them standalone', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    noteElement.phonemes = 'oo,,ah';
+    expect(noteElement.getAttribute('phonemes')).toBe('oo,,ah');
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/empty part/));
+    expect(
+      Array.from(
+        noteElement.shadowRoot!.querySelectorAll('.phoneme'),
+        (text) => text.textContent
+      )
+    ).toEqual(['oo', 'ah']);
+    noteElement.phonemes = null;
+    expect(noteElement.shadowRoot!.querySelector('.phoneme')).toBeNull();
+    warn.mockRestore();
+  });
+
+  it('re-lays out its staff', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    const staff = document.createElement(MUSIC_STAFF);
+    staff.appendChild(noteElement);
+    document.body.appendChild(staff);
+    const handler = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+    noteElement.phonemes = 'i';
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('size', () => {
+  it("takes its voice's size unless it has its own", () => {
+    const voice = document.createElement(MUSIC_VOICE);
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    voice.appendChild(noteElement);
+    document.body.appendChild(voice);
+    expect(noteElement.size).toBe('normal');
+    voice.setAttribute('size', 'cue');
+    expect(noteElement.size).toBe('cue');
+    noteElement.size = 'normal';
+    expect(noteElement.size).toBe('normal');
+  });
+
+  it("warns on a chord's own note", () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const chord = document.createElement(MUSIC_CHORD);
+    const tone = document.createElement(MUSIC_NOTE);
+    tone.setAttribute('size', 'cue');
+    chord.appendChild(tone);
+    document.body.appendChild(chord);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringMatching(/set it on the chord/)
+    );
+    warn.mockRestore();
+  });
+});
+
+describe('tie', () => {
+  it('reads continue, the middle of a tie chain', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    noteElement.setAttribute('tie', 'continue');
+    expect(noteElement.tie).toBe('continue');
+  });
+});
+
 describe('stem direction', () => {
   it('round-trips stem-direction, rejecting an invalid value', () => {
     const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
@@ -1936,6 +2366,51 @@ describe('tremolo numeral, label and repeated articulation', () => {
     expect(Number(label.getAttribute('y'))).toBeLessThan(
       Math.min(...stemEnds(noteElement))
     );
+  });
+
+  it('draws every flutter-tongue and ordinary label', () => {
+    const texts = {
+      flz: 'flz.',
+      flt: 'flt.',
+      frull: 'frull.',
+      ord: 'ord.',
+      nat: 'nat.',
+      norm: 'norm.',
+    } as const;
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    for (const [label, text] of Object.entries(texts)) {
+      const noteElement = standalone({ 'tremolo-label': label });
+      expect(noteElement.tremoloLabel).toBe(label);
+      expect(
+        noteElement.shadowRoot!.querySelector('.tremolo-label')?.textContent
+      ).toBe(text);
+    }
+    warn.mockRestore();
+  });
+
+  it('lists every label when one doesn’t parse', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    standalone({ 'tremolo-label': 'flutter' });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringMatching(/tremolo-label="flutter".*"flz".*"norm"/)
+    );
+    warn.mockRestore();
+  });
+
+  it('warns about a flutter label with no tremolo, and ord. on a tremolo', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    standalone({ 'tremolo-label': 'flz' });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('single-note tremolo')
+    );
+    warn.mockClear();
+    standalone({ tremolo: 'unmeasured', 'tremolo-label': 'flz' });
+    expect(warn).not.toHaveBeenCalled();
+    standalone({ tremolo: 'unmeasured', 'tremolo-label': 'ord' });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('remove the tremolo')
+    );
+    warn.mockRestore();
   });
 
   it('repeats the articulation once per repetition', () => {
@@ -2818,5 +3293,429 @@ describe('standalone redraw', () => {
     const before = note.shadowRoot!.innerHTML;
     note.note = 'F#';
     expect(note.shadowRoot!.innerHTML).not.toBe(before);
+  });
+});
+
+describe('quarter-tones', () => {
+  const make = (attributes: Record<string, string> = {}) => {
+    const element = document.createElement(MUSIC_NOTE) as any;
+    element.setAttribute('duration', 'quarter');
+    element.setAttribute('note', 'C#');
+    for (const [name, value] of Object.entries(attributes)) {
+      element.setAttribute(name, value);
+    }
+    document.body.appendChild(element);
+    return element;
+  };
+
+  it.each([
+    ['quarter-tone', 'quarterTone', 'up', 'up'],
+    ['trill-quarter-tone', 'trillQuarterTone', 'down', 'down'],
+    [
+      'grace-quarter-tone',
+      'graceQuarterTone',
+      'up,,down',
+      ['up', null, 'down'],
+    ],
+    [
+      'trill-finish-quarter-tone',
+      'trillFinishQuarterTone',
+      ',up',
+      [null, 'up'],
+    ],
+  ])(
+    'reflects %s and re-lays out the staff on a change',
+    (attribute, property, text, value) => {
+      const element = make();
+      const handler = jest.fn();
+      element.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+      element[property] = value;
+      expect(element.getAttribute(attribute)).toBe(text);
+      expect(element[property]).toEqual(value);
+      expect(handler).toHaveBeenCalledTimes(1);
+      element[property] = null;
+      expect(element.hasAttribute(attribute)).toBe(false);
+      expect(element[property]).toBeNull();
+    }
+  );
+
+  it('ignores a value that is not up or down', () => {
+    const element = make({ 'quarter-tone': 'sharp' });
+    expect(element.quarterTone).toBeNull();
+    expect(element.shadowRoot.querySelector('.accidental-arrow')).toBeNull();
+  });
+
+  it('standalone, adds and removes the arrow', () => {
+    const element = make({ 'quarter-tone': 'up' });
+    const arrows = () =>
+      element.shadowRoot.querySelectorAll('.accidental .accidental-arrow');
+    expect(arrows()).toHaveLength(1);
+    element.quarterTone = null;
+    expect(arrows()).toHaveLength(0);
+    expect(element.shadowRoot.querySelector('.accidental')).not.toBeNull();
+  });
+
+  it('standalone, arrows its grace and finishing notes', () => {
+    const element = make({
+      grace: 'D,E',
+      'grace-quarter-tone': ',up',
+      'trill-finish': 'B',
+      'trill-finish-quarter-tone': 'down',
+    });
+    expect(
+      element.shadowRoot.querySelectorAll('.grace-accidental .accidental-arrow')
+    ).toHaveLength(2);
+  });
+});
+
+describe('glissando-shape', () => {
+  it('round-trips, defaulting to straight and ignoring a value that doesn’t parse with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const element = document.createElement(MUSIC_NOTE) as NoteElementType;
+    element.setAttribute('glissando', 'start');
+    document.body.appendChild(element);
+
+    expect(element.glissandoShape).toBe('straight');
+    element.glissandoShape = 'dip';
+    expect(element.getAttribute('glissando-shape')).toBe('dip');
+    element.setAttribute('glissando-shape', 'bump');
+    expect(element.glissandoShape).toBe('straight');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('[music-note] glissando-shape="bump"')
+    );
+    element.glissandoShape = 'straight';
+    expect(element.hasAttribute('glissando-shape')).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('warns once connected where no glissando starts', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const element = document.createElement(MUSIC_NOTE) as NoteElementType;
+    element.setAttribute('glissando-shape', 'wave');
+    element.setAttribute('glissando', 'end');
+    expect(warn).not.toHaveBeenCalled();
+    document.body.appendChild(element);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('starts no glissando')
+    );
+    warn.mockRestore();
+  });
+
+  it('redraws connectors when the shape changes, and re-lays the staff out when the glissando does', () => {
+    const element = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(element);
+    const redraw = jest.fn();
+    const relayout = jest.fn();
+    element.addEventListener(NOTE_EVENTS.CONNECTOR_ATTRIBUTE_CHANGE, redraw);
+    element.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, relayout);
+
+    element.glissando = 'start';
+    expect(redraw).toHaveBeenCalledTimes(1);
+    expect(relayout).toHaveBeenCalledTimes(1);
+    element.glissandoShape = 'dip';
+    expect(redraw).toHaveBeenCalledTimes(2);
+    expect(relayout).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('unpitched, stem-mark and plain reminders', () => {
+  it('draws an unpitched note with no ledger line or accidental, at the top of the stave', () => {
+    const staff = makeStaff();
+    const note = renderNote(staff, 'F#', 6);
+    expect(note.shadowRoot!.querySelectorAll('.ledger-line').length).toBe(3);
+    note.setAttribute('unpitched', 'top');
+    expect((note as NoteElementType).staffY).toBe(25);
+    expect(note.shadowRoot!.querySelectorAll('.ledger-line').length).toBe(0);
+    expect(note.shadowRoot!.querySelector('.accidental')).toBeNull();
+  });
+
+  it('round-trips the enumerated attributes', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.accidentalReminder = true;
+    expect(note.getAttribute('accidental-reminder')).toBe('');
+    expect(note.accidentalReminder).toBe('bracketed');
+    note.accidentalReminder = 'plain';
+    expect(note.accidentalReminder).toBe('plain');
+    note.unpitched = true;
+    expect(note.unpitched).toBe('written');
+    note.notehead = 'triangle-up';
+    expect(note.unpitched).toBeNull();
+    note.stemMark = 'cross';
+    expect(note.getAttribute('stem-mark')).toBe('cross');
+  });
+
+  it('ignores a trill, an octave sign and a bend target on an unpitched note, warning once each', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('trill', '');
+    note.setAttribute('octave-shift', '8va');
+    note.setAttribute('bend-to', 'D');
+    document.body.appendChild(note);
+    note.setAttribute('unpitched', '');
+    expect(note.trill).toBe(false);
+    expect(note.octaveShift).toBeNull();
+    expect(note.bendTo).toBeNull();
+    const ignored = warn.mock.calls.filter(([message]) =>
+      String(message).includes('ignored on an unpitched note')
+    );
+    expect(ignored).toHaveLength(3);
+    warn.mockRestore();
+  });
+
+  it('draws a cross through the stem, standalone too', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('stem-mark', 'cross');
+    document.body.appendChild(note);
+    expect(note.shadowRoot!.querySelectorAll('.stem-cross line')).toHaveLength(
+      2
+    );
+    const staff = makeStaff();
+    const inStaff = renderNote(staff, 'E', 4);
+    inStaff.setAttribute('stem-mark', 'cross');
+    expect(inStaff.shadowRoot!.querySelector('.stem-cross')).not.toBeNull();
+  });
+});
+
+describe('headless notes and the multiphonic M', () => {
+  it('draws only the stem of a headless note: no head, ledger line, accidental or dot', () => {
+    const staff = makeStaff();
+    const note = renderNote(staff, 'F#', 6, 'dotted-quarter');
+    expect(note.shadowRoot!.querySelector('.head')).not.toBeNull();
+    expect(note.shadowRoot!.querySelectorAll('.ledger-line').length).toBe(3);
+    note.setAttribute('notehead', 'none');
+    expect(note.shadowRoot!.querySelector('.head')).toBeNull();
+    expect(note.shadowRoot!.querySelector('.head-hit-zone')).toBeNull();
+    expect(note.shadowRoot!.querySelectorAll('.ledger-line').length).toBe(0);
+    expect(note.shadowRoot!.querySelector('.accidental')).toBeNull();
+    expect(note.shadowRoot!.querySelector('.augmentation-dots')).toBeNull();
+    expect(note.shadowRoot!.querySelector('.stem')).not.toBeNull();
+    expect((note as NoteElementType).augmentationDotsRightEdgePx).toBeNull();
+  });
+
+  it('warns about a headless semibreve and a headless grace note', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('duration', 'whole');
+    note.setAttribute('notehead', 'none');
+    note.setAttribute('grace', 'D');
+    note.setAttribute('grace-notehead', 'none');
+    document.body.appendChild(note);
+    const messages = warn.mock.calls.map(([message]) => String(message));
+    expect(messages.some((m) => m.includes('needs a stem'))).toBe(true);
+    expect(messages.some((m) => m.includes('needs its head'))).toBe(true);
+    expect(note.shadowRoot!.querySelector('.grace-head')).not.toBeNull();
+    warn.mockRestore();
+  });
+
+  it('draws a plain cross at every value', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('duration', 'half');
+    note.setAttribute('notehead', 'x');
+    document.body.appendChild(note);
+    const circled = note.shadowRoot!.querySelector('.head')!.getAttribute('d');
+    note.setAttribute('notehead', 'x-plain');
+    const plain = note.shadowRoot!.querySelector('.head')!.getAttribute('d');
+    note.setAttribute('duration', 'quarter');
+    note.setAttribute('notehead', 'x');
+    expect(plain).not.toBe(circled);
+    expect(note.shadowRoot!.querySelector('.head')!.getAttribute('d')).toBe(
+      plain
+    );
+  });
+
+  it('draws an M through the stem, standalone and in a staff', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.stemMark = 'multiphonic';
+    document.body.appendChild(note);
+    expect(note.getAttribute('stem-mark')).toBe('multiphonic');
+    expect(note.shadowRoot!.querySelector('.stem-multiphonic')).not.toBeNull();
+    expect(note.shadowRoot!.querySelector('.stem-cross')).toBeNull();
+    const inStaff = renderNote(makeStaff(), 'A', 4);
+    inStaff.setAttribute('stem-mark', 'multiphonic');
+    expect(
+      inStaff.shadowRoot!.querySelector('.stem-multiphonic')
+    ).not.toBeNull();
+  });
+});
+
+describe('signs', () => {
+  const signGlyphs = (element: Element): string[] =>
+    Array.from(element.shadowRoot!.querySelectorAll('.signs .sign')).map(
+      (glyph) => glyph.getAttribute('class')!.replace('sign ', '')
+    );
+
+  it('round-trips the property, a bare list or empty clearing it', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    expect(note.sign).toBeNull();
+    note.sign = ['circle', 'circle'];
+    expect(note.getAttribute('sign')).toBe('circle,circle');
+    expect(note.sign).toEqual(['circle', 'circle']);
+    note.sign = [];
+    expect(note.hasAttribute('sign')).toBe(false);
+    note.setAttribute('sign', 'plus');
+    note.sign = null;
+    expect(note.hasAttribute('sign')).toBe(false);
+  });
+
+  it('draws its own signs standalone, stacked above its ink', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('sign', 'circle,plus');
+    document.body.appendChild(note);
+    expect(signGlyphs(note)).toEqual(['sign-circle', 'sign-plus']);
+    const [circle, plus] = Array.from(
+      note.shadowRoot!.querySelectorAll('.signs .sign')
+    );
+    const centerY = (glyph: Element) =>
+      Number(
+        glyph.querySelector('circle')?.getAttribute('cy') ??
+          glyph.querySelector('line:last-child')!.getAttribute('y1')
+      );
+    expect(centerY(plus)).toBeLessThan(centerY(circle));
+  });
+
+  it('warns about unknown entries and about a sign on a chord’s note', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('sign', 'bogus,cross');
+    document.body.appendChild(note);
+    expect(note.sign).toEqual(['cross']);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('ignoring "bogus"')
+    );
+    const chord = document.createElement(MUSIC_CHORD);
+    const tone = document.createElement(MUSIC_NOTE);
+    tone.setAttribute('note', 'C');
+    tone.setAttribute('sign', 'circle');
+    chord.appendChild(tone);
+    document.body.appendChild(chord);
+    expect(
+      warn.mock.calls.some(([message]) =>
+        String(message).includes("sign on a chord's note is ignored")
+      )
+    ).toBe(true);
+    warn.mockRestore();
+  });
+
+  it('asks the staff to lay out again when it changes', () => {
+    const staff = makeStaff();
+    const note = renderNote(staff, 'G', 4);
+    const handler = jest.fn();
+    note.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+    note.setAttribute('sign', 'plus');
+    expect(handler).toHaveBeenCalled();
+  });
+
+  it('stacks at the staff’s placement and moves an articulation above the head up under it', () => {
+    const staff = makeStaff();
+    const note = renderNote(staff, 'A', 4) as NoteElementType;
+    note.setAttribute('stem-direction', 'down');
+    note.setAttribute('articulation', 'tenuto');
+    const before = note
+      .shadowRoot!.querySelector('.articulations line')!
+      .getAttribute('y1');
+    note.setAttribute('sign', 'plus');
+    note.signPlacement = { bottomY: note.staffY! - 40, articulationLiftPx: 12 };
+    const after = note
+      .shadowRoot!.querySelector('.articulations line')!
+      .getAttribute('y1');
+    expect(Number(after)).toBeLessThan(Number(before));
+    // The plus's horizontal arm is level with its centre, 40px over the head
+    // less half its height.
+    const arm = note.shadowRoot!.querySelector('.sign-plus line')!;
+    const headY =
+      Number(note.shadowRoot!.querySelector('.head')!.getAttribute('cy')) *
+      NOTE_SCALE;
+    expect(Number(arm.getAttribute('y1'))).toBeCloseTo(
+      headY - 40 - SIGN_CROSS_SIZE_PX / 2
+    );
+  });
+});
+
+describe('technique-text and dynamic-text', () => {
+  const textOf = (note: Element): Element | null =>
+    note.shadowRoot!.querySelector('.technique-text');
+
+  it('reads above and upright by default; parses placement and style', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    expect(note.techniqueText).toBeNull();
+    expect(note.techniqueTextPlacement).toBe('above');
+    expect(note.techniqueTextStyle).toBe('normal');
+    note.techniqueText = 'hum';
+    note.techniqueTextPlacement = 'below';
+    note.techniqueTextStyle = 'italic';
+    expect(note.getAttribute('technique-text')).toBe('hum');
+    expect(note.techniqueTextPlacement).toBe('below');
+    expect(note.techniqueTextStyle).toBe('italic');
+    note.setAttribute('dynamic-text', '  ');
+    expect(note.dynamicText).toBeNull();
+    note.dynamicText = ', ma distinto';
+    expect(note.dynamicText).toBe(', ma distinto');
+  });
+
+  it('warns about an unknown placement or style and draws the default', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('technique-text-placement', 'left');
+    note.setAttribute('technique-text-style', 'bold');
+    note.setAttribute('technique-text', ' | ');
+    expect(note.techniqueTextPlacement).toBe('above');
+    expect(note.techniqueTextStyle).toBe('normal');
+    expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
+      expect.stringContaining('above or below'),
+      expect.stringContaining('normal or italic'),
+      expect.stringContaining('technique-text is empty'),
+    ]);
+    warn.mockRestore();
+  });
+
+  it('draws its text standalone, above or below its own ink', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('note', 'F');
+    note.setAttribute('octave', '5');
+    note.setAttribute('technique-text', 'key slaps|(without air)');
+    document.body.appendChild(note);
+    const above = textOf(note)!;
+    expect(
+      Array.from(above.querySelectorAll('tspan'), (span) => span.textContent)
+    ).toEqual(['key slaps', '(without air)']);
+    const [first, second] = Array.from(above.querySelectorAll('tspan'));
+    expect(Number(second.getAttribute('x'))).toBeLessThan(
+      Number(first.getAttribute('x'))
+    );
+    const aboveY = Number(above.getAttribute('y'));
+    note.setAttribute('technique-text-placement', 'below');
+    note.setAttribute('technique-text-style', 'italic');
+    const below = textOf(note)!;
+    expect(Number(below.getAttribute('y'))).toBeGreaterThan(aboveY);
+    expect(below.getAttribute('font-style')).toBe('italic');
+  });
+
+  it('leaves its text to the staff', () => {
+    const staff = makeStaff();
+    const note = renderNote(staff, 'C', 5);
+    note.setAttribute('technique-text', 'hum');
+    expect(textOf(note)).toBeNull();
+    expect(
+      staff.shadowRoot!.querySelector(
+        '.technique-labels-container .technique-text'
+      )?.textContent
+    ).toBe('hum');
+  });
+
+  it('warns once when dynamic-text has no dynamic to follow', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(note);
+    note.setAttribute('dynamic-text', 'sub.');
+    note.setAttribute('duration', 'half');
+    const missing = () =>
+      warn.mock.calls.filter(([message]) =>
+        String(message).includes('dynamic-text needs a dynamic')
+      ).length;
+    expect(missing()).toBe(1);
+    note.setAttribute('dynamic', 'p');
+    note.removeAttribute('dynamic');
+    expect(missing()).toBe(2);
+    warn.mockRestore();
   });
 });

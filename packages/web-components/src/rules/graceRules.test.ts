@@ -5,6 +5,7 @@ import type { Note } from '../types/theory';
 import {
   ACCIDENTAL_NOTE_GAP,
   ACCIDENTAL_SYMBOL_WIDTH,
+  GRACE_ACCIDENTAL_LEAD_GAP_PX,
   GRACE_MAIN_GAP_PX,
   GRACE_MIN_STEM_LENGTH_PX,
   GRACE_NOTE_ADVANCE_PX,
@@ -21,6 +22,7 @@ import {
   computeGraceLayout,
   diatonicStepsBetween,
   rebaseGraceSteps,
+  resolveOrnamentSlur,
   type GraceNoteDescriptor,
 } from './graceRules';
 
@@ -136,6 +138,45 @@ describe('buildGraceNoteDescriptors', () => {
   });
 });
 
+describe('buildGraceNoteDescriptors with quarter-tones', () => {
+  it('arrows each slot that has one', () => {
+    const descriptors = buildGraceNoteDescriptors(
+      ['F#', 'G', 'A'],
+      [4, 4, 4],
+      'C',
+      5,
+      [],
+      null,
+      ['up', null, 'down']
+    );
+    expect(descriptors.map(({ accidental }) => accidental)).toEqual([
+      'sharp-up',
+      null,
+      'natural-down',
+    ]);
+  });
+
+  it('keeps the layout and the reserved width in step', () => {
+    const graceNotes: Note[] = ['Bb', 'Ab'];
+    const descriptors = buildGraceNoteDescriptors(
+      graceNotes,
+      [4, 4],
+      'C',
+      5,
+      [],
+      null,
+      ['up', 'down']
+    );
+    const resolved = descriptors.map(({ accidental }) => accidental);
+    expect(computeGraceFootprintWidth(graceNotes, resolved)).toBeCloseTo(
+      computeGraceLayout(descriptors).totalWidth + GRACE_MAIN_GAP_PX
+    );
+    expect(computeGraceFootprintWidth(graceNotes, resolved)).toBeGreaterThan(
+      computeGraceFootprintWidth(graceNotes, ['flat', 'flat'])
+    );
+  });
+});
+
 describe('computeGraceLayout', () => {
   it('advances one column per grace head', () => {
     const layout = computeGraceLayout([
@@ -161,6 +202,25 @@ describe('computeGraceLayout', () => {
     expect(layout.totalWidth).toBe(2 * GRACE_NOTE_ADVANCE_PX + accidentalWidth);
     expect(layout.headXCenters[0]).toBe(
       accidentalWidth + GRACE_NOTE_ADVANCE_PX / 2
+    );
+  });
+
+  it('keeps a later accidental off the head before it, in layout and footprint alike', () => {
+    const accidentalWidth =
+      GRACE_SCALE * (ACCIDENTAL_SYMBOL_WIDTH.sharp + ACCIDENTAL_NOTE_GAP);
+    const layout = computeGraceLayout([
+      { relativeStaffSteps: 0, accidental: 'sharp', articulation: null },
+      { relativeStaffSteps: 1, accidental: 'sharp', articulation: null },
+    ]);
+    expect(layout.headXCenters[1] - layout.headXCenters[0]).toBeCloseTo(
+      GRACE_NOTE_ADVANCE_PX + accidentalWidth + GRACE_ACCIDENTAL_LEAD_GAP_PX
+    );
+    expect(computeGraceFootprintWidth(['F#', 'G#'])).toBeCloseTo(
+      GRACE_MAIN_GAP_PX + layout.totalWidth
+    );
+    // The first head keeps its place in the group.
+    expect(computeFirstGraceHeadX(100, 40, ['F#', 'G#'])).toBeCloseTo(
+      60 + layout.headXCenters[0]
     );
   });
 
@@ -190,6 +250,12 @@ describe('computeGraceFootprintWidth', () => {
   it('includes the gap to the main note', () => {
     expect(computeGraceFootprintWidth(['G'])).toBe(
       GRACE_MAIN_GAP_PX + GRACE_NOTE_ADVANCE_PX
+    );
+  });
+
+  it("narrows a cue note's grace notes, keeping the gap to the note", () => {
+    expect(computeGraceFootprintWidth(['G', 'A'], null, [], 0.75)).toBeCloseTo(
+      GRACE_MAIN_GAP_PX + 0.75 * 2 * GRACE_NOTE_ADVANCE_PX
     );
   });
 
@@ -376,5 +442,68 @@ describe('rebaseGraceSteps', () => {
     expect(5 - graces[0].relativeStaffSteps * STAFF_Y_STEP).toBe(
       80 - 3 * STAFF_Y_STEP
     );
+  });
+});
+
+describe('resolveOrnamentSlur', () => {
+  const BASE = 9;
+  const base = () => BASE;
+  const from = { x: 0, y: 100 };
+  const to = { x: 40, y: 100 };
+  const arcY = (
+    shape: ReturnType<typeof resolveOrnamentSlur>,
+    side: 'above' | 'below',
+    x: number
+  ) => {
+    const t = (x - shape.from.x) / (shape.to.x - shape.from.x);
+    const chord = shape.from.y + (shape.to.y - shape.from.y) * t;
+    return (
+      chord + (side === 'below' ? 1 : -1) * 2 * t * (1 - t) * shape.bulgeHeight
+    );
+  };
+
+  it('keeps the plain arc when nothing is in its way', () => {
+    expect(resolveOrnamentSlur(from, to, 'below', base, [])).toEqual({
+      from,
+      to,
+      bulgeHeight: BASE,
+    });
+    const shallow = { left: 15, right: 25, top: 90, bottom: 101 };
+    expect(resolveOrnamentSlur(from, to, 'below', base, [shallow])).toEqual({
+      from,
+      to,
+      bulgeHeight: BASE,
+    });
+  });
+
+  it('bows past an obstacle without moving its ends', () => {
+    const obstacle = { left: 15, right: 25, top: 90, bottom: 108 };
+    const shape = resolveOrnamentSlur(from, to, 'below', base, [obstacle]);
+    expect(shape.from).toEqual(from);
+    expect(shape.to).toEqual(to);
+    expect(shape.bulgeHeight).toBeGreaterThan(BASE);
+    expect(arcY(shape, 'below', 15)).toBeGreaterThan(obstacle.bottom);
+  });
+
+  it('lifts an end beside a tall obstacle instead of bowing high', () => {
+    const arrow = { left: 24, right: 32, top: 72, bottom: 110 };
+    const shape = resolveOrnamentSlur(from, to, 'above', base, [arrow]);
+    expect(shape.to.y).toBeLessThan(to.y);
+    for (const x of [24, 28, 32]) {
+      expect(arcY(shape, 'above', x)).toBeLessThan(arrow.top);
+    }
+  });
+
+  it('moves an end out of the obstacle it would start inside', () => {
+    const obstacle = { left: -4, right: 4, top: 90, bottom: 106 };
+    const shape = resolveOrnamentSlur(from, to, 'below', base, [obstacle]);
+    expect(shape.from.y).toBeGreaterThan(obstacle.bottom);
+  });
+
+  it('ignores obstacles outside its ends', () => {
+    const beside = { left: -20, right: -8, top: 60, bottom: 140 };
+    expect(
+      resolveOrnamentSlur(from, to, 'below', base, [beside]).bulgeHeight
+    ).toBe(BASE);
   });
 });

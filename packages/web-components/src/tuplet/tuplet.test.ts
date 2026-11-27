@@ -79,7 +79,32 @@ describe(MUSIC_TUPLET, () => {
     expect(element.hasAttribute('placement')).toBe(false);
   });
 
-  it.each(['ratio', 'tuplet-group', 'placement'])(
+  it('reads note-value and bracket, with their defaults', () => {
+    const element = document.createElement(MUSIC_TUPLET) as TupletElementType;
+    document.body.appendChild(element);
+    expect(element.noteValue).toBeNull();
+    expect(element.bracket).toBe('auto');
+    element.noteValue = 'dotted-quarter';
+    element.bracket = 'always';
+    expect(element.getAttribute('note-value')).toBe('dotted-quarter');
+    expect(element.bracket).toBe('always');
+    element.noteValue = null;
+    expect(element.hasAttribute('note-value')).toBe(false);
+  });
+
+  it('warns on a note-value or bracket it does not know, and falls back', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const element = document.createElement(MUSIC_TUPLET) as TupletElementType;
+    document.body.appendChild(element);
+    element.setAttribute('note-value', 'hundredtwentyeighth');
+    element.setAttribute('bracket', 'never');
+    expect(element.noteValue).toBeNull();
+    expect(element.bracket).toBe('auto');
+    expect(warn).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+  });
+
+  it.each(['ratio', 'tuplet-group', 'placement', 'note-value', 'bracket'])(
     'dispatches a bubbling, composed TUPLET_EVENTS.ATTRIBUTE_CHANGE when %s changes',
     (attribute) => {
       const element = document.createElement(MUSIC_TUPLET) as TupletElementType;
@@ -87,7 +112,12 @@ describe(MUSIC_TUPLET, () => {
       const listener = jest.fn();
       document.body.addEventListener(TUPLET_EVENTS.ATTRIBUTE_CHANGE, listener);
 
-      element.setAttribute(attribute, attribute === 'ratio' ? '5' : 'above');
+      const values: Record<string, string> = {
+        ratio: '5',
+        'note-value': 'quarter',
+        bracket: 'always',
+      };
+      element.setAttribute(attribute, values[attribute] ?? 'above');
 
       expect(listener).toHaveBeenCalledTimes(1);
       const event = listener.mock.calls[0][0] as CustomEvent;

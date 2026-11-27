@@ -5,18 +5,29 @@ import type {
   NoteLetter,
   NoteheadType,
   Octave,
+  QuarterTone,
 } from '../types/theory';
 import {
   ACCIDENTAL_NOTE_GAP,
-  ACCIDENTAL_SYMBOL_WIDTH,
+  GRACE_ACCIDENTAL_LEAD_GAP_PX,
   GRACE_MAIN_GAP_PX,
   GRACE_MIN_STEM_LENGTH_PX,
   GRACE_NOTE_ADVANCE_PX,
   GRACE_SCALE,
   GRACE_STEM_LENGTH_PX,
+  ORNAMENT_SLUR_CLEARANCE_PX,
+  ORNAMENT_SLUR_MAX_BULGE_PX,
   STAFF_Y_STEP,
 } from '../utils/notationDimensions';
-import { parseAccidentalSuffix, suffixToType } from './accidentalRules';
+import { accidentalReach, pitchAccidental } from './accidentalRules';
+import {
+  anchorYClearOfRects,
+  bulgeHeightEnclosingRects,
+  inflateRect,
+  type CurvePoint,
+  type CurveSide,
+  type ObstacleRect,
+} from './connectorPlacementRules';
 import { resolveGraceNoteheads } from './noteheadRules';
 
 export type GraceNoteDescriptor = {
@@ -55,10 +66,6 @@ export function diatonicStepsBetween(
   );
 }
 
-export function graceAccidentalFromNote(note: Note): AccidentalType | null {
-  return suffixToType(parseAccidentalSuffix(note));
-}
-
 // Missing or invalid octave slots (graceOctaves[i] is null, or the array is
 // shorter than graceNotes) default to the reference (main element's) octave.
 // Missing or invalid articulation slots (graceArticulations[i] is null/absent)
@@ -69,7 +76,8 @@ export function buildGraceNoteDescriptors(
   referenceLetter: NoteLetter,
   referenceOctave: Octave,
   graceArticulations: (ArticulationType | null)[] = [],
-  graceNoteheads: readonly (NoteheadType | null)[] | null = null
+  graceNoteheads: readonly (NoteheadType | null)[] | null = null,
+  graceQuarterTones: readonly (QuarterTone | null)[] | null = null
 ): GraceNoteDescriptor[] {
   const noteheads = graceNoteheads
     ? resolveGraceNoteheads(graceNoteheads, graceNotes.length)
@@ -84,7 +92,7 @@ export function buildGraceNoteDescriptors(
         letter,
         octave
       ),
-      accidental: graceAccidentalFromNote(graceNote),
+      accidental: pitchAccidental(graceNote, graceQuarterTones?.[i]),
       articulation: graceArticulations[i] ?? null,
       ...(noteheads ? { notehead: noteheads[i] } : {}),
     };
@@ -131,10 +139,25 @@ export function rebaseGraceSteps(
   }
 }
 
-// Width (px) an accidental column adds in front of a grace head, at grace scale.
-function graceAccidentalWidth(accidental: AccidentalType): number {
+// An unpitched note's grace notes stand where it does, without accidentals.
+export function flattenUnpitchedGraces(
+  graceNotes: GraceNoteDescriptor[]
+): void {
+  for (const graceNote of graceNotes) {
+    graceNote.relativeStaffSteps = 0;
+    graceNote.accidental = null;
+  }
+}
+
+// Width (px) an accidental column adds in front of a grace head, at grace
+// scale. Past the first of a group it also keeps off the head before it.
+function graceAccidentalWidth(
+  accidental: AccidentalType,
+  graceIndex: number
+): number {
   return (
-    GRACE_SCALE * (ACCIDENTAL_SYMBOL_WIDTH[accidental] + ACCIDENTAL_NOTE_GAP)
+    GRACE_SCALE * (accidentalReach(accidental) + ACCIDENTAL_NOTE_GAP) +
+    (graceIndex > 0 ? GRACE_ACCIDENTAL_LEAD_GAP_PX : 0)
   );
 }
 
@@ -145,10 +168,10 @@ export function computeGraceLayout(
 ): GraceLayout {
   const headXCenters: number[] = [];
   let runningX = 0;
-  for (const graceNote of graceNotes) {
+  for (const [i, graceNote] of graceNotes.entries()) {
     if (graceNote.accidental !== null) {
       runningX +=
-        graceAccidentalWidth(graceNote.accidental) +
+        graceAccidentalWidth(graceNote.accidental, i) +
         (graceNote.headLeftOverhangPx ?? 0);
     }
     headXCenters.push(runningX + GRACE_NOTE_ADVANCE_PX / 2);
@@ -166,7 +189,8 @@ export function computeFirstGraceHeadX(
   leftwardWidth: number,
   graceNotes: Note[],
   resolvedAccidentals?: (AccidentalType | null)[] | null,
-  headLeftOverhangsPx: readonly number[] = []
+  headLeftOverhangsPx: readonly number[] = [],
+  ratio = 1
 ): number {
   if (graceNotes.length === 0) {
     return noteX - leftwardWidth;
@@ -177,13 +201,13 @@ export function computeFirstGraceHeadX(
   );
   const firstAccidental = useResolved
     ? resolvedAccidentals[0]
-    : graceAccidentalFromNote(graceNotes[0]);
+    : pitchAccidental(graceNotes[0]);
   const firstAccidentalWidth =
     firstAccidental !== null
-      ? graceAccidentalWidth(firstAccidental) + (headLeftOverhangsPx[0] ?? 0)
+      ? graceAccidentalWidth(firstAccidental, 0) + (headLeftOverhangsPx[0] ?? 0)
       : 0;
   const firstHeadXCenter = firstAccidentalWidth + GRACE_NOTE_ADVANCE_PX / 2;
-  return noteX - leftwardWidth + firstHeadXCenter;
+  return noteX - leftwardWidth + ratio * firstHeadXCenter;
 }
 
 // True when resolvedAccidentals is usable (non-null and index-aligned with
@@ -202,11 +226,13 @@ function hasUsableResolvedAccidentals(
 // group, in addition to the main element's own accidental footprint. Prefers
 // the key-signature-resolved accidentals (which can render a natural even for
 // a suffix-less grace note) and falls back to suffix-derived accidentals when
-// resolved data isn't available, e.g. standalone (no staff) rendering.
+// resolved data isn't available, e.g. standalone (no staff) rendering. A cue
+// note's grace notes are `ratio` as wide; the gap before the note stays.
 export function computeGraceFootprintWidth(
   graceNotes: Note[] | null,
   resolvedAccidentals?: (AccidentalType | null)[] | null,
-  headLeftOverhangsPx: readonly number[] = []
+  headLeftOverhangsPx: readonly number[] = [],
+  ratio = 1
 ): number {
   if (graceNotes === null || graceNotes.length === 0) {
     return 0;
@@ -219,13 +245,14 @@ export function computeGraceFootprintWidth(
   for (let i = 0; i < graceNotes.length; i++) {
     const accidental = useResolved
       ? resolvedAccidentals[i]
-      : graceAccidentalFromNote(graceNotes[i]);
+      : pitchAccidental(graceNotes[i]);
     if (accidental !== null) {
-      width += graceAccidentalWidth(accidental) + (headLeftOverhangsPx[i] ?? 0);
+      width +=
+        graceAccidentalWidth(accidental, i) + (headLeftOverhangsPx[i] ?? 0);
     }
     width += GRACE_NOTE_ADVANCE_PX;
   }
-  return width;
+  return GRACE_MAIN_GAP_PX + ratio * (width - GRACE_MAIN_GAP_PX);
 }
 
 // Beam-surface Y for each stem of a grace group. The beam line runs through
@@ -253,4 +280,95 @@ export function computeGraceBeamYs(
   }
 
   return lineYs.map((lineY) => lineY - raise);
+}
+
+export type OrnamentSlurShape = {
+  from: CurvePoint;
+  to: CurvePoint;
+  bulgeHeight: number;
+};
+
+const ORNAMENT_SLUR_LIFT_STEPS = 10;
+
+// What a px of bulge height costs against a px of lift: enough to lift an end
+// rather than bow a short slur steeply.
+const ORNAMENT_SLUR_BULGE_COST = 0.75;
+
+/**
+ * An ornament slur's shape, outside every obstacle between its ends. Its ends
+ * stay at their notes unless that would bow it past
+ * `ORNAMENT_SLUR_MAX_BULGE_PX`; then they may lift off, and of the shapes that
+ * clear, the one that bows and lifts least in all is used.
+ */
+export function resolveOrnamentSlur(
+  from: CurvePoint,
+  to: CurvePoint,
+  side: CurveSide,
+  bulgeHeightFor: (from: CurvePoint, to: CurvePoint) => number,
+  obstacles: readonly ObstacleRect[]
+): OrnamentSlurShape {
+  const padded = obstacles
+    .filter((rect) => rect.right >= from.x && rect.left <= to.x)
+    .map((rect) => inflateRect(rect, ORNAMENT_SLUR_CLEARANCE_PX));
+  const clearOf = (anchor: CurvePoint): CurvePoint => ({
+    x: anchor.x,
+    y: anchorYClearOfRects(anchor, side, padded, 0),
+  });
+  const shapeBetween = (
+    start: CurvePoint,
+    end: CurvePoint
+  ): OrnamentSlurShape => {
+    const baseHeight = bulgeHeightFor(start, end);
+    return {
+      from: start,
+      to: end,
+      bulgeHeight:
+        bulgeHeightEnclosingRects(
+          start,
+          end,
+          side,
+          baseHeight,
+          padded,
+          Infinity
+        ) ?? baseHeight,
+    };
+  };
+
+  const start = clearOf(from);
+  const end = clearOf(to);
+  const grounded = shapeBetween(start, end);
+  if (
+    grounded.bulgeHeight <=
+    Math.max(ORNAMENT_SLUR_MAX_BULGE_PX, bulgeHeightFor(start, end))
+  ) {
+    return grounded;
+  }
+
+  const outermostY =
+    side === 'below'
+      ? Math.max(...padded.map((rect) => rect.bottom))
+      : Math.min(...padded.map((rect) => rect.top));
+  const liftsOf = (anchor: CurvePoint): CurvePoint[] => {
+    const inside =
+      side === 'below' ? anchor.y < outermostY : anchor.y > outermostY;
+    const steps = inside ? ORNAMENT_SLUR_LIFT_STEPS : 0;
+    return Array.from({ length: steps + 1 }, (_, step) => ({
+      x: anchor.x,
+      y: anchor.y + ((outermostY - anchor.y) * step) / Math.max(1, steps),
+    }));
+  };
+  const costOf = (shape: OrnamentSlurShape): number =>
+    shape.bulgeHeight * ORNAMENT_SLUR_BULGE_COST +
+    Math.abs(shape.from.y - start.y) +
+    Math.abs(shape.to.y - end.y);
+  let best = grounded;
+  for (const liftedStart of liftsOf(start)) {
+    for (const liftedEnd of liftsOf(end)) {
+      const shape = shapeBetween(liftedStart, liftedEnd);
+      if (costOf(shape) < costOf(best)) {
+        best = shape;
+      }
+    }
+  }
+  return best;
 }

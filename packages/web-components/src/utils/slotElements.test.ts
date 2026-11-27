@@ -6,6 +6,7 @@ import {
   MUSIC_BARLINE,
   MUSIC_CHORD,
   MUSIC_CLEF,
+  MUSIC_LYRICS,
   MUSIC_NOTE,
   MUSIC_REST,
   MUSIC_TREMOLO,
@@ -102,6 +103,15 @@ describe('flattenSlotElements — arpeggioGroups', () => {
 });
 
 describe('flattenStaffSlotElements', () => {
+  it('leaves lyrics beside voices alone', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const lyrics = document.createElement(MUSIC_LYRICS);
+    flattenStaffSlotElements([document.createElement(MUSIC_VOICE), lyrics]);
+    expect(lyrics.style.display).toBe('');
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it('behaves byte-identical to flattenSlotElements when there are zero <music-voice> siblings', () => {
     const assigned = [note('C'), note('D'), rest()];
     const direct = flattenSlotElements(assigned);

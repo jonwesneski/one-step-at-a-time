@@ -1,4 +1,9 @@
 import {
+  dynamicTextGapPx,
+  dynamicTextHalfWidth,
+  type HairpinSegment,
+} from '../../rules/dynamicsRules';
+import {
   hairpinWedgeEdges,
   type HairpinPoint,
   type HairpinWedgeEdges,
@@ -8,6 +13,7 @@ import { SVG_NS } from '../consts';
 import {
   ARPEGGIO_HAIRPIN_OPEN_WIDTH_PX,
   DYNAMICS_FONT_SIZE,
+  DYNAMIC_TEXT_FONT_SIZE_PX,
   HAIRPIN_OPEN_HEIGHT,
   HAIRPIN_STROKE_WIDTH,
 } from '../notationDimensions';
@@ -50,6 +56,37 @@ export function createDynamicMarkingSvg(
 }
 
 /**
+ * A `dynamic-text`: italic, on the baseline of the marking centred at
+ * markingCenterX, straight after its letters (and a reminder's brackets).
+ */
+export function createDynamicTextSvg(
+  text: string,
+  marking: DynamicMarking,
+  markingCenterX: number,
+  y: number,
+  { bracketed = false }: { bracketed?: boolean } = {}
+): SVGTextElement {
+  const element = document.createElementNS(SVG_NS, 'text');
+  element.classList.add('dynamic-text');
+  element.setAttribute(
+    'x',
+    `${
+      markingCenterX +
+      dynamicTextHalfWidth(marking, bracketed) +
+      dynamicTextGapPx(text)
+    }`
+  );
+  element.setAttribute('y', `${y}`);
+  element.setAttribute('text-anchor', 'start');
+  element.setAttribute('font-size', `${DYNAMIC_TEXT_FONT_SIZE_PX}`);
+  element.setAttribute('font-style', 'italic');
+  element.setAttribute('font-family', 'serif');
+  element.setAttribute('fill', 'currentColor');
+  element.textContent = text;
+  return element;
+}
+
+/**
  * Renders a hairpin wedge (crescendo or decrescendo) as two straight SVG lines.
  *
  * Crescendo (<): lines converge to a point at startX, open to openHeight at endX.
@@ -80,6 +117,29 @@ export function createHairpinSvg(
     )
   );
   group.classList.add('hairpin');
+  return group;
+}
+
+/** A swell: its wedges, each a hairpin segment (`resolveSwellSegments`). */
+export function createSwellSvg(
+  segments: readonly HairpinSegment[],
+  openHeight: number = HAIRPIN_OPEN_HEIGHT
+): SVGGElement {
+  const group = document.createElementNS(SVG_NS, 'g');
+  group.classList.add('swell');
+  for (const segment of segments) {
+    group.appendChild(
+      createHairpinSvg(
+        segment.kind,
+        segment.startX,
+        segment.endX,
+        segment.centerY,
+        openHeight,
+        segment.openAtStart,
+        segment.openAtEnd
+      )
+    );
+  }
   return group;
 }
 

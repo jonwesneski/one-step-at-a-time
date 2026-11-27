@@ -1,14 +1,19 @@
 import type {
-  AccidentalType,
+  AccidentalReminder,
   ArpeggioType,
   ArticulationType,
   BarlineType,
   BaseDurationType,
+  BendShape,
+  BreathMark,
   ClefType,
+  ConventionalAccidentalType,
   DurationType,
   DynamicMarking,
   EndingNumbering,
   GlissandoHint,
+  GlissandoLabel,
+  GlissandoShape,
   GraceDuration,
   GraceSlur,
   GraceType,
@@ -18,15 +23,23 @@ import type {
   Mode,
   Note,
   NoteheadType,
+  NoteSign,
+  NoteSize,
   Octave,
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
   PercussionInstrument,
+  QuarterTone,
   RestStaffSide,
+  SlurStyle,
   StaffGroupType,
   StemDirection,
+  StemMark,
   StressType,
+  SwellShape,
+  TextPlacement,
+  TextStyle,
   TieStyle,
   TimeSignature,
   TremoloBeamAttach,
@@ -37,8 +50,10 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  TupletBracket,
   TupletPlacement,
   TupletRatio,
+  UnpitchedPlacement,
   VocalType,
 } from '../types/theory';
 
@@ -347,10 +362,12 @@ export const STRESSES: StressType[] = ['stressed', 'unstressed'];
 export const NOTEHEADS: NoteheadType[] = [
   'normal',
   'x',
+  'x-plain',
   'diamond',
   'diamond-white',
   'triangle-up',
   'triangle-down',
+  'none',
 ];
 
 export const PERCUSSION_INSTRUMENTS: PercussionInstrument[] = [
@@ -384,7 +401,12 @@ export const ARPEGGIO_UNMATCHED_MODES = ['lv', 'skip'] as const;
 export const ARPEGGIO_RUN_DEFAULT_DURATION: DurationType = 'thirtysecond';
 
 /** Accepted values of the `tie` attribute on `<music-note>` / `<music-chord>`. */
-export const TIE_VALUES = ['start', 'end', 'laissez-vibrer'] as const;
+export const TIE_VALUES = [
+  'start',
+  'continue',
+  'end',
+  'laissez-vibrer',
+] as const;
 
 export const GRACE_TYPES: GraceType[] = [
   'acciaccatura',
@@ -403,7 +425,7 @@ export const GRACE_DURATIONS: GraceDuration[] = [
 
 export const GRACE_SLURS: GraceSlur[] = ['auto', 'none'];
 
-export const TRILL_LINE_MODES: TrillLineMode[] = ['auto', 'none'];
+export const TRILL_LINE_MODES: TrillLineMode[] = ['auto', 'none', 'double'];
 
 export const OCTAVE_SHIFT_AMOUNTS: OctaveShiftAmount[] = [
   '8va',
@@ -416,7 +438,24 @@ export const OCTAVE_SHIFT_AMOUNTS: OctaveShiftAmount[] = [
 
 export const OCTAVE_DISPLAY_MODES: OctaveDisplayMode[] = ['sign', 'col'];
 
-export const GLISSANDO_HINTS: GlissandoHint[] = ['white-key', 'black-key'];
+export const GLISSANDO_HINTS: GlissandoHint[] = [
+  'white-key',
+  'black-key',
+  'gliss',
+];
+
+export const GLISSANDO_SHAPES: GlissandoShape[] = ['straight', 'dip', 'wave'];
+
+export const GLISSANDO_LABELS: GlissandoLabel[] = [
+  'gliss',
+  'quasi-gliss',
+  'chrom',
+  'chromatic',
+  'lip',
+  'bend',
+];
+
+export const BEND_SHAPES: BendShape[] = ['up', 'down', 'dip', 'wave'];
 
 export const REST_STAFF_SIDES: RestStaffSide[] = ['above', 'below', 'centered'];
 
@@ -429,7 +468,47 @@ export const TREMOLO_VALUES: TremoloValue[] = [
   'unmeasured',
 ];
 
-export const TREMOLO_LABELS: TremoloLabel[] = ['trem', 'non-trem'];
+export const FLUTTER_TONGUE_LABELS: TremoloLabel[] = ['flz', 'flt', 'frull'];
+
+export const ORDINARY_LABELS: TremoloLabel[] = ['ord', 'nat', 'norm'];
+
+export const TREMOLO_LABELS: TremoloLabel[] = [
+  'trem',
+  'non-trem',
+  ...FLUTTER_TONGUE_LABELS,
+  ...ORDINARY_LABELS,
+];
+
+export const BREATH_MARKS: BreathMark[] = ['tick', 'comma'];
+
+export const UNPITCHED_PLACEMENTS: UnpitchedPlacement[] = [
+  'top',
+  'bottom',
+  'written',
+];
+
+export const STEM_MARKS: StemMark[] = ['cross', 'multiphonic'];
+
+export const NOTE_SIGNS: NoteSign[] = [
+  'circle',
+  'filled',
+  'half',
+  'plus',
+  'cross',
+];
+
+export const NOTE_SIZES: NoteSize[] = ['normal', 'cue'];
+
+export const ACCIDENTAL_REMINDERS: AccidentalReminder[] = [
+  'bracketed',
+  'plain',
+];
+
+export const TEXT_PLACEMENTS: TextPlacement[] = ['above', 'below'];
+
+export const TEXT_STYLES: TextStyle[] = ['normal', 'italic'];
+
+export const SWELL_SHAPES: SwellShape[] = ['both', 'crescendo', 'diminuendo'];
 
 export const TREMOLO_BEAM_ATTACHES: TremoloBeamAttach[] = ['all', 'outer'];
 
@@ -437,7 +516,11 @@ export const TREMOLO_BEAM_POSITIONS: TremoloBeamPosition[] = ['between'];
 
 export const TIE_STYLES: TieStyle[] = ['solid', 'dotted'];
 
+export const SLUR_STYLES: SlurStyle[] = ['solid', 'dotted'];
+
 export const TUPLET_PLACEMENTS: TupletPlacement[] = ['above', 'below'];
+
+export const TUPLET_BRACKETS: TupletBracket[] = ['auto', 'always'];
 
 export const BARLINE_TYPES: BarlineType[] = [
   'single',
@@ -486,13 +569,15 @@ export const TRILL_FINISH_SLURS: TrillFinishSlur[] = [
   'both',
 ];
 
-export const ACCIDENTAL_TYPES: AccidentalType[] = [
+export const ACCIDENTAL_TYPES: ConventionalAccidentalType[] = [
   'sharp',
   'flat',
   'natural',
   'double-sharp',
   'double-flat',
 ];
+
+export const QUARTER_TONES: QuarterTone[] = ['up', 'down'];
 
 export const CLEFS: ClefType[] = ['treble', 'bass'];
 

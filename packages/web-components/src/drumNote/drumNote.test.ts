@@ -35,6 +35,18 @@ describe(MUSIC_DRUM_NOTE, () => {
     expect(note.notehead).toBe('x');
   });
 
+  it('refuses a headless notehead with a warning and keeps its head', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const note = makeDrumNote({ instrument: 'ride', notehead: 'none' });
+    expect(note.notehead).toBe('x');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('notehead="none" is ignored')
+    );
+    expect(note.shadowRoot!.querySelector('.head')).not.toBeNull();
+    note.setAttribute('notehead', 'x-plain');
+    expect(note.notehead).toBe('x-plain');
+  });
+
   it('honours an explicit notehead', () => {
     const note = makeDrumNote({ instrument: 'snare', notehead: 'x' });
     expect(note.notehead).toBe('x');
@@ -62,6 +74,19 @@ describe(MUSIC_DRUM_NOTE, () => {
         'ignoring note, octave, trill, octave-shift, grace'
       )
     );
+  });
+
+  it('takes technique and dynamic text', () => {
+    const note = makeDrumNote({
+      instrument: 'snare',
+      'technique-text': 'rim',
+      'technique-text-placement': 'below',
+      dynamic: 'p',
+      'dynamic-text': 'sub.',
+    });
+    expect(note.techniqueText).toBe('rim');
+    expect(note.techniqueTextPlacement).toBe('below');
+    expect(note.dynamicText).toBe('sub.');
   });
 
   it('ignores an unknown instrument', () => {

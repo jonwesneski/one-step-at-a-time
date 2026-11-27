@@ -219,21 +219,49 @@ export function resolveBeamPlacement(input: {
   notes: readonly BeamPlacementNote[];
   stemUp: boolean;
   obstacles?: readonly BeamObstacle[];
+  // A cue group's beams, steps and stems.
+  scale?: number;
 }): UniformBeamPlacement {
-  const { notes, stemUp } = input;
+  const { notes, stemUp, scale = 1 } = input;
+  // A cue beam's thickness and step don't fit the stave's spaces, so it isn't
+  // hung, sat or straddled on its lines.
+  const attachesToLines = scale === 1;
   const maxBeamCount = Math.max(...notes.map((note) => note.beamCount));
-  if (maxBeamCount >= 4) {
-    const spread = solveUniform(input, WIDE_BEAM_STEP_PX, true);
-    if (spread !== null && stackTouchesStave(spread, notes, stemUp)) {
+  if (maxBeamCount >= 4 && attachesToLines) {
+    const wide = beamSizes(scale, WIDE_BEAM_STEP_PX);
+    const spread = solveUniform(input, wide, true);
+    if (spread !== null && stackTouchesStave(spread, notes, stemUp, wide)) {
       return spread;
     }
   }
+  const sizes = beamSizes(scale, BEAM_STEP_PX);
   return (
-    solveUniform(input, BEAM_STEP_PX, true) ??
-    solveUniform(input, BEAM_STEP_PX, false) ??
-    solveUniform({ notes, stemUp }, BEAM_STEP_PX, false) ??
-    fallbackPlacement(notes, stemUp, BEAM_STEP_PX)
+    (attachesToLines ? solveUniform(input, sizes, true) : null) ??
+    solveUniform(input, sizes, false) ??
+    solveUniform({ notes, stemUp }, sizes, false) ??
+    fallbackPlacement(notes, stemUp, sizes)
   );
+}
+
+// Beam and stem sizes at a group's scale, with `step` between levels.
+type BeamSizes = {
+  thickness: number;
+  step: number;
+  baseStem: number;
+  minStem: number;
+  minStemInStave: number;
+  scale: number;
+};
+
+function beamSizes(scale: number, step: number): BeamSizes {
+  return {
+    thickness: scale * BEAM_THICKNESS_PX,
+    step: scale * step,
+    baseStem: scale * BASE_STEM_LENGTH_PX,
+    minStem: scale * MIN_STEM_LENGTH_PX,
+    minStemInStave: scale * BEAMED_STEM_MIN_IN_STAVE_PX,
+    scale,
+  };
 }
 
 function solveUniform(
@@ -242,9 +270,10 @@ function solveUniform(
     stemUp: boolean;
     obstacles?: readonly BeamObstacle[];
   },
-  step: number,
+  sizes: BeamSizes,
   requireAttachment: boolean
 ): UniformBeamPlacement | null {
+  const { step } = sizes;
   const { notes, stemUp, obstacles = [] } = input;
   const count = notes.length;
   const first = notes[0];
@@ -265,9 +294,9 @@ function solveUniform(
   const intervalSign = Math.sign(last.nearestHeadY - first.nearestHeadY);
   const maxSlopeSteps = horizontal ? 0 : Math.floor(slope.max / GRID_PX);
   const maxBeamCount = Math.max(...notes.map((note) => note.beamCount));
-  const stackDepth = (maxBeamCount - 1) * step + BEAM_THICKNESS_PX;
-  const idealStems = notes.map((note) => idealStemPx(note, stemUp, step));
-  const minStems = notes.map((note) => minimumStemPx(note, step));
+  const stackDepth = (maxBeamCount - 1) * step + sizes.thickness;
+  const idealStems = notes.map((note) => idealStemPx(note, stemUp, sizes));
+  const minStems = notes.map((note) => minimumStemPx(note, sizes));
 
   // Wide enough that every note can reach both its ideal and its shortest
   // allowed stem, at any slope the group may take.
@@ -301,7 +330,7 @@ function solveUniform(
       if (
         notes.some(
           (note, i) =>
-            !innermostBeamClearsLedgerSide(note, stemUp, outerAt(i), step)
+            !innermostBeamClearsLedgerSide(note, stemUp, outerAt(i), sizes)
         )
       ) {
         continue;
@@ -309,8 +338,8 @@ function solveUniform(
       if (
         requireAttachment &&
         !(
-          endBeamsAttached(outerFirst, first.beamCount, stemUp, step) &&
-          endBeamsAttached(outerAt(count - 1), last.beamCount, stemUp, step)
+          endBeamsAttached(outerFirst, first.beamCount, stemUp, sizes) &&
+          endBeamsAttached(outerAt(count - 1), last.beamCount, stemUp, sizes)
         )
       ) {
         continue;
@@ -335,7 +364,13 @@ function solveUniform(
         Math.abs(slopeSteps * GRID_PX - slope.ideal);
       if (cost < bestCost - EPSILON) {
         bestCost = cost;
-        best = toPlacement(outerFirst, outerAt(count - 1), stemUp, step, stems);
+        best = toPlacement(
+          outerFirst,
+          outerAt(count - 1),
+          stemUp,
+          sizes,
+          stems
+        );
       }
     }
   }
@@ -346,28 +381,28 @@ function solveUniform(
 function fallbackPlacement(
   notes: readonly BeamPlacementNote[],
   stemUp: boolean,
-  step: number
+  sizes: BeamSizes
 ): UniformBeamPlacement {
   const towardBeam = stemUp ? -1 : 1;
   const outers = notes.map(
     (note) =>
       note.nearestHeadY +
-      towardBeam * Math.max(BASE_STEM_LENGTH_PX, minimumStemPx(note, step))
+      towardBeam * Math.max(sizes.baseStem, minimumStemPx(note, sizes))
   );
   const outer = stemUp ? Math.min(...outers) : Math.max(...outers);
   const stems = notes.map((note) => Math.abs(outer - note.nearestHeadY));
-  return toPlacement(outer, outer, stemUp, step, stems);
+  return toPlacement(outer, outer, stemUp, sizes, stems);
 }
 
 function toPlacement(
   outerFirst: number,
   outerLast: number,
   stemUp: boolean,
-  step: number,
+  { step, thickness }: BeamSizes,
   stems: readonly number[]
 ): UniformBeamPlacement {
   // An up-stem beam's outer edge is its top; a down-stem beam's is its bottom.
-  const toTop = stemUp ? 0 : -BEAM_THICKNESS_PX;
+  const toTop = stemUp ? 0 : -thickness;
   return {
     primaryTopAtFirst: outerFirst + toTop,
     primaryTopAtLast: outerLast + toTop,
@@ -410,7 +445,7 @@ function headInStave(y: number): boolean {
 function idealStemPx(
   note: BeamPlacementNote,
   stemUp: boolean,
-  step: number
+  { baseStem, step, scale }: BeamSizes
 ): number {
   const towardMiddle = stemUp
     ? note.nearestHeadY > MIDDLE_STAFF_Y
@@ -419,19 +454,20 @@ function idealStemPx(
     ? Math.abs(note.nearestHeadY - MIDDLE_STAFF_Y)
     : 0;
   return Math.max(
-    BASE_STEM_LENGTH_PX + Math.max(0, note.beamCount - 2) * step,
-    reachMiddle,
+    baseStem + Math.max(0, note.beamCount - 2) * step,
+    scale * reachMiddle,
     note.minimumStemPx ?? 0
   );
 }
 
-function minimumStemPx(note: BeamPlacementNote, step: number): number {
-  const base = headInStave(note.nearestHeadY)
-    ? BEAMED_STEM_MIN_IN_STAVE_PX
-    : MIN_STEM_LENGTH_PX;
+function minimumStemPx(
+  note: BeamPlacementNote,
+  { minStem, minStemInStave, step }: BeamSizes
+): number {
+  const base = headInStave(note.nearestHeadY) ? minStemInStave : minStem;
   return Math.max(
     base,
-    MIN_STEM_LENGTH_PX + (note.beamCount - 1) * step,
+    minStem + (note.beamCount - 1) * step,
     note.minimumStemPx ?? 0
   );
 }
@@ -442,14 +478,14 @@ function levelBand(
   outer: number,
   level: number,
   stemUp: boolean,
-  step: number
+  { step, thickness }: BeamSizes
 ): [number, number] {
   if (stemUp) {
     const top = outer + level * step;
-    return [top, top + BEAM_THICKNESS_PX];
+    return [top, top + thickness];
   }
   const bottom = outer - level * step;
-  return [bottom - BEAM_THICKNESS_PX, bottom];
+  return [bottom - thickness, bottom];
 }
 
 function bandTouchesLine(top: number, bottom: number): boolean {
@@ -470,10 +506,10 @@ function endBeamsAttached(
   outer: number,
   beamCount: number,
   stemUp: boolean,
-  step: number
+  sizes: BeamSizes
 ): boolean {
   for (let level = 0; level < Math.max(beamCount, 2); level++) {
-    const [top, bottom] = levelBand(outer, level, stemUp, step);
+    const [top, bottom] = levelBand(outer, level, stemUp, sizes);
     if (bandInsideStaveArea(top, bottom) && !bandTouchesLine(top, bottom)) {
       return false;
     }
@@ -485,9 +521,9 @@ function innermostBeamClearsLedgerSide(
   note: BeamPlacementNote,
   stemUp: boolean,
   outer: number,
-  step: number
+  sizes: BeamSizes
 ): boolean {
-  const [top, bottom] = levelBand(outer, note.beamCount - 1, stemUp, step);
+  const [top, bottom] = levelBand(outer, note.beamCount - 1, stemUp, sizes);
   if (!stemUp && note.nearestHeadY <= STAFF_TOP_LINE_Y - STAFF_LINE_SPACING) {
     return top > STAFF_TOP_LINE_Y + EPSILON;
   }
@@ -520,14 +556,15 @@ function stackHitsObstacle(
 function stackTouchesStave(
   placement: BeamPlacement,
   notes: readonly BeamPlacementNote[],
-  stemUp: boolean
+  stemUp: boolean,
+  { thickness }: BeamSizes
 ): boolean {
   const maxBeamCount = Math.max(...notes.map((note) => note.beamCount));
   const depth =
-    (maxBeamCount - 1) * Math.abs(placement.levelOffset) + BEAM_THICKNESS_PX;
+    (maxBeamCount - 1) * Math.abs(placement.levelOffset) + thickness;
   return [placement.primaryTopAtFirst, placement.primaryTopAtLast].some(
     (primaryTop) => {
-      const top = stemUp ? primaryTop : primaryTop + BEAM_THICKNESS_PX - depth;
+      const top = stemUp ? primaryTop : primaryTop + thickness - depth;
       return bandInsideStaveArea(top, top + depth);
     }
   );

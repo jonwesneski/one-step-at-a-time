@@ -31,13 +31,21 @@ export type Octave = 2 | 3 | 4 | 5 | 6;
 export type Sharp = '#';
 export type Flat = 'b';
 
-/** A drawn accidental glyph. */
-export type AccidentalType =
+/** An accidental without a quarter-tone arrow. */
+export type ConventionalAccidentalType =
   | 'sharp'
   | 'flat'
   | 'natural'
   | 'double-sharp'
   | 'double-flat';
+
+/** Raises or lowers a written pitch by a quarter-tone. */
+export type QuarterTone = 'up' | 'down';
+
+/** A drawn accidental glyph, with or without a quarter-tone arrow. */
+export type AccidentalType =
+  | ConventionalAccidentalType
+  | `${ConventionalAccidentalType}-${QuarterTone}`;
 
 /** Pitch letter `A`–`G` with an optional accidental suffix (`#`, `b`, `##`, `bb`). */
 export type Note =
@@ -262,6 +270,8 @@ export type StressType = 'stressed' | 'unstressed';
  * - `x`              crossed head ("x-head"), circled at half-note length and
  *                    longer. Read as a dead / muted (ghost) note, a cymbal or
  *                    cross-stick, spoken text, or indefinite pitch.
+ * - `x-plain`        a cross at every duration, never circled: multiphonics,
+ *                    and any cross that must not read as a circled one.
  * - `diamond`        black or white by duration: guitar harmonics, silently
  *                    depressed piano keys.
  * - `diamond-white`  white at every duration: the "harmonic" notehead for
@@ -270,14 +280,18 @@ export type StressType = 'stressed' | 'unstressed';
  * - `triangle-up` /
  *   `triangle-down`  "highest / lowest possible note". The staff places it
  *                    outside the stave and forces the stem away from the tip.
+ * - `none`           no head: the stem alone, from where the head would stand
+ *                    (key clicks, clapped keys). Not on drums or grace notes.
  */
 export type NoteheadType =
   | 'normal'
   | 'x'
+  | 'x-plain'
   | 'diamond'
   | 'diamond-white'
   | 'triangle-up'
-  | 'triangle-down';
+  | 'triangle-down'
+  | 'none';
 
 /**
  * Arpeggio (rolled / spread chord) sign, drawn as a vertical wavy line left of
@@ -310,10 +324,25 @@ export type GraceDuration = Extract<
 export type GraceSlur = 'auto' | 'none';
 
 /**
- * Which keys a `glissando` slides across, shown as "white-note gliss." /
- * "black-note gliss." near the line.
+ * Text above a `glissando` line: "gliss.", or which keys it slides across
+ * ("white-note gliss." / "black-note gliss.").
  */
-export type GlissandoHint = 'white-key' | 'black-key';
+export type GlissandoHint = 'white-key' | 'black-key' | 'gliss';
+
+/**
+ * A `glissando` line's contour: straight, straight with a short dip, or wavy.
+ */
+export type GlissandoShape = 'straight' | 'dip' | 'wave';
+/** The named `glissando-label`s; any other text is drawn as written. */
+export type GlissandoLabel =
+  | 'gliss'
+  | 'quasi-gliss'
+  | 'chrom'
+  | 'chromatic'
+  | 'lip'
+  | 'bend';
+/** The contour of a pitch bend after one note. */
+export type BendShape = 'up' | 'down' | 'dip' | 'wave';
 
 /**
  * Which measures of a `<music-composition>` show their own `number` —
@@ -340,9 +369,10 @@ export type EndingNumbering = 'consecutive' | 'duplicate';
 /**
  * `'auto'` (default) draws the wavy extension line, matching standard
  * engraving practice; `'none'` suppresses it for the rare case an engraver
- * wants the bare sign only on an isolated, untied note-value.
+ * wants the bare sign only on an isolated, untied note-value; `'double'` draws
+ * two lines after the one sign, a double trill (two keys alternating).
  */
-export type TrillLineMode = 'auto' | 'none';
+export type TrillLineMode = 'auto' | 'none' | 'double';
 
 /**
  * Controls how a trill's line restates itself after a system break, once its
@@ -398,6 +428,12 @@ export type RestStaffSide = 'above' | 'below' | 'centered';
 export type TupletPlacement = 'above' | 'below';
 
 /**
+ * Whether a tuplet draws its bracket: `auto` leaves it off a fully beamed
+ * group, `always` draws it there too, along the beam.
+ */
+export type TupletBracket = 'auto' | 'always';
+
+/**
  * Author override for a note/chord's stem direction, independent of its
  * pitch-driven default. Unset leaves pitch, voice or beam-group policy to
  * decide. A beamed group draws one direction, so set it on every member.
@@ -415,10 +451,66 @@ export type TremoloStrokeCount = 1 | 2 | 3 | 4;
 export type TremoloValue = TremoloStrokeCount | 'unmeasured';
 
 /**
- * Tremolo technique label above the stave: `trem.` marks the start of an
- * unmeasured passage, `non trem.` the first measured or plain note after one.
+ * Technique label above the stave. `trem.` marks the start of an unmeasured
+ * passage, `non trem.` the first measured or plain note after one.
+ * `flz.` / `flt.` / `frull.` mark a flutter-tongued tremolo, and `ord.` /
+ * `nat.` / `norm.` the ordinary note that cancels it.
  */
-export type TremoloLabel = 'trem' | 'non-trem';
+export type TremoloLabel =
+  | 'trem'
+  | 'non-trem'
+  | 'flz'
+  | 'flt'
+  | 'frull'
+  | 'ord'
+  | 'nat'
+  | 'norm';
+
+/**
+ * A breath mark after a note: `tick` (✓), a break in the sound, or `comma`
+ * ('), a short pause or lift within a phrase.
+ */
+export type BreathMark = 'tick' | 'comma';
+
+/**
+ * Where an unpitched sound is drawn: in the space above the stave (`top`),
+ * below it (`bottom`), or at its `written` note.
+ */
+export type UnpitchedPlacement = 'top' | 'bottom' | 'written';
+
+/**
+ * A mark through a note's stem: `cross`, air through the instrument;
+ * `multiphonic`, an M asking for a multiphonic on the written pitch.
+ */
+export type StemMark = 'cross' | 'multiphonic';
+
+/**
+ * A sign above a note, by shape: `circle` ○ (a harmonic, two for a double
+ * harmonic; horn open; a bright timbre), `filled` ● (a dark timbre), `half` ◑, its
+ * right half filled (between the two), `plus` + (a key slap or clapped key; horn stopped),
+ * `cross` × (a key slap).
+ */
+export type NoteSign = 'circle' | 'filled' | 'half' | 'plus' | 'cross';
+
+/** A note's size: `cue` draws it at ¾, as sung or optional notes. */
+export type NoteSize = 'normal' | 'cue';
+
+/**
+ * How a reminder accidental is drawn: `bracketed` (in parentheses) or `plain`.
+ */
+export type AccidentalReminder = 'bracketed' | 'plain';
+
+/** Which side of the stave text goes: `above` or `below`. */
+export type TextPlacement = 'above' | 'below';
+
+/** How text is set: `normal` (upright) or `italic`. */
+export type TextStyle = 'normal' | 'italic';
+
+/**
+ * Which wedges a `swell` draws over its tie chain: `both` (`< >`), or the
+ * `crescendo` or `diminuendo` alone.
+ */
+export type SwellShape = 'both' | 'crescendo' | 'diminuendo';
 
 /**
  * Which of a minim two-note tremolo's beams join its stems: `all` of them, or
@@ -439,6 +531,12 @@ export type TremoloBeamPosition = 'between';
  * a barline.
  */
 export type TieStyle = 'solid' | 'dotted';
+
+/**
+ * How a slur is drawn. A `dotted` slur marks phrase structure apart from a
+ * legato slur.
+ */
+export type SlurStyle = 'solid' | 'dotted';
 
 /**
  * A barline's design: `single`, a thin `double`, a thin–thick `final`, or a

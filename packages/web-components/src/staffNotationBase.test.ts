@@ -3,7 +3,11 @@
  */
 import './index';
 import type { CrossStaffDynamicsOverride } from './rules/hairpinPlacementRules';
-import { ChordElementType, StaffElementType } from './types/elements';
+import {
+  ChordElementType,
+  NoteElementType,
+  StaffElementType,
+} from './types/elements';
 import type { Chord, DurationType, Octave } from './types/theory';
 import {
   COMMON_ATTRIBUTES,
@@ -18,16 +22,20 @@ import {
 } from './utils/consts';
 import {
   BASE_STEM_LENGTH_PX,
+  CUE_SCALE,
   DYNAMICS_BASELINE_Y,
+  DYNAMICS_CHAR_WIDTH_PX,
   MIDDLE_STAFF_Y,
   MIN_NOTE_WIDTH,
   MIN_STEM_LENGTH_PX,
+  SIGN_STAFF_CLEARANCE_PX,
   STAFF_BOTTOM_LINE_Y,
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
-  TREMOLO_LABEL_FONT_SIZE_PX,
-  TREMOLO_LABEL_GAP_PX,
+  STAFF_Y_STEP,
+  TECHNIQUE_LABEL_FONT_SIZE_PX,
+  TECHNIQUE_LABEL_GAP_PX,
   TRIANGLE_OUTSIDE_STAFF_PX,
   TRIANGLE_RUN_CLEARANCE_PX,
   TRILL_ABOVE_STAFF_GAP_PX,
@@ -39,6 +47,7 @@ import {
   NOTE_SCALE,
   NOTE_STEM_X_OFFSET,
   NOTE_STEM_X_OFFSET_STEM_DOWN,
+  NOTE_SVG_WIDTH,
   noteHeadCenter,
   TAIL_DOWN_WIDTH_PX,
   TAIL_UP_WIDTH_PX,
@@ -183,6 +192,59 @@ describe('staffNotationBase', () => {
       );
 
       consoleSpy.mockRestore();
+    });
+  });
+
+  describe('dynamics row under slurs', () => {
+    // E4 stems up, so its marks and slur sit below, on the dynamics side.
+    function hairpinBaseline(noteAttrs: Record<string, string>[]): number {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      document.body.appendChild(staff);
+      const notes = noteAttrs.map((attrs) => {
+        const note = document.createElement(MUSIC_NOTE) as any;
+        note.setAttribute('duration', 'quarter');
+        note.setAttribute('note', 'E');
+        note.setAttribute('octave', `${4 satisfies Octave}`);
+        for (const [key, value] of Object.entries(attrs)) {
+          note.setAttribute(key, value);
+        }
+        return note;
+      });
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => notes;
+      slot.dispatchEvent(new Event('slotchange'));
+      return staff.hairpinDefaultsForMeasure().pairs[0].baselineClientY;
+    }
+
+    const deepMarks = { articulation: 'accent-portato', stress: 'stressed' };
+
+    it('moves past a slur enclosing deep marks', () => {
+      const unslurred = hairpinBaseline([
+        { ...deepMarks, crescendo: 'start' },
+        { ...deepMarks },
+        { ...deepMarks, crescendo: 'end' },
+      ]);
+      const slurred = hairpinBaseline([
+        { ...deepMarks, crescendo: 'start', slur: 'start' },
+        { ...deepMarks },
+        { ...deepMarks, crescendo: 'end', slur: 'end' },
+      ]);
+      expect(slurred).toBeGreaterThan(unslurred);
+    });
+
+    it('stays put for a slur well inside the stave', () => {
+      const inside = { note: 'A' };
+      const unslurred = hairpinBaseline([
+        { ...inside, crescendo: 'start' },
+        inside,
+        { ...inside, crescendo: 'end' },
+      ]);
+      const slurred = hairpinBaseline([
+        { ...inside, crescendo: 'start', slur: 'start' },
+        inside,
+        { ...inside, crescendo: 'end', slur: 'end' },
+      ]);
+      expect(slurred).toBe(unslurred);
     });
   });
 
@@ -741,6 +803,25 @@ describe('staffNotationBase', () => {
 
       const synthesizedChord = staff.shadowRoot.querySelector(MUSIC_CHORD);
       expect(synthesizedChord.dynamicReminder).toBe(true);
+    });
+
+    it("copies a cue voice's size onto the combined chord", () => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+
+      const voice1 = document.createElement('music-voice');
+      voice1.setAttribute('size', 'cue');
+      voice1.appendChild(makeQuarterNote('C'));
+      const voice2 = document.createElement('music-voice');
+      voice2.setAttribute('size', 'cue');
+      voice2.appendChild(makeQuarterNote('E'));
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [voice1, voice2];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      expect(staff.shadowRoot.querySelector(MUSIC_CHORD).size).toBe('cue');
     });
 
     describe('re-combines when articulation-repeat changes', () => {
@@ -1538,6 +1619,15 @@ describe('staffNotationBase strut min width', () => {
 
   it.each<[string, (index: number) => Record<string, string>]>([
     ['an accidental', (index) => ({ note: ACCIDENTAL_NOTES[index] })],
+    [
+      'a quarter-tone',
+      () => ({
+        note: 'Bb',
+        'quarter-tone': 'up',
+        grace: 'Ab',
+        'grace-quarter-tone': 'up',
+      }),
+    ],
     ['grace notes', () => ({ note: 'G', grace: 'A,B' })],
     [
       'a written trilling notehead',
@@ -1571,10 +1661,737 @@ describe('staffNotationBase strut min width', () => {
     slot.assignedElements = () => elements;
     slot.dispatchEvent(new Event('slotchange'));
 
-    expect(minWidth).toBeCloseTo(
-      parseFloat(plainLastNote.style.left) + MIN_NOTE_WIDTH,
-      5
+    const afterLast = minWidth - parseFloat(plainLastNote.style.left);
+    expect(afterLast).toBeGreaterThanOrEqual(MIN_NOTE_WIDTH);
+    expect(afterLast).toBeLessThanOrEqual(NOTE_SVG_WIDTH);
+  });
+});
+
+describe('staffNotationBase reported widths', () => {
+  function renderStaff(markup: string, parent: HTMLElement = document.body) {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    staff.innerHTML = markup;
+    const widths = { minWidth: 0, naturalWidth: 0 };
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+      Object.assign(widths, (event as CustomEvent).detail);
+    });
+    parent.appendChild(staff);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return { staff, slot, widths };
+  }
+  const notes = (...durations: DurationType[]) =>
+    durations
+      .map(
+        (duration) =>
+          `<music-note note="A" octave="4" duration="${duration}"></music-note>`
+      )
+      .join('');
+  const ownMinWidth = (staff: any): string =>
+    staff.style.getPropertyValue('--staff-strut-width');
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('keeps to its own minimum with no measure around it', () => {
+    const { staff, slot, widths } = renderStaff(notes('quarter', 'quarter'));
+    expect(ownMinWidth(staff)).toBe(`${Math.ceil(widths.minWidth)}px`);
+
+    staff.replaceChildren();
+    slot.dispatchEvent(new Event('slotchange'));
+    expect(ownMinWidth(staff)).toBe('');
+  });
+
+  it('leaves its minimum to the measure inside one', () => {
+    const measure = document.createElement('music-measure');
+    document.body.appendChild(measure);
+    const { staff, widths } = renderStaff(notes('quarter', 'quarter'), measure);
+    expect(widths.minWidth).toBeGreaterThan(0);
+    expect(ownMinWidth(staff)).toBe('');
+  });
+
+  it('needs the room of every voice together', () => {
+    const alone = (first: string, second: string) =>
+      `<music-voice number="1">${first}</music-voice><music-voice number="2">${second}</music-voice>`;
+    const busyStart = notes('sixteenth', 'sixteenth', 'sixteenth', 'sixteenth');
+    const early = renderStaff(
+      alone(busyStart + notes('half'), notes('quarter', 'half'))
+    ).widths.minWidth;
+    const late = renderStaff(
+      alone(notes('quarter', 'half'), notes('quarter') + busyStart)
+    ).widths.minWidth;
+    const both = renderStaff(
+      alone(busyStart + notes('half'), notes('quarter') + busyStart)
+    ).widths.minWidth;
+    expect(both).toBeGreaterThan(Math.max(early, late));
+  });
+
+  it('asks for more width when its last notes are shorter than its others', () => {
+    const slackWidth = 10 + 4 * 20 + 4 * 20;
+    const evenly = renderStaff(
+      notes('quarter', 'quarter', 'quarter', 'quarter')
     );
+    const shortEnd = renderStaff(
+      notes('half', 'quarter', 'eighth', 'sixteenth', 'sixteenth')
+    );
+    expect(evenly.widths.naturalWidth).toBeLessThanOrEqual(slackWidth);
+    expect(shortEnd.widths.naturalWidth).toBeGreaterThan(slackWidth * 1.5);
+  });
+
+  it('takes up to its container for that, but may shrink beside other items', () => {
+    const shortEnd = notes(
+      'half',
+      'quarter',
+      'eighth',
+      'sixteenth',
+      'sixteenth'
+    );
+    expect(ownMinWidth(renderStaff(shortEnd).staff)).toMatch(
+      /^max\(\d+px, min\(100%, \d+px\)\)$/
+    );
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    document.body.appendChild(row);
+    expect(ownMinWidth(renderStaff(shortEnd, row).staff)).toMatch(/^\d+px$/);
+  });
+});
+
+describe('staffNotationBase signs', () => {
+  const renderNotes = (markup: string) => {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    staff.innerHTML = markup;
+    document.body.appendChild(staff);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  };
+  const notesOf = (staff: any) =>
+    Array.from(staff.querySelectorAll(MUSIC_NOTE)) as any[];
+  const textY = (staff: any) =>
+    Number(
+      staff.shadowRoot
+        .querySelector('.technique-labels-container .technique-text')
+        .getAttribute('y')
+    );
+
+  it('lifts technique text over a sign, and the staff’s top margin with it', () => {
+    const note = (sign: string) =>
+      `<music-note note="E" octave="5" duration="quarter" technique-text="slap" ${sign}></music-note>`;
+    const plain = renderNotes(note(''));
+    const signed = renderNotes(note('sign="plus,circle"'));
+    expect(textY(signed)).toBeLessThan(textY(plain));
+    expect(parseFloat(signed.style.marginTop || '0')).toBeGreaterThan(
+      parseFloat(plain.style.marginTop || '0')
+    );
+  });
+
+  it('stands clear above the stave, and lines up a beamed run', () => {
+    const staff = renderNotes(
+      ['C4', 'E4', 'G4', 'B4']
+        .map(
+          (pitch) =>
+            `<music-note note="${pitch[0]}" octave="${pitch[1]}" duration="eighth" sign="plus"></music-note>`
+        )
+        .join('')
+    );
+    const bottoms = notesOf(staff).map((note) => note.signPlacement.bottomY);
+    expect(new Set(bottoms).size).toBe(1);
+    expect(bottoms[0]).toBeLessThanOrEqual(
+      STAFF_TOP_LINE_Y - SIGN_STAFF_CLEARANCE_PX
+    );
+  });
+
+  it('moves a stem-down note’s tenuto out of the stave under its plus (±)', () => {
+    const staff = renderNotes(
+      '<music-note note="B" octave="4" duration="quarter" stem-direction="down" articulation="tenuto" sign="plus"></music-note>' +
+        '<music-note note="B" octave="4" duration="quarter" stem-direction="down" articulation="tenuto"></music-note>'
+    );
+    const [signed, plain] = notesOf(staff);
+    expect(signed.signPlacement.articulationLiftPx).toBeGreaterThan(0);
+    expect(plain.signPlacement).toBeNull();
+    const tenutoY = (note: any) =>
+      Number(
+        note.shadowRoot.querySelector('.articulations line').getAttribute('y1')
+      );
+    expect(tenutoY(signed)).toBeLessThan(tenutoY(plain));
+  });
+
+  it('forgets its placement when the sign is removed', () => {
+    const staff = renderNotes(
+      '<music-note note="G" octave="4" duration="quarter" sign="circle"></music-note>'
+    );
+    const [note] = notesOf(staff);
+    expect(note.signPlacement).not.toBeNull();
+    note.removeAttribute('sign');
+    staff.shadowRoot
+      .querySelector('slot')
+      .dispatchEvent(new Event('slotchange'));
+    expect(note.signPlacement).toBeNull();
+    expect(note.shadowRoot.querySelector('.signs')).toBeNull();
+  });
+});
+
+describe('staffNotationBase quarter-tones', () => {
+  const renderNotes = (markup: string) => {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    staff.innerHTML = markup;
+    document.body.appendChild(staff);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  };
+  const topMargin = (staff: any) => parseFloat(staff.style.marginTop || '0');
+  const bottomMargin = (staff: any) =>
+    parseFloat(staff.style.marginBottom || '0');
+
+  it('shows the arrowed accidental and updates it', () => {
+    const staff = renderNotes(
+      '<music-note note="C#" octave="5" duration="quarter" quarter-tone="down"></music-note>' +
+        '<music-note note="C#" octave="5" duration="quarter"></music-note>'
+    );
+    const [first, second] = staff.children;
+    expect(first.showAccidental).toBe('sharp-down');
+    expect(second.showAccidental).toBe('sharp');
+    first.quarterTone = null;
+    expect(first.showAccidental).toBe('sharp');
+    expect(second.showAccidental).toBeNull();
+  });
+
+  it('applies to the trilling pitch', () => {
+    const staff = renderNotes(
+      '<music-note note="E" octave="4" duration="quarter" trill trill-quarter-tone="up"></music-note>'
+    );
+    const note = staff.children[0];
+    expect(note.resolvedTrillPitch.accidental).toBe('natural-up');
+    note.setAttribute('trill-accidental', 'sharp');
+    expect(note.resolvedTrillPitch.accidental).toBe('sharp-up');
+  });
+
+  it('reserves room for an arrow past the stave, on its own side', () => {
+    const high = (quarterTone: string) =>
+      renderNotes(
+        `<music-note note="B#" octave="5" duration="quarter" ${quarterTone}></music-note>`
+      );
+    expect(topMargin(high(''))).toBe(0);
+    expect(topMargin(high('quarter-tone="up"'))).toBeGreaterThan(0);
+    expect(topMargin(high('quarter-tone="down"'))).toBe(0);
+    const low = renderNotes(
+      '<music-note note="Gb" octave="2" duration="quarter" quarter-tone="down"></music-note>'
+    );
+    expect(bottomMargin(low)).toBeGreaterThan(0);
+    expect(topMargin(low)).toBe(0);
+  });
+});
+
+describe('staffNotationBase breath marks', () => {
+  function renderStaff(markup: string): { staff: any; minWidth: number } {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    staff.innerHTML = markup;
+    document.body.appendChild(staff);
+    let minWidth = 0;
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+      minWidth = (event as CustomEvent).detail.minWidth;
+    });
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return { staff, minWidth };
+  }
+
+  const quarters = (breathMark: string | null) =>
+    ['E', 'F', 'G', 'A']
+      .map(
+        (note, index) =>
+          `<music-note note="${note}" octave="4" duration="quarter"${
+            index === 1 && breathMark !== null
+              ? ` breath-mark="${breathMark}"`
+              : ''
+          }></music-note>`
+      )
+      .join('');
+
+  it('keeps a column free after a note with a breath mark', () => {
+    const plain = renderStaff(quarters(null)).minWidth;
+    document.body.innerHTML = '';
+    const marked = renderStaff(quarters('tick')).minWidth;
+    expect(marked).toBeGreaterThan(plain);
+  });
+
+  it('draws one glyph per mark, above the stave', () => {
+    const { staff } = renderStaff(quarters('comma'));
+    const marks = staff.shadowRoot.querySelectorAll(
+      '.breath-marks-container .breath-mark'
+    );
+    expect(marks).toHaveLength(1);
+    expect(marks[0].classList.contains('breath-mark-comma')).toBe(true);
+  });
+
+  it('draws a combined-voices chord’s breath mark once, from the staff', () => {
+    const { staff } = renderStaff(`
+      <music-voice>
+        <music-note note="E" octave="5" duration="half" breath-mark="tick"></music-note>
+        <music-note note="F" octave="5" duration="half"></music-note>
+      </music-voice>
+      <music-voice>
+        <music-note note="C" octave="5" duration="half" breath-mark="tick"></music-note>
+        <music-note note="A" octave="4" duration="half"></music-note>
+      </music-voice>`);
+    const staffMarks = staff.shadowRoot.querySelectorAll(
+      '.breath-marks-container .breath-mark'
+    );
+    const chordMarks = Array.from<Element>(
+      staff.shadowRoot.querySelectorAll(MUSIC_CHORD)
+    ).flatMap((chord) =>
+      Array.from(chord.shadowRoot?.querySelectorAll('.breath-mark') ?? [])
+    );
+    expect(staffMarks).toHaveLength(1);
+    expect(chordMarks).toHaveLength(0);
+  });
+});
+
+describe('staffNotationBase bends', () => {
+  function renderStaff(markup: string): { staff: any; minWidth: number } {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    staff.innerHTML = markup;
+    document.body.appendChild(staff);
+    let minWidth = 0;
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+      minWidth = (event as CustomEvent).detail.minWidth;
+    });
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return { staff, minWidth };
+  }
+  const quarters = (attributes: string) =>
+    ['E', 'F', 'G', 'A']
+      .map(
+        (note, index) =>
+          `<music-note note="${note}" octave="4" duration="quarter" ${
+            index === 1 ? attributes : ''
+          }></music-note>`
+      )
+      .join('');
+  const bendLines = (staff: any): Element[] =>
+    Array.from(
+      staff.shadowRoot.querySelectorAll('.bends-container .bend-line')
+    );
+
+  it('keeps room for a line, and more for a target', () => {
+    const plain = renderStaff(quarters('')).minWidth;
+    document.body.innerHTML = '';
+    const free = renderStaff(quarters('bend="down"')).minWidth;
+    document.body.innerHTML = '';
+    const target = renderStaff(quarters('bend-to="G"')).minWidth;
+    expect(free).toBeGreaterThan(plain);
+    expect(target).toBeGreaterThan(free);
+  });
+
+  it('draws one line a note and its target', () => {
+    const { staff } = renderStaff(quarters('bend-to="G"'));
+    expect(bendLines(staff)).toHaveLength(1);
+    expect(
+      staff.shadowRoot.querySelectorAll('.bends-container .bend-target-note')
+    ).toHaveLength(1);
+  });
+
+  it('draws one line per chord head, all ending at one x', () => {
+    const { staff } = renderStaff(
+      `<music-chord duration="quarter" bend="down">
+        <music-note note="E" octave="4"></music-note>
+        <music-note note="G" octave="4"></music-note>
+        <music-note note="C" octave="5"></music-note>
+      </music-chord>${quarters('')}`
+    );
+    const ends = bendLines(staff).map(
+      (line) => line.getAttribute('d')?.split('L ')[1].split(' ')[0]
+    );
+    expect(ends).toHaveLength(3);
+    expect(new Set(ends).size).toBe(1);
+  });
+
+  it('bends one tone of a chord to its own target', () => {
+    const { staff } = renderStaff(
+      `<music-chord duration="quarter">
+        <music-note note="E" octave="4"></music-note>
+        <music-note note="C" octave="5" bend-to="B" bend-to-quarter-tone="down"></music-note>
+      </music-chord>${quarters('')}`
+    );
+    expect(bendLines(staff)).toHaveLength(1);
+    expect(
+      staff.shadowRoot.querySelectorAll('.bends-container .bend-target-note')
+    ).toHaveLength(1);
+  });
+
+  it('keeps each voice’s bends in its own container', () => {
+    const { staff } = renderStaff(`
+      <music-voice>${quarters('bend="up"')}</music-voice>
+      <music-voice>
+        <music-note note="C" octave="3" duration="half" bend="down"></music-note>
+        <music-note note="D" octave="3" duration="half"></music-note>
+      </music-voice>`);
+    const counts = Array.from<Element>(
+      staff.shadowRoot.querySelectorAll('.bends-container')
+    ).map((container) => container.querySelectorAll('.bend').length);
+    expect(counts).toEqual([1, 1]);
+  });
+
+  it('draws none for a glissando’s start, a tremolo member or a triangle', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    for (const markup of [
+      quarters('bend="down" glissando="start"'),
+      quarters('bend="down" notehead="triangle-up"'),
+      `<music-tremolo strokes="2">
+        <music-note note="E" octave="4" duration="half" bend="down"></music-note>
+        <music-note note="G" octave="4" duration="half"></music-note>
+      </music-tremolo>
+      <music-note note="G" octave="4" duration="half"></music-note>`,
+    ]) {
+      expect(bendLines(renderStaff(markup).staff)).toHaveLength(0);
+      document.body.innerHTML = '';
+    }
+    warn.mockRestore();
+  });
+
+  it('keeps room above the stave for a contour’s highest pitch', () => {
+    const contour = (pitches: string) =>
+      renderStaff(
+        `<music-note note="A" octave="4" duration="whole" bend-contour="${pitches}"></music-note>`
+      ).staff.contentVerticalSpace.top;
+    const low = contour('B4,G4');
+    document.body.innerHTML = '';
+    const high = contour('B4,E6,G4');
+    expect(high).toBeGreaterThan(low);
+  });
+
+  it('keeps its points where a later clef change leaves its note', () => {
+    const endOf = (later: string) => {
+      const { staff } = renderStaff(
+        `<music-note note="A" octave="4" duration="quarter" bend-contour="C5,E5"></music-note>
+         <music-note note="A" octave="4" duration="quarter"></music-note>
+         ${later}
+         <music-note note="A" octave="3" duration="half"></music-note>`
+      );
+      const d =
+        staff.shadowRoot.querySelector('.bend-contour')?.getAttribute('d') ??
+        '';
+      document.body.innerHTML = '';
+      return d.trim().split(' ').map(Number);
+    };
+    const plain = endOf('');
+    const [, , fromY] = plain;
+    expect(plain.pop()).toBeCloseTo(fromY - 4 * STAFF_Y_STEP, 0);
+    expect(endOf('<music-clef type="bass"></music-clef>')).toEqual(endOf(''));
+  });
+
+  it('stops a bend before a mid-bar barline', () => {
+    const { staff } = renderStaff(
+      `<music-note note="E" octave="4" duration="half" bend="down"></music-note>
+       <music-barline type="double"></music-barline>
+       <music-note note="G" octave="4" duration="half"></music-note>`
+    );
+    const endX = Number(
+      bendLines(staff)[0].getAttribute('d')?.split('L ')[1].split(' ')[0]
+    );
+    expect(staff.ownBarlineSlotLefts).toHaveLength(1);
+    expect(endX).toBeLessThan(
+      staff.ownBarlineSlotLefts[0].left - staff.describeEndX
+    );
+  });
+});
+
+describe('staffNotationBase swells', () => {
+  function renderStaff(markup: string): { staff: any; minWidth: number } {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    staff.innerHTML = markup;
+    document.body.appendChild(staff);
+    let minWidth = 0;
+    staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+      minWidth = (event as CustomEvent).detail.minWidth;
+    });
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return { staff, minWidth };
+  }
+
+  const swells = (staff: any) =>
+    staff.shadowRoot.querySelectorAll('.dynamics-container .swell');
+
+  it('keeps room after a short note for its swell', () => {
+    const plain = renderStaff(
+      '<music-note note="E" octave="4" duration="eighth"></music-note>'.repeat(
+        8
+      )
+    ).minWidth;
+    document.body.innerHTML = '';
+    const swelled = renderStaff(
+      '<music-note note="E" octave="4" duration="eighth" swell></music-note>' +
+        '<music-note note="E" octave="4" duration="eighth"></music-note>'.repeat(
+          7
+        )
+    ).minWidth;
+    expect(swelled).toBeGreaterThan(plain);
+  });
+
+  it('gives way to a hairpin on the same note, with one warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const { staff } = renderStaff(`
+      <music-note note="E" octave="4" duration="half" swell crescendo="start"></music-note>
+      <music-note note="F" octave="4" duration="half" crescendo="end"></music-note>`);
+    expect(swells(staff)).toHaveLength(0);
+    expect(staff.shadowRoot.querySelectorAll('.hairpin')).toHaveLength(1);
+    staff.onStaffResize();
+    const swellWarnings = warn.mock.calls.filter(([message]) =>
+      String(message).includes('swell is not drawn')
+    );
+    expect(swellWarnings).toHaveLength(1);
+    warn.mockRestore();
+  });
+});
+
+describe('swells over tie chains', () => {
+  const WIDTH = 400;
+
+  function renderStaff(markup: string): any {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    document.body.appendChild(staff);
+    staff.shadowRoot.querySelector(
+      '.transcribe-container'
+    ).getBoundingClientRect = () => ({
+      width: WIDTH,
+      left: 0,
+      right: WIDTH,
+      top: 0,
+      bottom: 0,
+      height: 0,
+    });
+    staff.innerHTML = markup;
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+  // Each wedge's left and right x.
+  const wedges = (staff: any): { left: number; right: number }[] =>
+    Array.from(
+      staff.shadowRoot.querySelectorAll('.dynamics-container .swell .hairpin')
+    ).map((hairpin: any) => {
+      const xs = Array.from(hairpin.querySelectorAll('path')).flatMap(
+        (path: any) => {
+          const [, x1, , , x2] = path.getAttribute('d').split(' ');
+          return [Number(x1), Number(x2)];
+        }
+      );
+      return { left: Math.min(...xs), right: Math.max(...xs) };
+    });
+  const leftOf = (element: Element) =>
+    parseFloat((element as HTMLElement).style.left);
+
+  it('covers the whole chain, its gap over the middle beat', () => {
+    const staff = renderStaff(`
+      <music-note note="E" octave="4" duration="half" tie="start" swell></music-note>
+      <music-note note="E" octave="4" duration="quarter" tie="continue"></music-note>
+      <music-note note="E" octave="4" duration="quarter" tie="end"></music-note>`);
+    const notes = Array.from(staff.children) as Element[];
+    const [crescendo, diminuendo] = wedges(staff);
+    expect(wedges(staff)).toHaveLength(2);
+    // The chain starts at the first note: its offset maps notes into the frame.
+    const offset = leftOf(notes[0]) - crescendo.left;
+    const middleBeatX = leftOf(notes[1]) - offset;
+    expect(crescendo.right).toBeLessThan(middleBeatX);
+    expect(diminuendo.left).toBeGreaterThan(middleBeatX);
+    expect(diminuendo.right).toBeGreaterThan(leftOf(notes[2]) - offset);
+  });
+
+  it('draws one wedge for a crescendo alone', () => {
+    const staff = renderStaff(`
+      <music-note note="E" octave="4" duration="half" tie="start" swell="crescendo"></music-note>
+      <music-note note="E" octave="4" duration="half" tie="end"></music-note>`);
+    expect(wedges(staff)).toHaveLength(1);
+  });
+
+  it('lets the earlier swell of a chain win, with one warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const staff = renderStaff(`
+      <music-note note="E" octave="4" duration="half" tie="start" swell></music-note>
+      <music-note note="E" octave="4" duration="half" tie="end" swell></music-note>`);
+    expect(
+      staff.shadowRoot.querySelectorAll('.dynamics-container .swell')
+    ).toHaveLength(1);
+    staff.onStaffResize();
+    expect(
+      warn.mock.calls.filter(([message]) =>
+        String(message).includes('an earlier swell')
+      )
+    ).toHaveLength(1);
+    warn.mockRestore();
+  });
+
+  it('ends before its dynamic-end, drawn at the end of the chain', () => {
+    const staff = renderStaff(`
+      <music-note note="E" octave="4" duration="half" tie="start" swell="crescendo" dynamic="p" dynamic-end="f"></music-note>
+      <music-note note="E" octave="4" duration="quarter" tie="end"></music-note>
+      <music-note note="G" octave="4" duration="quarter"></music-note>`);
+    const notes = Array.from(staff.children) as Element[];
+    const end = staff.shadowRoot.querySelector(
+      '.dynamics-container .dynamic-end'
+    );
+    expect(end?.textContent).toBe('f');
+    const endX = Number(end.getAttribute('x'));
+    const [crescendo] = wedges(staff);
+    expect(crescendo.right).toBeLessThan(endX - DYNAMICS_CHAR_WIDTH_PX / 2);
+    const dynamics = Array.from(
+      staff.shadowRoot.querySelectorAll('.dynamics-container .dynamic-marking')
+    ) as Element[];
+    const start = dynamics.find((marking) => marking.textContent === 'p');
+    // Past the tied note's head, before the next note.
+    expect(endX - Number(start?.getAttribute('x'))).toBeGreaterThan(
+      leftOf(notes[1]) - leftOf(notes[0])
+    );
+    expect(endX - Number(start?.getAttribute('x'))).toBeLessThan(
+      leftOf(notes[2]) - leftOf(notes[0])
+    );
+  });
+
+  it('keeps room after a lone note for its dynamic-end', () => {
+    const minWidth = (markup: string) => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      staff.innerHTML = markup;
+      document.body.appendChild(staff);
+      let width = 0;
+      staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+        width = (event as CustomEvent).detail.minWidth;
+      });
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => Array.from(staff.children);
+      slot.dispatchEvent(new Event('slotchange'));
+      return width;
+    };
+    const eighths = (first: string) =>
+      `<music-note note="E" octave="4" duration="eighth" ${first}></music-note>` +
+      '<music-note note="E" octave="4" duration="eighth"></music-note>'.repeat(
+        7
+      );
+    expect(minWidth(eighths('dynamic="p" dynamic-end="ff"'))).toBeGreaterThan(
+      minWidth(eighths('dynamic="p"'))
+    );
+  });
+});
+
+describe('phonemes', () => {
+  const WIDTH = 400;
+
+  function renderStaff(markup: string): any {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    document.body.appendChild(staff);
+    staff.shadowRoot.querySelector(
+      '.transcribe-container'
+    ).getBoundingClientRect = () => ({
+      width: WIDTH,
+      left: 0,
+      right: WIDTH,
+      top: 0,
+      bottom: 0,
+      height: 0,
+    });
+    staff.innerHTML = markup;
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+  const texts = (staff: any, selector: string): Element[] =>
+    Array.from(staff.shadowRoot.querySelectorAll(selector));
+  const at = (element: Element | undefined, name: string) =>
+    Number(element?.getAttribute(name));
+  const baselineOf = (staff: any) =>
+    at(texts(staff, '.phonemes-container .phoneme')[0], 'y');
+
+  it('goes below a low note and its tie, the dynamics below it', () => {
+    const high = renderStaff(
+      '<music-note note="G" octave="4" duration="whole" phonemes="oo"></music-note>'
+    );
+    const highBaseline = baselineOf(high);
+    document.body.innerHTML = '';
+    const low = renderStaff(`
+      <music-note note="A" octave="3" duration="half" tie="start" phonemes="oo" dynamic="p"></music-note>
+      <music-note note="A" octave="3" duration="half" tie="end"></music-note>`);
+    expect(baselineOf(low)).toBeGreaterThan(highBaseline);
+    const dynamic = texts(low, '.dynamics-container .dynamic-marking')[0];
+    expect(at(dynamic, 'y')).toBeGreaterThan(baselineOf(low));
+  });
+
+  it('stands a phoneme after an arrow halfway to the next', () => {
+    const staff = renderStaff(`
+      <music-note note="E" octave="4" duration="half" phonemes="oo>ah>"></music-note>
+      <music-note note="E" octave="4" duration="half" phonemes="oo"></music-note>`);
+    const [first, middle, last] = texts(
+      staff,
+      '.phonemes-container .phoneme'
+    ).map((text) => at(text, 'x'));
+    expect(middle).toBeCloseTo((first + last) / 2);
+    expect(texts(staff, '.phonemes-container .phoneme-arrow')).toHaveLength(2);
+    expect(
+      texts(staff, '.phonemes-container .phoneme-bracket').map(
+        (bracket) => bracket.textContent
+      )
+    ).toEqual(['[', ']']);
+  });
+
+  it('warns once about an arrow to a note with no phoneme', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const staff = renderStaff(`
+      <music-note note="E" octave="4" duration="half" phonemes="oo>"></music-note>
+      <music-note note="E" octave="4" duration="half"></music-note>`);
+    staff.onStaffResize();
+    expect(
+      warn.mock.calls.filter(([message]) =>
+        String(message).includes('leads to no phoneme')
+      )
+    ).toHaveLength(1);
+    expect(
+      texts(staff, '.phonemes-container .phoneme-bracket').map(
+        (bracket) => bracket.textContent
+      )
+    ).toEqual(['[', ']']);
+    warn.mockRestore();
+  });
+
+  it('keeps room after a short note for its phonemes', () => {
+    const minWidth = (first: string) => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      staff.innerHTML =
+        `<music-note note="E" octave="4" duration="eighth" ${first}></music-note>` +
+        '<music-note note="E" octave="4" duration="eighth"></music-note>'.repeat(
+          7
+        );
+      document.body.appendChild(staff);
+      let width = 0;
+      staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+        width = (event as CustomEvent).detail.minWidth;
+      });
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => Array.from(staff.children);
+      slot.dispatchEvent(new Event('slotchange'));
+      document.body.innerHTML = '';
+      return width;
+    };
+    expect(minWidth('phonemes="oo>ah>ee"')).toBeGreaterThan(minWidth(''));
   });
 });
 
@@ -1646,10 +2463,9 @@ describe('staffNotationBase strut min width with tuplets', () => {
     slot.assignedElements = () => entries;
     slot.dispatchEvent(new Event('slotchange'));
 
-    expect(minWidth).toBeCloseTo(
-      parseFloat(last.style.left) + MIN_NOTE_WIDTH,
-      5
-    );
+    const afterLast = minWidth - parseFloat(last.style.left);
+    expect(afterLast).toBeGreaterThanOrEqual(MIN_NOTE_WIDTH);
+    expect(afterLast).toBeLessThanOrEqual(NOTE_SVG_WIDTH);
   });
 });
 
@@ -1712,6 +2528,38 @@ describe('staffNotationBase stems', () => {
       quarter('A', '4'),
     ]);
     expect(b4.stemUp).toBe(false);
+  });
+
+  it('beams and stems headless notes as if they had heads', () => {
+    const run = (notehead: string) =>
+      renderStaff(
+        ['A3', 'A3', 'A3', 'A3'].map(() => ({
+          note: 'A',
+          octave: '3',
+          duration: 'thirtysecond',
+          notehead,
+        }))
+      );
+    const headed = run('normal');
+    const headless = run('none');
+    expect(headless.map((note) => note.stemUp)).toEqual(
+      headed.map((note) => note.stemUp)
+    );
+    expect(headless.map((note) => note.stemExtension)).toEqual(
+      headed.map((note) => note.stemExtension)
+    );
+    expect(headless.every((note) => note.noFlags)).toBe(true);
+    expect(headless[0].shadowRoot.querySelector('.ledger-line')).toBeNull();
+    expect(headed[0].shadowRoot.querySelector('.ledger-line')).not.toBeNull();
+  });
+
+  it('gives an unbeamed headless note below the stave no ledger-line stem floor', () => {
+    const [headed, headless] = renderStaff([
+      { note: 'A', octave: '3', duration: 'eighth' },
+      { tag: MUSIC_REST, duration: 'eighth' },
+      { note: 'A', octave: '3', duration: 'eighth', notehead: 'none' },
+    ]).filter((element) => element.tagName !== MUSIC_REST.toUpperCase());
+    expect(headless.stemExtension).toBeLessThan(headed.stemExtension);
   });
 
   it('extends a stem to the middle line past the first ledger line', () => {
@@ -1819,7 +2667,7 @@ describe('tremolo labels and numerals', () => {
   const labels = (staff: StaffElementType) =>
     Array.from(
       staff.shadowRoot!.querySelectorAll(
-        '.tremolo-labels-container .tremolo-label'
+        '.technique-labels-container .tremolo-label'
       )
     );
 
@@ -1828,7 +2676,7 @@ describe('tremolo labels and numerals', () => {
     const [label] = labels(staff);
     expect(label.textContent).toBe('trem.');
     expect(Number(label.getAttribute('y'))).toBeLessThanOrEqual(
-      containerY(STAFF_TOP_LINE_Y) - TREMOLO_LABEL_GAP_PX
+      containerY(STAFF_TOP_LINE_Y) - TECHNIQUE_LABEL_GAP_PX
     );
   });
 
@@ -1841,7 +2689,7 @@ describe('tremolo labels and numerals', () => {
       containerY(STAFF_TOP_LINE_Y) -
         TRILL_ABOVE_STAFF_GAP_PX -
         TRILL_SIGN_HEIGHT_PX -
-        TREMOLO_LABEL_GAP_PX
+        TECHNIQUE_LABEL_GAP_PX
     );
   });
 
@@ -1866,7 +2714,7 @@ describe('tremolo labels and numerals', () => {
       .map((label) => Number(label.getAttribute('y')))
       .sort((a, b) => a - b);
     expect(ys).toHaveLength(2);
-    expect(ys[1] - ys[0]).toBeGreaterThanOrEqual(TREMOLO_LABEL_FONT_SIZE_PX);
+    expect(ys[1] - ys[0]).toBeGreaterThanOrEqual(TECHNIQUE_LABEL_FONT_SIZE_PX);
   });
 
   it('draws no label inside the note on a staff', () => {
@@ -1900,6 +2748,374 @@ describe('tremolo labels and numerals', () => {
       return Math.min(...ys);
     };
     expect(bracketTop(true)).toBeLessThan(bracketTop(false));
+  });
+});
+
+describe('glissando labels', () => {
+  const WIDTH = 400;
+
+  function renderStaff(markup: string): any {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    document.body.appendChild(staff);
+    staff.shadowRoot.querySelector(
+      '.transcribe-container'
+    ).getBoundingClientRect = () => ({
+      width: WIDTH,
+      left: 0,
+      right: WIDTH,
+      top: 0,
+      bottom: 0,
+      height: 0,
+    });
+    staff.innerHTML = markup;
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+  const quarter = (attributes: string) =>
+    `<music-note note="C" octave="5" duration="quarter" ${attributes}></music-note>`;
+  const at = (element: Element | null, name: string) =>
+    Number(element?.getAttribute(name));
+  const labelOf = (staff: any, kind = 'glissando'): Element =>
+    staff.shadowRoot.querySelector(
+      `.technique-labels-container .${kind}-label`
+    );
+
+  it('starts at the head, its accidental or its first grace note', () => {
+    const xOf = (attributes: string) => {
+      const x = at(labelOf(renderStaff(quarter(attributes))), 'x');
+      document.body.innerHTML = '';
+      return x;
+    };
+    const ink = 'accidental-reminder grace="A" grace-octave="4"';
+    const head = xOf(`${ink} glissando-label="lip"`);
+    const accidental = xOf(`${ink} glissando-label="quasi-gliss"`);
+    const grace = xOf(`${ink} glissando-label="chrom"`);
+    expect(accidental).toBeLessThan(head);
+    expect(grace).toBeLessThan(accidental);
+    expect(xOf('glissando-label="chrom"')).toBe(xOf('glissando-label="lip"'));
+  });
+
+  it('shifts left rather than run past the bar, never past its start', () => {
+    const xOf = (label: string) => {
+      const x = at(
+        labelOf(
+          renderStaff(
+            `${quarter('').repeat(3)}${quarter(`glissando-label="${label}"`)}`
+          )
+        ),
+        'x'
+      );
+      document.body.innerHTML = '';
+      return x;
+    };
+    const atHead = xOf('lip');
+    const shifted = xOf('m'.repeat(20));
+    expect(shifted).toBeLessThan(atHead);
+    expect(shifted).toBeGreaterThan(0);
+    expect(xOf('m'.repeat(80))).toBe(0);
+  });
+
+  it('wraps a label wider than the bar', () => {
+    const staff = renderStaff(
+      quarter(`glissando-label="${'slowly '.repeat(20).trim()}"`)
+    );
+    expect(labelOf(staff).querySelectorAll('tspan').length).toBeGreaterThan(1);
+  });
+
+  it('moves up for a slur, a tie or a rising glissando over it', () => {
+    const yOf = (first: string, second: string) => {
+      const y = at(
+        labelOf(
+          renderStaff(
+            `<music-note note="F" octave="5" duration="half" glissando-label="a long label" ${first}></music-note>
+             <music-note note="F" octave="5" duration="quarter" ${second}></music-note>`
+          )
+        ),
+        'y'
+      );
+      document.body.innerHTML = '';
+      return y;
+    };
+    const plain = yOf('', '');
+    expect(yOf('slur="start"', 'slur="end"')).toBeLessThan(plain);
+    expect(yOf('tie="start"', 'tie="end"')).toBeLessThan(plain);
+    const line = (note: string) => {
+      const y = at(
+        labelOf(
+          renderStaff(
+            `<music-note note="C" octave="5" duration="half" glissando="start" glissando-label="${'m'.repeat(
+              16
+            )}"></music-note>
+             <music-note note="${note}" octave="6" duration="quarter" glissando="end"></music-note>`
+          )
+        ),
+        'y'
+      );
+      document.body.innerHTML = '';
+      return y;
+    };
+    expect(line('E')).toBeLessThan(line('C'));
+  });
+
+  it('stacks above a tremolo label on its note', () => {
+    const staff = renderStaff(
+      quarter('tremolo="3" tremolo-label="trem" glissando-label="lip"')
+    );
+    expect(
+      at(labelOf(staff, 'tremolo'), 'y') - at(labelOf(staff), 'y')
+    ).toBeGreaterThanOrEqual(
+      TECHNIQUE_LABEL_FONT_SIZE_PX + TECHNIQUE_LABEL_GAP_PX
+    );
+  });
+
+  it('clears the grace notes and later notes it reaches over', () => {
+    const yOf = (markup: string) => {
+      const y = at(labelOf(renderStaff(markup)), 'y');
+      document.body.innerHTML = '';
+      return y;
+    };
+    const plain = yOf(quarter('glissando-label="chrom"'));
+    expect(
+      yOf(quarter('grace="F,G,A" grace-octave="5,5,5" glissando-label="chrom"'))
+    ).toBeLessThan(plain);
+    const high = `<music-note note="C" octave="6" duration="quarter"></music-note>`;
+    const reach = 'm'.repeat(12);
+    expect(yOf(quarter(`glissando-label="${reach}"`) + high)).toBeLessThan(
+      yOf(quarter(`glissando-label="${reach}"`) + quarter(''))
+    );
+    expect(yOf(quarter('glissando-label="lip"') + high)).toBe(
+      yOf(quarter('glissando-label="lip"') + quarter(''))
+    );
+  });
+
+  it('keeps more room above the stave for two lines', () => {
+    const marginOf = (label: string) => {
+      const staff = renderStaff(
+        `<music-note note="A" octave="5" duration="quarter" stem-direction="up" glissando-label="${label}"></music-note>`
+      );
+      const margin = parseFloat(staff.style.marginTop || '0');
+      document.body.innerHTML = '';
+      return margin;
+    };
+    expect(marginOf('bend|down')).toBeGreaterThan(marginOf('bend'));
+  });
+});
+
+describe('technique text', () => {
+  const WIDTH = 400;
+
+  function renderStaff(markup: string): any {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    document.body.appendChild(staff);
+    staff.shadowRoot.querySelector(
+      '.transcribe-container'
+    ).getBoundingClientRect = () => ({
+      width: WIDTH,
+      left: 0,
+      right: WIDTH,
+      top: 0,
+      bottom: 0,
+      height: 0,
+    });
+    staff.innerHTML = markup;
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+  const quarter = (attributes: string, pitch = 'note="C" octave="5"') =>
+    `<music-note ${pitch} duration="quarter" ${attributes}></music-note>`;
+  const at = (element: Element | null | undefined, name: string) =>
+    Number(element?.getAttribute(name));
+  const textsOf = (staff: any): Element[] =>
+    Array.from(
+      staff.shadowRoot.querySelectorAll(
+        '.technique-labels-container .technique-text'
+      )
+    );
+  const staffBottomY =
+    STAFF_Y_PADDING + STAFF_BOTTOM_LINE_Y - NOTE_HEAD_Y_OFFSET_CORRECTION;
+
+  it('stacks above a glissando label on its note', () => {
+    const staff = renderStaff(
+      quarter('glissando-label="lip" technique-text="hum"')
+    );
+    const gliss = staff.shadowRoot.querySelector('.glissando-label');
+    const [text] = textsOf(staff);
+    expect(at(gliss, 'y') - at(text, 'y')).toBeGreaterThanOrEqual(
+      TECHNIQUE_LABEL_FONT_SIZE_PX + TECHNIQUE_LABEL_GAP_PX
+    );
+  });
+
+  it('moves the second of two overlapping texts in a bar up', () => {
+    const staff = renderStaff(
+      quarter('technique-text="a much longer instruction"') +
+        quarter('technique-text="next"')
+    );
+    const [first, second] = textsOf(staff);
+    expect(at(second, 'y')).toBeLessThan(at(first, 'y'));
+  });
+
+  it('starts over a rest at its left edge, a hidden one included', () => {
+    const staff = renderStaff(
+      '<music-rest duration="quarter" hidden technique-text="spoken"></music-rest>' +
+        quarter('')
+    );
+    expect(textsOf(staff).map(({ textContent }) => textContent)).toEqual([
+      'spoken',
+    ]);
+  });
+
+  it('goes below the stave, beneath its ink and above the dynamics', () => {
+    const staff = renderStaff(
+      quarter(
+        'technique-text="legato" technique-text-placement="below" dynamic="p"',
+        'note="F" octave="5"'
+      )
+    );
+    const [text] = textsOf(staff);
+    const marking = staff.shadowRoot.querySelector('.dynamic-marking');
+    expect(at(text, 'y') - TECHNIQUE_LABEL_FONT_SIZE_PX).toBeCloseTo(
+      staffBottomY + STAFF_LINE_SPACING
+    );
+    expect(at(marking, 'y')).toBeGreaterThan(at(text, 'y'));
+  });
+
+  it('ends before its own ledger lines below, or drops under them', () => {
+    const ledgered = (before: string, placement = 'below') => {
+      const staff = renderStaff(
+        before +
+          quarter(
+            `technique-text="hum" technique-text-placement="${placement}"`,
+            'note="A" octave="3"'
+          )
+      );
+      const text = textsOf(staff)[0];
+      const result = { x: at(text, 'x'), y: at(text, 'y') };
+      document.body.innerHTML = '';
+      return result;
+    };
+    const roomy = ledgered(quarter('').repeat(2));
+    const crowded = ledgered('');
+    expect(crowded.y).toBeGreaterThan(roomy.y);
+    expect(roomy.x).toBeLessThan(ledgered(quarter('').repeat(2), 'above').x);
+    expect(crowded.x).toBe(ledgered('', 'above').x);
+  });
+
+  it('keeps room above and below the stave for its lines', () => {
+    const margins = (markup: string) => {
+      const staff = renderStaff(markup);
+      const result = {
+        top: parseFloat(staff.style.marginTop || '0'),
+        bottom: parseFloat(staff.style.marginBottom || '0'),
+      };
+      document.body.innerHTML = '';
+      return result;
+    };
+    const one = margins(quarter('technique-text="hum"'));
+    expect(margins(quarter('technique-text="hum|softly"')).top).toBeGreaterThan(
+      one.top
+    );
+    expect(
+      margins(
+        quarter('technique-text="hum|softly" technique-text-placement="below"')
+      ).bottom
+    ).toBeGreaterThan(
+      margins(quarter('technique-text="hum" technique-text-placement="below"'))
+        .bottom
+    );
+  });
+
+  it('runs on to the limit the composition gives, and clears the ink there', () => {
+    const long = 'm'.repeat(30);
+    const staff = renderStaff(
+      quarter('').repeat(3) + quarter(`technique-text="${long}"`)
+    );
+    const [shifted] = textsOf(staff);
+    const [placement] = staff.techniqueTextPlacements();
+
+    const runOn = new Map([
+      [
+        placement.element,
+        { maxRight: staff.notesAreaClientRight + 1000, inkY: null },
+      ],
+    ]);
+    expect(staff.applyTechniqueTextRunOn(runOn, [], null)).toBe(true);
+    expect(staff.applyTechniqueTextRunOn(runOn, [], null)).toBe(false);
+    const [runningOn] = textsOf(staff);
+    const freeY = at(runningOn, 'y');
+    expect(at(runningOn, 'x')).toBeGreaterThan(at(shifted, 'x'));
+
+    staff.applyTechniqueTextRunOn(
+      new Map([
+        [
+          placement.element,
+          {
+            maxRight: staff.notesAreaClientRight + 1000,
+            inkY: placement.top - 30,
+          },
+        ],
+      ]),
+      [],
+      null
+    );
+    expect(at(textsOf(staff)[0], 'y')).toBeLessThan(freeY);
+  });
+
+  it("re-lays out for the row's end only when it has a dynamic-text", () => {
+    const plain = renderStaff(quarter('dynamic="p"'));
+    expect(plain.applyTechniqueTextRunOn(null, [], 900)).toBe(false);
+    expect(plain.applyTechniqueTextRunOn(null, [], 950)).toBe(false);
+    document.body.innerHTML = '';
+    const withText = renderStaff(quarter('dynamic="p" dynamic-text="sub."'));
+    expect(withText.applyTechniqueTextRunOn(null, [], 900)).toBe(true);
+    expect(withText.applyTechniqueTextRunOn(null, [], 900)).toBe(false);
+  });
+
+  it('moves its own labels above a text running on over it', () => {
+    const staff = renderStaff(quarter('technique-text="hum"'));
+    const [own] = staff.techniqueTextPlacements();
+    const before = at(textsOf(staff)[0], 'y');
+    const marginBefore = parseFloat(staff.style.marginTop || '0');
+    staff.applyTechniqueTextRunOn(
+      null,
+      [{ ...own, above: true, left: own.left - 50, right: own.right + 50 }],
+      null
+    );
+    expect(at(textsOf(staff)[0], 'y')).toBeLessThan(before);
+    expect(parseFloat(staff.style.marginTop || '0')).toBeGreaterThan(
+      marginBefore
+    );
+  });
+
+  it('draws a dynamic-text after its marking, shifting both left at the end', () => {
+    const marked = (before: string, text: string) => {
+      const staff = renderStaff(
+        before + quarter(`dynamic="mp" dynamic-text="${text}"`)
+      );
+      const marking = staff.shadowRoot.querySelector('.dynamic-marking');
+      const after = staff.shadowRoot.querySelector('.dynamic-text');
+      const result = {
+        markingX: at(marking, 'x'),
+        textX: at(after, 'x'),
+        textY: at(after, 'y'),
+        markingY: at(marking, 'y'),
+        italic: after?.getAttribute('font-style'),
+      };
+      document.body.innerHTML = '';
+      return result;
+    };
+    const short = marked('', 'sub.');
+    expect(short.textX).toBeGreaterThan(short.markingX);
+    expect(short.textY).toBe(short.markingY);
+    expect(short.italic).toBe('italic');
+    const atEnd = marked(quarter('').repeat(3), 'sub.');
+    const pushed = marked(quarter('').repeat(3), 'm'.repeat(20));
+    expect(pushed.markingX).toBeLessThan(atEnd.markingX);
   });
 });
 
@@ -2027,5 +3243,126 @@ describe('key changes and end-of-measure warnings', () => {
     expect(widths.naturalWidth).toBeCloseTo(
       naturalWidth + staff.ownEndWarningSpace.width
     );
+  });
+});
+
+describe('staffNotationBase flutter-tongue passages', () => {
+  function renderStaff(markup: string): any {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    staff.innerHTML = markup;
+    document.body.appendChild(staff);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+
+  const flutterTie = `
+    <music-note note="E" octave="4" duration="half" tremolo="unmeasured" tremolo-label="flz" tie="start"></music-note>`;
+
+  it('warns once about a flutter tie into a note with no ord.', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const staff = renderStaff(
+      `${flutterTie}<music-note note="E" octave="4" duration="half" tie="end"></music-note>`
+    );
+    staff.flutterCarryIn = new Set([2]);
+    const flutterWarnings = warn.mock.calls.filter(([message]) =>
+      String(message).includes('flutter-tongued')
+    );
+    expect(flutterWarnings).toEqual([[expect.stringContaining('entry 2')]]);
+    warn.mockRestore();
+  });
+
+  it('is quiet once the tied-into note says ord.', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    renderStaff(
+      `${flutterTie}<music-note note="E" octave="4" duration="half" tie="end" tremolo-label="ord"></music-note>`
+    );
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('flutter-tongued')
+    );
+    warn.mockRestore();
+  });
+});
+
+describe('cue size', () => {
+  function renderStaff(markup: string): any {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    document.body.appendChild(staff);
+    staff.innerHTML = markup;
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+
+  it("gives a cue note's unbeamed stem ¾ of the rule's length", () => {
+    const staff = renderStaff(`
+      <music-note note="A" octave="3" duration="half"></music-note>
+      <music-note note="A" octave="3" duration="half" size="cue"></music-note>`);
+    const [full, cue] = Array.from(staff.children) as NoteElementType[];
+    expect(full.stemExtension).toBeGreaterThan(0);
+    expect(cue.stemExtension).toBeCloseTo(CUE_SCALE * full.stemExtension);
+  });
+
+  it("reserves less room for a cue note's accidental", () => {
+    const minWidthOf = (size: string) => {
+      document.body.innerHTML = '';
+      let minWidth = 0;
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+        minWidth = (event as CustomEvent).detail.minWidth;
+      });
+      document.body.appendChild(staff);
+      staff.innerHTML = `<music-note note="F#" octave="4" duration="whole" size="${size}"></music-note>`;
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => Array.from(staff.children);
+      slot.dispatchEvent(new Event('slotchange'));
+      return minWidth;
+    };
+    expect(minWidthOf('cue')).toBeLessThan(minWidthOf('normal'));
+  });
+});
+
+describe('beam-over rests', () => {
+  function renderStaff(markup: string): any {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '2/4');
+    document.body.appendChild(staff);
+    staff.innerHTML = markup;
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+
+  it('beams a lone note beside one instead of drawing its tail', () => {
+    const staff = renderStaff(`
+      <music-rest duration="eighth" beam-over></music-rest>
+      <music-note note="G" octave="4" duration="eighth"></music-note>
+      <music-note note="G" octave="4" duration="quarter"></music-note>`);
+    const note = staff.children[1] as NoteElementType;
+    expect(note.noFlags).toBe(true);
+    expect(staff.shadowRoot.querySelectorAll('.beam-group')).toHaveLength(1);
+  });
+
+  it('moves a rest the beam runs through clear of it, by whole spaces', () => {
+    const markup = (beamOver: string) => `
+      <music-note note="G" octave="4" duration="sixteenth"></music-note>
+      <music-rest duration="sixteenth" ${beamOver}></music-rest>
+      <music-note note="G" octave="4" duration="sixteenth"></music-note>
+      <music-note note="G" octave="4" duration="sixteenth"></music-note>
+      <music-rest duration="quarter"></music-rest>`;
+    const restTop = (beamOver: string) => {
+      document.body.innerHTML = '';
+      const staff = renderStaff(markup(beamOver));
+      return parseFloat((staff.children[1] as HTMLElement).style.top);
+    };
+    const shift = restTop('beam-over') - restTop('');
+    expect(shift).toBeGreaterThan(0);
+    expect(shift % STAFF_LINE_SPACING).toBeCloseTo(0);
   });
 });

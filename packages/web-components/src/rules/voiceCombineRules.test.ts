@@ -205,6 +205,107 @@ describe('detectCombinableGroups', () => {
     expect(groups).toHaveLength(0);
   });
 
+  it('combines a dynamic with its text only when the text matches', () => {
+    const marked = (pitch: string, text: string) => {
+      const element = note(pitch, 4);
+      element.setAttribute('dynamic', 'p');
+      element.setAttribute('dynamic-text', text);
+      return element;
+    };
+    const combine = (first: NoteElementType, second: NoteElementType): number =>
+      detectCombinableGroups(
+        new Map([
+          [1, voiceInput([first], [0])],
+          [2, voiceInput([second], [0])],
+        ])
+      ).length;
+    expect(combine(marked('C', 'sub.'), marked('E', 'sub.'))).toBe(1);
+    expect(combine(marked('C', 'sub.'), marked('E', 'dolce'))).toBe(0);
+  });
+
+  it('never combines a note with phonemes', () => {
+    const voiced = note('C', 4);
+    voiced.setAttribute('phonemes', 'oo');
+    expect(
+      detectCombinableGroups(
+        new Map([
+          [1, voiceInput([voiced], [0])],
+          [2, voiceInput([note('E', 4)], [0])],
+        ])
+      )
+    ).toHaveLength(0);
+  });
+
+  it('combines notes only at one size', () => {
+    const cue = note('C', 4);
+    cue.setAttribute('size', 'cue');
+    const otherCue = note('E', 4);
+    otherCue.setAttribute('size', 'cue');
+    const combine = (first: NoteElementType, second: NoteElementType) =>
+      detectCombinableGroups(
+        new Map([
+          [1, voiceInput([first], [0])],
+          [2, voiceInput([second], [0])],
+        ])
+      ).length;
+    expect(combine(cue, note('E', 4))).toBe(0);
+    expect(combine(cue, otherCue)).toBe(1);
+  });
+
+  it('never combines a note with a bend contour', () => {
+    const contoured = note('C', 4);
+    contoured.setAttribute('bend-contour', 'G4');
+    expect(
+      detectCombinableGroups(
+        new Map([
+          [1, voiceInput([contoured], [0])],
+          [2, voiceInput([note('E', 4)], [0])],
+        ])
+      )
+    ).toHaveLength(0);
+  });
+
+  it('combines a swell and dynamic-end only when both match', () => {
+    const marked = (pitch: string, swell: string, dynamicEnd: string) => {
+      const element = note(pitch, 4);
+      element.setAttribute('swell', swell);
+      element.setAttribute('dynamic-end', dynamicEnd);
+      return element;
+    };
+    const combine = (first: NoteElementType, second: NoteElementType): number =>
+      detectCombinableGroups(
+        new Map([
+          [1, voiceInput([first], [0])],
+          [2, voiceInput([second], [0])],
+        ])
+      ).length;
+    expect(combine(marked('C', '', 'f'), marked('E', 'both', 'f'))).toBe(1);
+    expect(combine(marked('C', '', 'f'), marked('E', 'crescendo', 'f'))).toBe(
+      0
+    );
+    expect(combine(marked('C', '', 'f'), marked('E', '', 'p'))).toBe(0);
+  });
+
+  it('combines a stem cross only with another, never an unpitched note', () => {
+    const crossed = (pitch: string) => {
+      const element = note(pitch, 4);
+      element.setAttribute('stem-mark', 'cross');
+      return element;
+    };
+    const combine = (first: NoteElementType, second: NoteElementType): number =>
+      detectCombinableGroups(
+        new Map([
+          [1, voiceInput([first], [0])],
+          [2, voiceInput([second], [0])],
+        ])
+      ).length;
+    expect(combine(crossed('C'), crossed('E'))).toBe(1);
+    expect(combine(crossed('C'), note('E', 4))).toBe(0);
+    const unpitched = note('E', 4);
+    unpitched.setAttribute('unpitched', '');
+    expect(combine(note('C', 4), unpitched)).toBe(0);
+  });
+
   it('excludes a trilled note from combining', () => {
     const v1Note = note('C', 4);
     const v2Note = note('E', 4);
@@ -382,6 +483,45 @@ describe('detectCombinableGroups', () => {
       ])
     );
     expect(groups).toHaveLength(0);
+  });
+
+  it('excludes a bend, free or to a target, a glissando label and technique text', () => {
+    for (const [name, value] of [
+      ['bend', 'down'],
+      ['bend-to', 'D'],
+      ['glissando-label', 'lip'],
+      ['technique-text', 'hum'],
+    ]) {
+      const bent = note('E', 5);
+      bent.setAttribute(name, value);
+      const groups = detectCombinableGroups(
+        new Map([
+          [1, voiceInput([bent], [0])],
+          [2, voiceInput([note('C', 5)], [0])],
+        ])
+      );
+      expect(groups).toHaveLength(0);
+    }
+  });
+
+  it('excludes a quarter-tone, on a note or a chord tone', () => {
+    const arrowed = note('E', 4);
+    arrowed.setAttribute('quarter-tone', 'up');
+    const tones = chord([
+      ['E', 4],
+      ['G', 4],
+    ]);
+    const combinable = (element: NoteElementType | ChordElementType) =>
+      detectCombinableGroups(
+        new Map([
+          [1, voiceInput([note('C', 4)], [0])],
+          [2, voiceInput([element], [0])],
+        ])
+      ).length;
+    expect(combinable(arrowed)).toBe(0);
+    expect(combinable(tones)).toBe(1);
+    tones.querySelector('music-note')?.setAttribute('quarter-tone', 'down');
+    expect(combinable(tones)).toBe(0);
   });
 
   it('excludes a glissando-anchored note from combining, since the synthetic chord would drop the anchor', () => {

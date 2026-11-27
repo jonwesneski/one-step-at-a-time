@@ -27,7 +27,7 @@ export type CurveProps = {
   // rules/connectorPlacementRules.ts#cubicSlurControlPoints). Overrides
   // bulgeHeight/nestingLevel.
   controlHeights?: readonly [number, number];
-  // Draws the curve as a dotted line (a dotted tie).
+  // Draws the curve as a dotted line (a dotted tie or slur).
   dotted?: boolean;
 };
 
@@ -35,6 +35,9 @@ export const DEFAULT_BULGE_HEIGHT = STAFF_LINE_SPACING * 0.9;
 export const BULGE_STEP_PX = STAFF_LINE_SPACING * 1.1;
 const STROKE_WIDTH = 1.4;
 const LABEL_FONT_SIZE = STAFF_LINE_SPACING * 1.1;
+// How far a line's label reaches past the line's own clearance: its baseline's
+// distance and its ascent.
+const LINE_LABEL_REACH_PX = LABEL_FONT_SIZE * 1.65;
 
 export const createCurveSvg = ({
   from,
@@ -85,34 +88,11 @@ export const createCurveSvg = ({
   group.appendChild(path);
 
   if (label) {
-    const text = document.createElementNS(SVG_NS, 'text');
-    let labelY: number;
-    if (style === 'straight') {
-      // A straight line's Y varies with slope across the label's own width —
-      // clearing only the midpoint isn't enough for a steep line (e.g. a
-      // multi-octave glissando), so clear whichever of the label's two edges
-      // sits closest to the line on the bulge side.
-      const halfWidth = (label.length * CONNECTOR_LABEL_CHAR_WIDTH_PX) / 2;
-      const slope = endX === startX ? 0 : (endY - startY) / (endX - startX);
-      const trueMidY = (startY + endY) / 2;
-      const yAtLeftEdge = trueMidY - slope * halfWidth;
-      const yAtRightEdge = trueMidY + slope * halfWidth;
-      const clearedY =
-        bulge === 'above'
-          ? Math.min(yAtLeftEdge, yAtRightEdge)
-          : Math.max(yAtLeftEdge, yAtRightEdge);
-      labelY = clearedY + bulgeSign * LABEL_FONT_SIZE * 0.9;
-    } else {
-      labelY = midY + bulgeSign * LABEL_FONT_SIZE * 0.6;
-    }
-    text.setAttribute('x', `${midX}`);
-    text.setAttribute('y', `${labelY}`);
-    text.setAttribute('text-anchor', 'middle');
-    text.setAttribute('font-size', `${LABEL_FONT_SIZE}`);
-    text.setAttribute('font-style', 'italic');
-    text.setAttribute('fill', 'currentColor');
-    text.textContent = label;
-    group.appendChild(text);
+    group.appendChild(
+      style === 'straight'
+        ? createLineLabel({ from, to, label, side: bulge })
+        : createLabelText(label, midX, midY + bulgeSign * LABEL_FONT_SIZE * 0.6)
+    );
   }
 
   if (dotted) {
@@ -121,6 +101,75 @@ export const createCurveSvg = ({
 
   return group;
 };
+
+function createLabelText(label: string, x: number, y: number): SVGTextElement {
+  const text = document.createElementNS(SVG_NS, 'text');
+  text.setAttribute('x', `${x}`);
+  text.setAttribute('y', `${y}`);
+  text.setAttribute('text-anchor', 'middle');
+  text.setAttribute('font-size', `${LABEL_FONT_SIZE}`);
+  text.setAttribute('font-style', 'italic');
+  text.setAttribute('fill', 'currentColor');
+  text.textContent = label;
+  return text;
+}
+
+/**
+ * A label beside a straight line's middle. A steep line rises or falls under
+ * the label's width, so it keeps off the line at both of its own edges, as far
+ * as the line reaches.
+ */
+export function createLineLabel({
+  from,
+  to,
+  label,
+  side,
+  clearance = 0,
+}: {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  label: string;
+  side: CurveBulge;
+  /** How far the drawn line leaves the straight one. */
+  clearance?: number;
+}): SVGTextElement {
+  const span = to.x - from.x;
+  const slope = span === 0 ? 0 : (to.y - from.y) / span;
+  const halfWidth = Math.min(
+    (label.length * CONNECTOR_LABEL_CHAR_WIDTH_PX) / 2,
+    Math.abs(span) / 2
+  );
+  const sign = side === 'above' ? -1 : 1;
+  const nearestY =
+    (from.y + to.y) / 2 + sign * (Math.abs(slope) * halfWidth + clearance);
+  return createLabelText(
+    label,
+    (from.x + to.x) / 2,
+    nearestY + sign * LABEL_FONT_SIZE * 0.9
+  );
+}
+
+/** The box over a line's label (see createLineLabel), above the line. */
+export function lineLabelBox(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  label: string,
+  clearance: number
+): { left: number; right: number; top: number } {
+  const span = to.x - from.x;
+  const slope = span === 0 ? 0 : (to.y - from.y) / span;
+  const halfText = (label.length * CONNECTOR_LABEL_CHAR_WIDTH_PX) / 2;
+  const midX = (from.x + to.x) / 2;
+  return {
+    left: midX - halfText,
+    right: midX + halfText,
+    top:
+      (from.y + to.y) / 2 -
+      Math.abs(slope) * Math.min(halfText, Math.abs(span) / 2) -
+      clearance -
+      LINE_LABEL_REACH_PX,
+  };
+}
 
 /** Redraws an already built curve's line as a dotted one. */
 export function setCurveDotted(curve: SVGGElement): void {

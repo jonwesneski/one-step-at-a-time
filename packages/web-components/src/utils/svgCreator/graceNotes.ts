@@ -1,12 +1,24 @@
 import {
+  accidentalInkRect,
+  accidentalPitchOffset,
+  accidentalSymbolHeight,
+  accidentalSymbolWidth,
+} from '../../rules/accidentalRules';
+import type {
+  CurvePoint,
+  ObstacleRect,
+} from '../../rules/connectorPlacementRules';
+import {
   computeGraceBeamYs,
   computeGraceLayout,
   GraceNoteDescriptor,
+  resolveOrnamentSlur,
 } from '../../rules/graceRules';
 import { resolveGraceNoteheads } from '../../rules/noteheadRules';
 import { computeLedgerLines } from '../../rules/staffNoteRules';
 import { durationToFlagCountMap } from '../../rules/theoryConsts';
 import type {
+  AccidentalType,
   ArticulationType,
   GraceDuration,
   GraceSlur,
@@ -16,9 +28,6 @@ import type {
 } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
-  ACCIDENTAL_NOTE_GAP,
-  ACCIDENTAL_SYMBOL_HEIGHT,
-  ACCIDENTAL_SYMBOL_WIDTH,
   BASE_STEM_LENGTH_PX,
   GRACE_BEAM_COUNT,
   GRACE_BEAM_GAP_PX,
@@ -101,9 +110,9 @@ export type GraceNotesProps = {
   // Right edge available to the grace group — already left of the main
   // element's accidental footprint, including the grace-to-main gap.
   anchorRightXPx: number;
-  // A shown main accidental flips the slur above, starting from the grace
-  // stem tip.
-  mainAccidentalShown: boolean;
+  // The ink of the main element's shown accidentals. Any flips the slur
+  // above, over them, starting from the grace stem tip.
+  mainAccidentalRects: readonly ObstacleRect[];
   // Main note's own stem direction. Stem-down puts the main stem on the same
   // (left) side the slur approaches from, so the slur needs extra horizontal
   // clearance on that end to avoid crossing it.
@@ -111,6 +120,49 @@ export type GraceNotesProps = {
   // Staff Y of the main notehead — enables grace ledger lines. null in
   // standalone mode (matching the main note's own ledger-line behavior).
   mainStaffY: number | null;
+  // A cue note's grace notes are this much smaller.
+  ratio?: number;
+};
+
+// A cue note's ornament group is drawn `ratio` times as large about the point
+// it hangs from (its end beside the note, level with the main head). Inside
+// it, positions given in the host's px are mapped back by `local`, and a
+// pitch step is 1/ratio as tall, so its heads still land on their stave
+// positions.
+type OrnamentFrame = {
+  local: (x: number, y: number) => { x: number; y: number };
+  stepPx: number;
+  wrap: (group: SVGGElement) => SVGGElement;
+};
+
+function ornamentFrame(x: number, y: number, ratio: number): OrnamentFrame {
+  return {
+    local: (px, py) =>
+      ratio === 1
+        ? { x: px, y: py }
+        : { x: x + (px - x) / ratio, y: y + (py - y) / ratio },
+    stepPx: STAFF_Y_STEP / ratio,
+    wrap: (group) => {
+      if (ratio !== 1) {
+        group.setAttribute(
+          'transform',
+          `translate(${x} ${y}) scale(${ratio}) translate(${-x} ${-y})`
+        );
+      }
+      return group;
+    },
+  };
+}
+
+const localRect = (frame: OrnamentFrame, rect: ObstacleRect): ObstacleRect => {
+  const topLeft = frame.local(rect.left, rect.top);
+  const bottomRight = frame.local(rect.right, rect.bottom);
+  return {
+    left: topLeft.x,
+    top: topLeft.y,
+    right: bottomRight.x,
+    bottom: bottomRight.y,
+  };
 };
 
 type OrnamentNoteGroupResult = {
@@ -139,7 +191,8 @@ function renderOrnamentNoteGroup(
   mainHeadCenterYPx: number,
   // null for a trill's finishing notes: the acciaccatura slash and per-note
   // articulation marks belong to leading grace notes only.
-  graceType: GraceType | null
+  graceType: GraceType | null,
+  stepPx: number
 ): OrnamentNoteGroupResult {
   const group = document.createElementNS(SVG_NS, 'g');
   const isGroup = graceNotes.length > 1;
@@ -151,7 +204,8 @@ function renderOrnamentNoteGroup(
     graceNotes,
     headXCenters,
     mainStaffY,
-    mainHeadCenterYPx
+    mainHeadCenterYPx,
+    stepPx
   );
 
   const stemXs = headXCenters.map(
@@ -268,15 +322,7 @@ function renderOrnamentNoteGroup(
       }
     }
 
-    // Grace notes are always stem-up and placed by their head, so tails past
-    // the second move the tip away from it.
-    const stemTipY =
-      headYCenters[0] -
-      GRACE_SCALE *
-        (BASE_STEM_LENGTH_PX +
-          flagStemExtensionPx(
-            durationToFlagCountMap.get(writtenDuration) ?? 0
-          ));
+    const stemTipY = loneGraceStemTipY(writtenDuration, headYCenters[0]);
     firstStemTipY = stemTipY;
     lastStemTipY = stemTipY;
 
@@ -291,6 +337,61 @@ function renderOrnamentNoteGroup(
   return { group, firstStemTipY, lastStemTipY };
 }
 
+// Grace notes are always stem-up and placed by their head, so tails past the
+// second move the tip away from it.
+function loneGraceStemTipY(
+  duration: GraceDuration,
+  headYCenter: number
+): number {
+  return (
+    headYCenter -
+    GRACE_SCALE *
+      (BASE_STEM_LENGTH_PX +
+        flagStemExtensionPx(durationToFlagCountMap.get(duration) ?? 0))
+  );
+}
+
+/** The top of a leading grace group's stems and beams (px). */
+export function graceInkTopY(
+  graceNotes: GraceNoteDescriptor[],
+  graceDuration: GraceDuration | null,
+  mainHeadCenterYPx: number,
+  ratio = 1
+): number {
+  const headYCenters = graceNotes.map(
+    ({ relativeStaffSteps }) =>
+      mainHeadCenterYPx - (relativeStaffSteps * STAFF_Y_STEP) / ratio
+  );
+  const localTop =
+    graceNotes.length === 1
+      ? loneGraceStemTipY(graceDuration ?? 'eighth', headYCenters[0])
+      : Math.min(
+          ...computeGraceBeamYs(
+            computeGraceLayout(graceNotes).headXCenters,
+            headYCenters
+          )
+        ) -
+        STEM_OVERLAP_PX * GRACE_SCALE;
+  return mainHeadCenterYPx + ratio * (localTop - mainHeadCenterYPx);
+}
+
+/** The bottom edge (px) of a grace group's lowest head. */
+export function graceHeadsBottomY(
+  graceNotes: readonly GraceNoteDescriptor[],
+  mainHeadCenterYPx: number,
+  ratio = 1
+): number {
+  return (
+    Math.max(
+      ...graceNotes.map(
+        ({ relativeStaffSteps }) =>
+          mainHeadCenterYPx - relativeStaffSteps * STAFF_Y_STEP
+      )
+    ) +
+    STAFF_Y_STEP * GRACE_SCALE * ratio
+  );
+}
+
 export function createGraceNotesSvg({
   graceNotes,
   graceType,
@@ -303,12 +404,17 @@ export function createGraceNotesSvg({
   mainSlurTargetXPx,
   mainSlurTargetYPx,
   anchorRightXPx,
-  mainAccidentalShown,
+  mainAccidentalRects,
   mainStemUp,
   mainStaffY,
+  ratio = 1,
 }: GraceNotesProps): SVGGElement {
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('grace-notes');
+  const frame = ornamentFrame(anchorRightXPx, mainHeadCenterYPx, ratio);
+  const mainHead = frame.local(mainHeadCenterXPx, mainHeadCenterYPx);
+  const mainTopNote = frame.local(mainTopNoteXPx, mainTopNoteYPx);
+  const mainSlurTarget = frame.local(mainSlurTargetXPx, mainSlurTargetYPx);
 
   const layout = computeGraceLayout(graceNotes);
   const headXCenters = layout.headXCenters.map(
@@ -316,7 +422,7 @@ export function createGraceNotesSvg({
   );
   const headYCenters = graceNotes.map(
     (graceNote) =>
-      mainHeadCenterYPx - graceNote.relativeStaffSteps * STAFF_Y_STEP
+      mainHeadCenterYPx - graceNote.relativeStaffSteps * frame.stepPx
   );
 
   const { group: noteGroup, firstStemTipY: firstGraceStemTipY } =
@@ -327,7 +433,8 @@ export function createGraceNotesSvg({
       headYCenters,
       mainStaffY,
       mainHeadCenterYPx,
-      graceType
+      graceType,
+      frame.stepPx
     );
   group.appendChild(noteGroup);
 
@@ -342,22 +449,27 @@ export function createGraceNotesSvg({
         headXCenters[0],
         headYCenters[0],
         firstGraceStemTipY,
-        mainHeadCenterXPx,
-        mainHeadCenterYPx,
-        mainTopNoteXPx,
-        mainTopNoteYPx,
-        mainSlurTargetXPx,
-        mainSlurTargetYPx,
-        mainAccidentalShown,
+        mainHead.x,
+        mainHead.y,
+        mainTopNote.x,
+        mainTopNote.y,
+        mainSlurTarget.x,
+        mainSlurTarget.y,
+        mainAccidentalRects.length > 0,
         mainStemUp,
-        isDescendingGroup
+        isDescendingGroup,
+        [
+          ...mainAccidentalRects.map((rect) => localRect(frame, rect)),
+          ...graceAccidentalRects(graceNotes, headXCenters, headYCenters),
+          ...innerGraceHeadRects(headXCenters, headYCenters),
+        ]
       )
     );
   }
 
   appendGraceAccidentals(group, graceNotes, headXCenters, headYCenters);
 
-  return group;
+  return frame.wrap(group);
 }
 
 export type TrillFinishNotesProps = {
@@ -375,6 +487,7 @@ export type TrillFinishNotesProps = {
   // Staff Y of the main notehead — enables ledger lines, same as
   // GraceNotesProps.mainStaffY.
   mainStaffY: number | null;
+  ratio?: number;
 };
 
 /**
@@ -382,11 +495,15 @@ export type TrillFinishNotesProps = {
  * lone finishing note has a tail, and it points at whatever follows; a group is
  * beamed.
  */
-export function trillFinishTailOverhangPx(noteCount: number): number {
+export function trillFinishTailOverhangPx(
+  noteCount: number,
+  ratio = 1
+): number {
   return noteCount === 1
-    ? GRACE_STEM_X_FROM_HEAD_CENTER +
-        GRACE_SCALE * TAIL_UP_WIDTH_PX -
-        GRACE_NOTE_ADVANCE_PX / 2
+    ? ratio *
+        (GRACE_STEM_X_FROM_HEAD_CENTER +
+          GRACE_SCALE * TAIL_UP_WIDTH_PX -
+          GRACE_NOTE_ADVANCE_PX / 2)
     : 0;
 }
 
@@ -407,16 +524,19 @@ export function createTrillFinishNotesSvg({
   mainHeadCenterYPx,
   anchorLeftXPx,
   mainStaffY,
+  ratio = 1,
 }: TrillFinishNotesProps): TrillFinishNotesResult {
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('trill-finish-notes');
+  const frame = ornamentFrame(anchorLeftXPx, mainHeadCenterYPx, ratio);
+  const mainHead = frame.local(mainHeadCenterXPx, mainHeadCenterYPx);
 
   const layout = computeGraceLayout(trillFinishNotes);
   const headXCenters = layout.headXCenters.map(
     (headXCenter) => anchorLeftXPx + headXCenter
   );
   const headYCenters = trillFinishNotes.map(
-    (note) => mainHeadCenterYPx - note.relativeStaffSteps * STAFF_Y_STEP
+    (note) => mainHeadCenterYPx - note.relativeStaffSteps * frame.stepPx
   );
 
   const { group: noteGroup } = renderOrnamentNoteGroup(
@@ -426,58 +546,79 @@ export function createTrillFinishNotesSvg({
     headYCenters,
     mainStaffY,
     mainHeadCenterYPx,
-    null
+    null,
+    frame.stepPx
   );
   group.appendChild(noteGroup);
 
   if (trillFinishSlur === 'to-main' || trillFinishSlur === 'both') {
     group.appendChild(
       createOrnamentConnectorSlur(
-        mainHeadCenterXPx,
-        mainHeadCenterYPx,
+        mainHead.x,
+        mainHead.y,
         NOTE_HEAD_RADIUS_PX * 0.75,
         headXCenters[0],
         headYCenters[0],
-        TRILL_FINISH_HEAD_RY
+        TRILL_FINISH_HEAD_RY,
+        true,
+        graceAccidentalRects(
+          trillFinishNotes.slice(0, 1),
+          headXCenters,
+          headYCenters
+        )
       )
     );
   }
 
   appendGraceAccidentals(group, trillFinishNotes, headXCenters, headYCenters);
 
-  return { element: group, width: layout.totalWidth };
+  return { element: frame.wrap(group), width: ratio * layout.totalWidth };
 }
 
 // A trill-finish slur half: notehead to notehead, always bulging below (a v1
-// simplification of buildGraceSlur's rules).
+// simplification of buildGraceSlur's rules). It passes under the accidentals
+// of the note it leads to, and lands below its head where no stem is in the way.
 export function createOrnamentConnectorSlur(
   fromXCenter: number,
   fromYCenter: number,
   fromHeadRy: number,
   toXCenter: number,
   toYCenter: number,
-  toHeadRy: number
+  toHeadRy: number,
+  toStemUp: boolean,
+  toAccidentalRects: readonly ObstacleRect[]
 ): SVGGElement {
   const fromY = fromYCenter + fromHeadRy + SLUR_HEAD_CLEARANCE_PX;
   const toY = toYCenter + toHeadRy + SLUR_HEAD_CLEARANCE_PX;
-  const bulgeHeight = Math.max(
-    DEFAULT_BULGE_HEIGHT,
-    Math.abs(fromY - toY) / 2 + SLUR_HEAD_CLEARANCE_PX
-  );
   const slur = createCurveSvg({
-    from: {
-      x: fromXCenter + fromHeadRy + SLUR_HEAD_CLEARANCE_PX,
-      y: fromY,
-    },
-    to: {
-      x: toXCenter - toHeadRy - SLUR_HEAD_CLEARANCE_PX,
-      y: toY,
-    },
-    bulgeHeight,
+    ...resolveOrnamentSlur(
+      {
+        x: fromXCenter + fromHeadRy + SLUR_HEAD_CLEARANCE_PX,
+        y: fromY,
+      },
+      {
+        x:
+          toStemUp && toAccidentalRects.length > 0
+            ? toXCenter
+            : toXCenter - toHeadRy - SLUR_HEAD_CLEARANCE_PX,
+        y: toY,
+      },
+      'below',
+      ornamentSlurBulgeHeight,
+      toAccidentalRects
+    ),
     bulge: 'below',
   });
   slur.classList.add('trill-finish-slur');
   return slur;
+}
+
+// Grows the bulge so the control point stays beyond both endpoints.
+function ornamentSlurBulgeHeight(from: CurvePoint, to: CurvePoint): number {
+  return Math.max(
+    DEFAULT_BULGE_HEIGHT,
+    Math.abs(from.y - to.y) / 2 + SLUR_HEAD_CLEARANCE_PX
+  );
 }
 
 // Grace-note-head radius at GRACE_SCALE — the "from" or "to" head-radius arg
@@ -628,9 +769,8 @@ function buildSlash(crossingX: number, crossingY: number): SVGLineElement {
 // above, from the grace stem tip onto the chord's top note. A descending group
 // also goes above, with both ends at stem tips, so it clears every head.
 //
-// The curve's x is linear between its endpoints (the control point is their
-// midpoint), so a `to.x` past the accidental's right edge keeps the whole
-// curve clear of it. Each end is also pushed past a stem on its approach side.
+// Over an accidental the slur lands above the head's centre, which leaves it
+// room to come down. Each end is also pushed past a stem on its approach side.
 function buildGraceSlur(
   firstGraceHeadX: number,
   firstGraceHeadY: number,
@@ -645,7 +785,8 @@ function buildGraceSlur(
   mainSlurTargetYPx: number,
   accidentalShown: boolean,
   mainStemUp: boolean,
-  isDescendingGroup: boolean
+  isDescendingGroup: boolean,
+  obstacles: readonly ObstacleRect[]
 ): SVGGElement {
   const bulgeAbove = accidentalShown || isDescendingGroup;
   const bulge = bulgeAbove ? 'above' : 'below';
@@ -666,24 +807,20 @@ function buildGraceSlur(
     ? mainTopNoteYPx
     : mainHeadCenterYPx;
   const graceHeadRy = GRACE_SCALE * NOTE_HEAD_RADIUS_PX * 0.75;
+  // A cue main head is full size in its grace group's frame.
   const mainHeadRy = NOTE_HEAD_RADIUS_PX * 0.75;
   const mainStemInApproachPath = !mainStemUp && !accidentalShown;
-  // Always clear the notehead ellipse; additionally clear the stem's own
-  // offset when it sits in the curve's approach path (stem-down, no
-  // accidental), or the shown accidental's own rendered edge — whichever
-  // pullback is larger wins.
+  // Clear the notehead ellipse, and the stem's own offset when it sits in the
+  // curve's approach path (stem-down, no accidental).
   const headClearanceX = NOTE_HEAD_RADIUS_PX + SLUR_HEAD_CLEARANCE_PX;
   const stemClearanceX = mainStemInApproachPath
     ? MAIN_STEM_X_FROM_HEAD_CENTER + SLUR_STEM_CLEARANCE_PX
     : 0;
-  // The nearest accidental column's right edge is always at
-  // -ACCIDENTAL_NOTE_GAP (note.ts and accidentalRules.ts both place it so),
-  // whatever its width or the number of columns.
-  const accidentalClearanceX = accidentalShown
-    ? targetXPx + ACCIDENTAL_NOTE_GAP - SLUR_HEAD_CLEARANCE_PX
-    : 0;
+  const landsOnStemTip = isDescendingGroup && mainStemUp;
   const toX =
-    targetXPx - Math.max(headClearanceX, stemClearanceX, accidentalClearanceX);
+    accidentalShown && !landsOnStemTip
+      ? targetXPx
+      : targetXPx - Math.max(headClearanceX, stemClearanceX);
   // Grace-side start: a descending group always starts at the grace stem
   // tip (structurally clears every interior grace head, which a
   // notehead-anchored start cannot guarantee); the accidental case's
@@ -697,24 +834,20 @@ function buildGraceSlur(
   const toY = isDescendingGroup
     ? targetYPx + direction * SLUR_STEM_TIP_CLEARANCE_PX
     : targetYPx + direction * (mainHeadRy + SLUR_HEAD_CLEARANCE_PX);
-  // Grow the bulge so the control point stays beyond both endpoints.
-  const bulgeHeight = Math.max(
-    DEFAULT_BULGE_HEIGHT,
-    Math.abs(fromY - toY) / 2 + SLUR_HEAD_CLEARANCE_PX
-  );
   const slur = createCurveSvg({
-    from: {
-      x:
-        firstGraceHeadX +
-        GRACE_STEM_X_FROM_HEAD_CENTER +
-        SLUR_STEM_CLEARANCE_PX,
-      y: fromY,
-    },
-    to: {
-      x: toX,
-      y: toY,
-    },
-    bulgeHeight,
+    ...resolveOrnamentSlur(
+      {
+        x:
+          firstGraceHeadX +
+          GRACE_STEM_X_FROM_HEAD_CENTER +
+          SLUR_STEM_CLEARANCE_PX,
+        y: fromY,
+      },
+      { x: toX, y: toY },
+      bulge,
+      ornamentSlurBulgeHeight,
+      obstacles
+    ),
     bulge,
   });
   slur.classList.add('grace-slur');
@@ -728,14 +861,15 @@ function appendLedgerLines(
   graceNotes: GraceNoteDescriptor[],
   headXCenters: number[],
   mainStaffY: number | null,
-  mainHeadCenterYPx: number
+  mainHeadCenterYPx: number,
+  stepPx: number
 ): void {
   if (mainStaffY === null) {
     return;
   }
-  // Pixel Y of a staff position = padding + staffY, and the main head center
-  // is padding + mainStaffY, so padding falls out of the difference.
-  const staffYPadding = mainHeadCenterYPx - mainStaffY;
+  // A staff position's px Y is the main head's, moved by its steps from the
+  // main note.
+  const stepScale = stepPx / STAFF_Y_STEP;
   const halfLength =
     GRACE_SCALE * NOTE_HEAD_RADIUS_PX + GRACE_LEDGER_LINE_MARGIN;
 
@@ -745,7 +879,8 @@ function appendLedgerLines(
     for (const ledgerLine of computeLedgerLines([graceStaffY], true)) {
       const line = document.createElementNS(SVG_NS, 'line');
       line.classList.add('grace-ledger-line');
-      const lineY = staffYPadding + ledgerLine.staffY;
+      const lineY =
+        mainHeadCenterYPx + (ledgerLine.staffY - mainStaffY) * stepScale;
       line.setAttribute('x1', `${headXCenters[i] - halfLength}`);
       line.setAttribute('y1', `${lineY}`);
       line.setAttribute('x2', `${headXCenters[i] + halfLength}`);
@@ -755,6 +890,57 @@ function appendLedgerLines(
       group.appendChild(line);
     }
   }
+}
+
+function graceAccidentalLeftX(
+  graceNote: GraceNoteDescriptor,
+  accidental: AccidentalType,
+  headXCenter: number
+): number {
+  return (
+    headXCenter -
+    GRACE_SCALE * (NOTE_HEAD_RADIUS_PX + 1) -
+    (graceNote.headLeftOverhangPx ?? 0) -
+    GRACE_SCALE * accidentalSymbolWidth(accidental)
+  );
+}
+
+function graceAccidentalRects(
+  graceNotes: GraceNoteDescriptor[],
+  headXCenters: number[],
+  headYCenters: number[]
+): ObstacleRect[] {
+  return graceNotes.flatMap((graceNote, i) =>
+    graceNote.accidental === null
+      ? []
+      : [
+          accidentalInkRect(
+            graceNote.accidental,
+            graceAccidentalLeftX(
+              graceNote,
+              graceNote.accidental,
+              headXCenters[i]
+            ),
+            headYCenters[i],
+            { scale: GRACE_SCALE }
+          ),
+        ]
+  );
+}
+
+// Every head but the one the slur starts from.
+function innerGraceHeadRects(
+  headXCenters: number[],
+  headYCenters: number[]
+): ObstacleRect[] {
+  const rx = GRACE_SCALE * NOTE_HEAD_RADIUS_PX;
+  const ry = rx * 0.75;
+  return headXCenters.slice(1).map((headXCenter, i) => ({
+    left: headXCenter - rx,
+    right: headXCenter + rx,
+    top: headYCenters[i + 1] - ry,
+    bottom: headYCenters[i + 1] + ry,
+  }));
 }
 
 // Scaled accidental symbols, each placed just left of its grace head.
@@ -771,16 +957,18 @@ function appendGraceAccidentals(
     }
     const symbolSvg = createAccidentalSvg(accidental);
     symbolSvg.classList.add('grace-accidental');
-    const symbolWidth = GRACE_SCALE * ACCIDENTAL_SYMBOL_WIDTH[accidental];
-    const symbolHeight = GRACE_SCALE * ACCIDENTAL_SYMBOL_HEIGHT[accidental];
+    const symbolWidth = GRACE_SCALE * accidentalSymbolWidth(accidental);
+    const symbolHeight = GRACE_SCALE * accidentalSymbolHeight(accidental);
     symbolSvg.setAttribute('width', `${symbolWidth}px`);
     symbolSvg.setAttribute('height', `${symbolHeight}px`);
-    const symbolRightEdge =
-      headXCenters[i] -
-      GRACE_SCALE * (NOTE_HEAD_RADIUS_PX + 1) -
-      (graceNotes[i].headLeftOverhangPx ?? 0);
-    symbolSvg.setAttribute('x', `${symbolRightEdge - symbolWidth}`);
-    symbolSvg.setAttribute('y', `${headYCenters[i] - symbolHeight / 2}`);
+    symbolSvg.setAttribute(
+      'x',
+      `${graceAccidentalLeftX(graceNotes[i], accidental, headXCenters[i])}`
+    );
+    symbolSvg.setAttribute(
+      'y',
+      `${headYCenters[i] - GRACE_SCALE * accidentalPitchOffset(accidental)}`
+    );
     group.appendChild(symbolSvg);
   }
 }

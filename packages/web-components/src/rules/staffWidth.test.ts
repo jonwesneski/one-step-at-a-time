@@ -5,6 +5,7 @@ import {
 } from '../utils/notationDimensions';
 import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
 import {
+  barMinWidthCss,
   calculateGuitarTabMinWidth,
   calculateStaffMinWidth,
   calculateStaffNaturalWidth,
@@ -248,6 +249,15 @@ describe('calculateStaffVocalNaturalWidth', () => {
       TYPICAL_DESCRIBE_END_X +
         LEADING_NOTE_GAP_PX +
         80 * AVG_LYRIC_CHAR_WIDTH_PX
+    );
+  });
+});
+
+describe('barMinWidthCss', () => {
+  it('asks for up to its container only when the bar needs more than its floor', () => {
+    expect(barMinWidthCss(120, 90, '100%')).toBe('120px');
+    expect(barMinWidthCss(120, 200, '100%')).toBe(
+      'max(120px, min(100%, 200px))'
     );
   });
 });

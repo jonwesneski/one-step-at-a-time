@@ -187,3 +187,57 @@ export const QuintupletAmongPlainNotes: Story = {
     </music-staff>
   `,
 };
+
+// `note-value` shows the ratio as `5=♩`; the label keeps clear of the beam by
+// its full height on either side. `bracket="always"` draws the bracket over a
+// beamed group too, along the beam.
+export const AsANoteValue: Story = {
+  render: () => html`
+    <music-composition time="2/4">
+      <music-measure>
+        <music-staff clef="treble">
+          <music-tuplet ratio="5" note-value="quarter">
+            <music-note note="C" octave="5" duration="sixteenth"></music-note>
+            <music-note note="D" octave="5" duration="sixteenth"></music-note>
+            <music-note note="E" octave="5" duration="sixteenth"></music-note>
+            <music-note note="F" octave="5" duration="sixteenth"></music-note>
+            <music-note note="G" octave="5" duration="sixteenth"></music-note>
+          </music-tuplet>
+          <music-tuplet ratio="3" note-value="eighth" bracket="always">
+            <music-note note="E" octave="4" duration="sixteenth"></music-note>
+            <music-note note="G" octave="4" duration="sixteenth"></music-note>
+            <music-note note="B" octave="4" duration="sixteenth"></music-note>
+          </music-tuplet>
+          <music-tuplet ratio="3" note-value="eighth">
+            <music-note note="A" octave="4" duration="sixteenth"></music-note>
+            <music-note note="F" octave="4" duration="sixteenth"></music-note>
+            <music-note note="D" octave="4" duration="sixteenth"></music-note>
+          </music-tuplet>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-tuplet ratio="3" note-value="half">
+            <music-note note="D" octave="5" duration="quarter"></music-note>
+            <music-note note="C" octave="5" duration="quarter"></music-note>
+            <music-note note="B" octave="4" duration="quarter"></music-note>
+          </music-tuplet>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-tuplet ratio="7:6" note-value="dotted-quarter">
+            <music-note note="C" octave="5" duration="sixteenth"></music-note>
+            <music-note note="D" octave="5" duration="sixteenth"></music-note>
+            <music-note note="C" octave="5" duration="sixteenth"></music-note>
+            <music-rest duration="sixteenth"></music-rest>
+            <music-note note="D" octave="5" duration="sixteenth"></music-note>
+            <music-note note="E" octave="5" duration="sixteenth"></music-note>
+            <music-note note="D" octave="5" duration="sixteenth"></music-note>
+          </music-tuplet>
+          <music-note note="G" octave="4" duration="eighth"></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};

@@ -52,6 +52,45 @@ export function getFirstBallYPx(hookCount: number): number {
   return 33.75 - 5 * hookCount;
 }
 
+const HOOK_BALL_RADIUS_PX = 2.5;
+
+/** The rest's top ink edge (px) below the top of its SVG box. */
+export function restInkTopPx(duration: DurationType): number {
+  const base = durationToBase[duration];
+  switch (base) {
+    case 'double-whole':
+    case 'whole':
+      return WHOLE_RECT_TOP_PX;
+    case 'half':
+      return HALF_REST_Y * NOTE_SCALE;
+    case 'quarter':
+      return QUARTER_SY_PX;
+    default:
+      return getFirstBallYPx(hookCountMap[base]) - HOOK_BALL_RADIUS_PX;
+  }
+}
+
+/** The rest's bottom ink edge (px) below the top of its SVG box. */
+export function restInkBottomPx(duration: DurationType): number {
+  const base = durationToBase[duration];
+  switch (base) {
+    case 'double-whole':
+      return (WHOLE_REST_Y + SPACE) * NOTE_SCALE;
+    case 'whole':
+      return (WHOLE_REST_Y + REST_RECT_HEIGHT) * NOTE_SCALE;
+    case 'half':
+      return HALF_RECT_BOTTOM_PX;
+    case 'quarter':
+      return QUARTER_SY_PX + 3 * SPACE * NOTE_SCALE;
+    default:
+      return (
+        (hookedRestGeometry(hookCountMap[base]).stemBotY +
+          STEM_STROKE_WIDTH / 2) *
+        NOTE_SCALE
+      );
+  }
+}
+
 export type RestProps = {
   duration: DurationType;
 };

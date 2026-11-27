@@ -1,6 +1,5 @@
 import { VoiceNumber } from '../types/theory';
 import {
-  ACCIDENTAL_SYMBOL_WIDTH,
   AUGMENTATION_DOT_SPACING_GAP_PX,
   CROSSED_VOICE_CLEARANCE_PX,
   STAFF_Y_STEP,
@@ -9,11 +8,13 @@ import {
   ADJACENT_NOTE_X_DISPLACEMENT_PX,
   OPPOSITE_STEM_ALIGN_OFFSET_PX,
 } from '../utils/svgCreator/note';
+import { accidentalReach as accidentalReachPx } from './accidentalRules';
 import {
   resolveChordDotStaffYs,
   resolveNoteDotStaffY,
   resolveUnisonDotStaffYs,
 } from './augmentationDotRules';
+import { adjacentHeadOffset, type HeadExtent } from './chordRules';
 import {
   canShareNotehead,
   groupUnisonPlacements,
@@ -157,6 +158,24 @@ export type VoiceNoteheadDisplacement = {
   overlappingSemibreves: boolean;
 };
 
+// How far a part moves right to stand beside a part a step from it.
+function secondOffset(
+  left: VoiceNoteheadPlacement,
+  right: VoiceNoteheadPlacement
+): number {
+  if (!left.geometry || !right.geometry) {
+    return ADJACENT_NOTE_X_DISPLACEMENT_PX;
+  }
+  const extent = ({
+    headLeftX,
+    headRightX,
+  }: VoicePartGeometry): HeadExtent => ({
+    left: headLeftX,
+    right: headRightX,
+  });
+  return adjacentHeadOffset(extent(left.geometry), extent(right.geometry));
+}
+
 /**
  * Resolves horizontal displacement for all voices' notes/chords sharing one
  * beat-offset column:
@@ -210,9 +229,7 @@ export function computeCrossVoiceDisplacements(
     )?.rowStaffYs ?? [];
   const accidentalReach = (input: UnisonPartInput): number =>
     input.accidentalReachPx ??
-    (input.shownAccidental
-      ? ACCIDENTAL_SYMBOL_WIDTH[input.shownAccidental]
-      : 0);
+    (input.shownAccidental ? accidentalReachPx(input.shownAccidental) : 0);
   const dotsFollowGroup = (placement: VoiceNoteheadPlacement): boolean =>
     dotShifts.has(placement);
   const addOffset = (placement: VoiceNoteheadPlacement, offset: number) => {
@@ -378,7 +395,7 @@ export function computeCrossVoiceDisplacements(
             overlappingSemibreves.add(down);
           }
           const [first, second] = upY > downY ? [down, up] : [up, down];
-          addOffset(second, ADJACENT_NOTE_X_DISPLACEMENT_PX);
+          addOffset(second, secondOffset(first, second));
           separateByDots(first, second);
           continue;
         }
@@ -387,7 +404,7 @@ export function computeCrossVoiceDisplacements(
         // (its dot then separates the two) or both are (they may overlap).
         const upDots = up.dotCount ?? 0;
         if (upY > downY && upDots === 0) {
-          addOffset(up, ADJACENT_NOTE_X_DISPLACEMENT_PX);
+          addOffset(up, secondOffset(down, up));
           separateByDots(down, up);
           continue;
         }
@@ -406,7 +423,7 @@ export function computeCrossVoiceDisplacements(
         if (mover.hasFlagOrBeam && !other.hasFlagOrBeam) {
           mover = other;
         }
-        addOffset(mover, ADJACENT_NOTE_X_DISPLACEMENT_PX);
+        addOffset(mover, secondOffset(mover === a ? b : a, mover));
         continue;
       }
 

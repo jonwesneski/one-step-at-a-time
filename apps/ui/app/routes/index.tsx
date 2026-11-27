@@ -1,6 +1,6 @@
-import { createFileRoute } from '@tanstack/react-router';
 import { ClientOnly } from '@/components/ClientOnly';
 import { CompositionInput } from '@/components/compositionForm';
+import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/')({
   head: () => ({

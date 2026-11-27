@@ -1,6 +1,10 @@
 import { BaseDurationType, DurationType } from '../types/theory';
 import { BASE_DURATIONS } from '../utils/consts';
-import { VOICE_REST_DISPLACEMENT_PX } from '../utils/notationDimensions';
+import {
+  REST_BEAM_CLEARANCE_PX,
+  STAFF_LINE_SPACING,
+  VOICE_REST_DISPLACEMENT_PX,
+} from '../utils/notationDimensions';
 import {
   getFirstBallYPx,
   HALF_RECT_BOTTOM_PX,
@@ -8,7 +12,7 @@ import {
   QUARTER_SY_PX,
   WHOLE_RECT_TOP_PX,
 } from '../utils/svgCreator/rest';
-import { durationToBase } from './theoryConsts';
+import { durationToBase, durationToFlagCountMap } from './theoryConsts';
 import { VoiceDirection } from './voiceRules';
 
 // Absolute staff line positions (px from staff-wrapper top), clef-agnostic
@@ -87,4 +91,40 @@ export function restToYCoordinate(
   return voiceContext.direction === 'up'
     ? top - VOICE_REST_DISPLACEMENT_PX
     : top + VOICE_REST_DISPLACEMENT_PX;
+}
+
+/** Why a rest's `beam-over` has no effect, or null when it can join a beam. */
+export function beamOverWarning(
+  duration: DurationType,
+  beamGroup: string | null
+): string | null {
+  if ((durationToFlagCountMap.get(duration) ?? 0) === 0) {
+    return `beam-over only applies to rests shorter than a crotchet; ignoring it on a ${duration} rest`;
+  }
+  if (beamGroup !== null) {
+    return 'beam-over is ignored on a rest in a cross-staff beam-group, which places its own rests';
+  }
+  return null;
+}
+
+/**
+ * How far (px, +down) a rest under or over a beam moves, by whole spaces
+ * away from it, to stand REST_BEAM_CLEARANCE_PX clear.
+ */
+export function restShiftClearOfBeam(input: {
+  inkTop: number;
+  inkBottom: number;
+  beamTop: number;
+  beamBottom: number;
+  beamAbove: boolean;
+}): number {
+  const { inkTop, inkBottom, beamTop, beamBottom, beamAbove } = input;
+  const overlap = beamAbove
+    ? beamBottom + REST_BEAM_CLEARANCE_PX - inkTop
+    : inkBottom - (beamTop - REST_BEAM_CLEARANCE_PX);
+  if (overlap <= 0) {
+    return 0;
+  }
+  const spaces = Math.ceil(overlap / STAFF_LINE_SPACING - 1e-9);
+  return (beamAbove ? 1 : -1) * spaces * STAFF_LINE_SPACING;
 }

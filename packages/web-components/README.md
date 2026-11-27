@@ -113,7 +113,7 @@ font** and then hand-tuned:
    point). The noteheads in `svgCreator/noteheads.ts` came from
    `noteheadXBlack:anchors noteheadCircleX:anchors noteheadDiamondWhole:anchors
 noteheadDiamondHalfWide:anchors noteheadDiamondBlack:anchors
-noteheadTriangleUpWhite noteheadTriangleUpBlack noteheadTriangleDownWhite
+noteheadWhole noteheadTriangleUpWhite noteheadTriangleUpBlack noteheadTriangleDownWhite
 noteheadTriangleDownBlack`.
 3. Paste the printed constants into the target `svgCreator/*.ts` file and commit.
 

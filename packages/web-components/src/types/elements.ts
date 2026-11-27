@@ -1,15 +1,21 @@
+import type { ResolvedBend } from '../rules/glissandoRules';
 import type { ResolvedTrillPitch } from '../rules/trillRules';
 import type { VerticalBand } from '../rules/verticalSpaceRules';
 import type {
+  AccidentalReminder,
   AccidentalType,
   ArpeggioType,
   ArticulationType,
   BarlineType,
+  BendShape,
+  BreathMark,
   Chord,
   ClefType,
+  ConventionalAccidentalType,
   DurationType,
   DynamicMarking,
   GlissandoHint,
+  GlissandoShape,
   GraceDuration,
   GraceSlur,
   GraceType,
@@ -17,17 +23,25 @@ import type {
   HairpinRole,
   Mode,
   Note,
-  NoteLetter,
   NoteheadType,
+  NoteLetter,
+  NoteSign,
+  NoteSize,
   Octave,
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
   PercussionInstrument,
+  QuarterTone,
   RestStaffSide,
+  SlurStyle,
   StaffGroupType,
   StemDirection,
+  StemMark,
   StressType,
+  SwellShape,
+  TextPlacement,
+  TextStyle,
   TieStyle,
   TimeSignature,
   TremoloBeamAttach,
@@ -38,8 +52,10 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  TupletBracket,
   TupletPlacement,
   TupletRatio,
+  UnpitchedPlacement,
 } from './theory';
 
 export type NoteLetterOctave = `${NoteLetter}${Octave}`;
@@ -48,11 +64,12 @@ export type NoteLetterOctave = `${NoteLetter}${Octave}`;
 export type ConnectorRole = 'start' | 'end';
 
 /**
- * Value of the `tie` attribute: a `start`/`end` endpoint, or `laissez-vibrer`
+ * Value of the `tie` attribute: a `start`/`end` endpoint, `continue` for the
+ * middle of a tie chain (tied into and on), or `laissez-vibrer`
  * — an open-ended tie curving off the notehead into empty space, for a note
  * left to ring (not held to a matching next notehead).
  */
-export type TieValue = ConnectorRole | 'laissez-vibrer';
+export type TieValue = ConnectorRole | 'continue' | 'laissez-vibrer';
 
 // The three array-valued grace properties reflect a comma-separated string
 // attribute. Reads return the parsed array (internal renderers rely on that);
@@ -65,8 +82,16 @@ export type GraceArticulationsType =
   | string
   | null;
 export type GraceNoteheadsType = (NoteheadType | null)[] | string | null;
+export type GraceQuarterTonesType = (QuarterTone | null)[] | string | null;
 
 // A note's role in a unison with another voice (see rules/unisonRules.ts).
+/**
+ * Where a staff puts a note's or chord's signs: the stack's bottom edge in
+ * staff Y, and how far (px) an articulation above the head moves up to stand
+ * under them.
+ */
+export type SignPlacement = { bottomY: number; articulationLiftPx: number };
+
 export type UnisonPart = {
   // The other voice draws the shared head.
   omitsHead: boolean;
@@ -75,6 +100,12 @@ export type UnisonPart = {
 export interface INoteElement {
   duration: DurationType;
   note: Note;
+  // Raises or lowers `note` by a quarter-tone, drawn as an arrow on its
+  // accidental; null for an ordinary pitch.
+  quarterTone: QuarterTone | null;
+  /** An unpitched sound: no accidental or ledger line, at `top`, `bottom` or its written note. */
+  get unpitched(): UnpitchedPlacement | null;
+  set unpitched(value: UnpitchedPlacement | boolean | null);
   octave: Octave | null;
   stemUp: boolean;
   // Author override for stemUp; null leaves the pitch, voice or beam-group
@@ -90,6 +121,14 @@ export interface INoteElement {
   articulationRepeat: boolean;
   // How the tie this element starts is drawn.
   tieStyle: TieStyle;
+  // How the slur this element starts is drawn.
+  slurStyle: SlurStyle;
+  // A breath mark after this element; null for none.
+  breathMark: BreathMark | null;
+  // A swell over this element's tie chain (its own duration when untied).
+  // Setting `true` writes the bare attribute, which reads back as `both`.
+  get swell(): SwellShape | null;
+  set swell(value: SwellShape | boolean | null);
   // Set by the composition on the end of a dotted tie that crosses a barline,
   // which shows its accidental again.
   dottedTieAcrossBarline: boolean;
@@ -138,15 +177,50 @@ export interface INoteElement {
   /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
   lvLabel: boolean;
   glissando: ConnectorRole | null;
-  /** Which register of key the glissando line starts on — shown as text. */
+  /** Text above the glissando line this starts. */
   glissandoHint: GlissandoHint | null;
+  /** The contour of the glissando line this starts. Defaults to `straight`. */
+  glissandoShape: GlissandoShape;
+  /**
+   * Text above the stave: a `GlissandoLabel`, or any other text drawn as
+   * written, `|` starting a new line.
+   */
+  glissandoLabel: string | null;
+  /** A pitch bend: a line after this note, inside its own duration. */
+  bend: BendShape | null;
+  /** The pitch it bends to, in parentheses; alone, a straight bend to it. */
+  bendTo: Note | null;
+  /** Raises or lowers `bendTo` by a quarter-tone. */
+  bendToQuarterTone: QuarterTone | null;
+  // Approximate pitches a free line passes through after the note (`G5,B4`).
+  bendContour: string | null;
   dynamic: DynamicMarking | null;
   /** Centers `dynamic` between this staff and its neighbor instead of locally. */
   dynamicShared: boolean;
   /** Draws `dynamic` in brackets, as a reminder (e.g. for a repeat's return). */
   dynamicReminder: boolean;
-  /** Shows the accidental in force in parentheses, as a reminder. */
-  accidentalReminder: boolean;
+  /** Text after `dynamic`, on its baseline. */
+  dynamicText: string | null;
+  /** A second dynamic at the end of this entry's span (its swell's chain). */
+  dynamicEnd: DynamicMarking | null;
+  /** Phonemes below the stave: `,` separates, `>` draws an arrow. */
+  phonemes: string | null;
+  /** Technique text over (or under) this entry, `|` starting a new line. */
+  techniqueText: string | null;
+  techniqueTextPlacement: TextPlacement;
+  techniqueTextStyle: TextStyle;
+  /**
+   * Shows the accidental in force as a reminder, in parentheses or plain.
+   * Null when unset.
+   */
+  get accidentalReminder(): AccidentalReminder | null;
+  set accidentalReminder(value: AccidentalReminder | boolean | null);
+  /** A mark through the stem. */
+  stemMark: StemMark | null;
+  sign: NoteSign[] | null;
+  signPlacement: SignPlacement | null;
+  // Own `size`, else the closest `<music-voice>`'s.
+  size: NoteSize;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
   // Alias for decrescendo — always mirrors it.
@@ -192,10 +266,13 @@ export interface INoteElement {
   // normally the diatonic upper neighbor as modified by the key signature.
   // Never changes the letter itself. Ignored (with a warning) when
   // `trillNote` is also set.
-  trillAccidental: AccidentalType | null;
+  trillAccidental: ConventionalAccidentalType | null;
   // Full override of the trilling pitch, drawn as a small parenthesized
   // notehead after the main one. Wins over `trillAccidental`.
   trillNote: Note | null;
+  // Raises or lowers the trilling pitch by a quarter-tone, whether it comes
+  // from `trillNote`, `trillAccidental` or the diatonic neighbor.
+  trillQuarterTone: QuarterTone | null;
   // How a trill restates itself after a system break; read from the element
   // that starts the trill.
   trillContinuation: TrillContinuationMode;
@@ -214,6 +291,10 @@ export interface INoteElement {
   // missing trailing slot) falls back to the host element's own octave.
   get graceOctave(): (Octave | null)[] | null;
   set graceOctave(value: GraceOctavesType);
+  // Per-grace-note quarter-tone, aligned by index with `grace`. A null slot
+  // (or a missing trailing slot) is an ordinary pitch.
+  get graceQuarterTone(): (QuarterTone | null)[] | null;
+  set graceQuarterTone(value: GraceQuarterTonesType);
   // Per-grace-note articulation, aligned by index with `grace`. A null slot
   // (or a missing trailing slot) means no mark for that grace note.
   get graceArticulation(): (ArticulationType | null)[] | null;
@@ -243,6 +324,9 @@ export interface INoteElement {
   // shape and fallback behavior as `graceOctave`.
   get trillFinishOctave(): (Octave | null)[] | null;
   set trillFinishOctave(value: GraceOctavesType);
+  // Per-trill-finish-note quarter-tone, aligned by index with `trillFinish`.
+  get trillFinishQuarterTone(): (QuarterTone | null)[] | null;
+  set trillFinishQuarterTone(value: GraceQuarterTonesType);
   // Which slur(s) a trill's finishing grace note(s) draw: back to this
   // element ('to-main', default), forward to the next element ('to-next'),
   // 'both', or 'none'.
@@ -304,6 +388,13 @@ export interface IChordElement {
   articulationRepeat: boolean;
   // See INoteElement.tieStyle.
   tieStyle: TieStyle;
+  // See INoteElement.slurStyle.
+  slurStyle: SlurStyle;
+  // See INoteElement.breathMark.
+  breathMark: BreathMark | null;
+  // See INoteElement.swell.
+  get swell(): SwellShape | null;
+  set swell(value: SwellShape | boolean | null);
   // See INoteElement.dottedTieAcrossBarline.
   dottedTieAcrossBarline: boolean;
   // Default for every tone; a slotted <music-note>'s own notehead overrides
@@ -312,7 +403,8 @@ export interface IChordElement {
   set notehead(value: NoteheadType | null);
   // Resolved per tone, in `notes` order.
   readonly toneNoteheads: NoteheadType[];
-  // The widest tone's INoteElement.headLeftOverhangPx.
+  // As INoteElement.headLeftOverhangPx, over every tone, displaced ones
+  // included.
   readonly headLeftOverhangPx: number;
   // Right ink edge (element px) of the duration dots, or null when undotted.
   readonly augmentationDotsRightEdgePx: number | null;
@@ -331,8 +423,14 @@ export interface IChordElement {
   noteAccidentals: (AccidentalType | null | undefined)[];
   /** Set by the staff: per tone, the shown accidental is a reminder. */
   noteAccidentalsParenthesized: boolean[];
+  /** Per tone, in `notes` order: a slotted note's own `quarter-tone`. */
+  readonly toneQuarterTones: (QuarterTone | null)[];
+  /** Per tone: the bend it draws, its own or the chord's. */
+  readonly toneBends: (ResolvedBend | null)[];
   /** Per tone: the chord's `accidental-reminder`, or the tone's own. */
-  readonly toneAccidentalReminders: boolean[];
+  readonly toneAccidentalReminders: (AccidentalReminder | null)[];
+  /** Per tone: a slotted note's own `unpitched`. */
+  readonly toneUnpitched: (UnpitchedPlacement | null)[];
   tie: TieValue | null;
   slur: ConnectorRole | null;
   // `id` shared by every breakpoint note/chord of one continuous multi-leg
@@ -343,15 +441,48 @@ export interface IChordElement {
   /** Draw an `l.v.` label on a `tie="laissez-vibrer"` tie. */
   lvLabel: boolean;
   glissando: ConnectorRole | null;
-  /** Which register of key the glissando line starts on — shown as text. */
+  /** Text above the glissando line this starts. */
   glissandoHint: GlissandoHint | null;
+  /** The contour of the glissando line this starts. Defaults to `straight`. */
+  glissandoShape: GlissandoShape;
+  /**
+   * Text above the stave: a `GlissandoLabel`, or any other text drawn as
+   * written, `|` starting a new line.
+   */
+  glissandoLabel: string | null;
+  /** A pitch bend: a line after each head, inside the chord's own duration. */
+  bend: BendShape | null;
+  /** Notes only; ignored, with a warning, on a chord. */
+  bendTo: Note | null;
+  /** Applies to `bendTo`. */
+  bendToQuarterTone: QuarterTone | null;
   dynamic: DynamicMarking | null;
   /** Centers `dynamic` between this staff and its neighbor instead of locally. */
   dynamicShared: boolean;
   /** Draws `dynamic` in brackets, as a reminder (e.g. for a repeat's return). */
   dynamicReminder: boolean;
-  /** Shows the accidental in force in parentheses, as a reminder. */
-  accidentalReminder: boolean;
+  /** Text after `dynamic`, on its baseline. */
+  dynamicText: string | null;
+  /** A second dynamic at the end of this entry's span (its swell's chain). */
+  dynamicEnd: DynamicMarking | null;
+  /** Phonemes below the stave: `,` separates, `>` draws an arrow. */
+  phonemes: string | null;
+  /** Technique text over (or under) this entry, `|` starting a new line. */
+  techniqueText: string | null;
+  techniqueTextPlacement: TextPlacement;
+  techniqueTextStyle: TextStyle;
+  /**
+   * Shows the accidental in force as a reminder, in parentheses or plain.
+   * Null when unset.
+   */
+  get accidentalReminder(): AccidentalReminder | null;
+  set accidentalReminder(value: AccidentalReminder | boolean | null);
+  /** A mark through the stem. */
+  stemMark: StemMark | null;
+  sign: NoteSign[] | null;
+  signPlacement: SignPlacement | null;
+  // Own `size`, else the closest `<music-voice>`'s.
+  size: NoteSize;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
   // Alias for decrescendo — always mirrors it.
@@ -397,10 +528,13 @@ export interface IChordElement {
   // normally the diatonic upper neighbor as modified by the key signature.
   // Never changes the letter itself. Ignored (with a warning) when
   // `trillNote` is also set.
-  trillAccidental: AccidentalType | null;
+  trillAccidental: ConventionalAccidentalType | null;
   // Full override of the trilling pitch, drawn as a small parenthesized
   // notehead after the main one. Wins over `trillAccidental`.
   trillNote: Note | null;
+  // Raises or lowers the trilling pitch by a quarter-tone, whether it comes
+  // from `trillNote`, `trillAccidental` or the diatonic neighbor.
+  trillQuarterTone: QuarterTone | null;
   // How a trill restates itself after a system break; read from the element
   // that starts the trill.
   trillContinuation: TrillContinuationMode;
@@ -419,6 +553,10 @@ export interface IChordElement {
   // missing trailing slot) falls back to the host element's reference octave.
   get graceOctave(): (Octave | null)[] | null;
   set graceOctave(value: GraceOctavesType);
+  // Per-grace-note quarter-tone, aligned by index with `grace`. A null slot
+  // (or a missing trailing slot) is an ordinary pitch.
+  get graceQuarterTone(): (QuarterTone | null)[] | null;
+  set graceQuarterTone(value: GraceQuarterTonesType);
   // Per-grace-note articulation, aligned by index with `grace`. A null slot
   // (or a missing trailing slot) means no mark for that grace note.
   get graceArticulation(): (ArticulationType | null)[] | null;
@@ -448,6 +586,9 @@ export interface IChordElement {
   // shape and fallback behavior as `graceOctave`.
   get trillFinishOctave(): (Octave | null)[] | null;
   set trillFinishOctave(value: GraceOctavesType);
+  // Per-trill-finish-note quarter-tone, aligned by index with `trillFinish`.
+  get trillFinishQuarterTone(): (QuarterTone | null)[] | null;
+  set trillFinishQuarterTone(value: GraceQuarterTonesType);
   // Which slur(s) a trill's finishing grace note(s) draw: back to this
   // element ('to-main', default), forward to the next element ('to-next'),
   // 'both', or 'none'.
@@ -503,6 +644,12 @@ export interface IRestElement {
   // ancestor <music-measure> from the rest's position among its group's
   // members, re-derived on every render rather than persisted here.
   restStaffSide: RestStaffSide | null;
+  /** Joins the beam of the notes beside it (shorter than a crotchet only). */
+  beamOver: boolean;
+  /** Technique text over (or under) this rest, `|` starting a new line. */
+  techniqueText: string | null;
+  techniqueTextPlacement: TextPlacement;
+  techniqueTextStyle: TextStyle;
 }
 
 export interface IClefElement {
@@ -531,6 +678,9 @@ export interface ITupletElement {
   ratio: TupletRatio;
   tupletGroup: string | null;
   placement: TupletPlacement | null;
+  /** Shows the ratio as a note value, `5=♩`, rather than the numeral alone. */
+  noteValue: DurationType | null;
+  bracket: TupletBracket;
   readonly flatElements: NoteChordOrRestElementType[];
 }
 

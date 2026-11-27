@@ -11,6 +11,7 @@ import {
   MUSIC_VOICE_NODE,
   NOTE_EVENTS,
 } from '../utils/consts';
+import { parseNoteSize } from '../utils/parsers';
 // A <music-clef> or <music-barline> is a valid <music-voice> child (see
 // #validateChildren below) — only meaningfully honored inside the *first*
 // <music-voice> sibling (voice 1), since each is staff-wide and voice 1 is the
@@ -29,10 +30,12 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * direction). Voice number is never authored on the element itself — it is
    * resolved by the staff from sibling position, see utils/slotElements.ts.
    *
-   * The wrapper is layout-only (no shadow DOM, no attributes); the staff
-   * flattens each voice's children itself (flattenStaffSlotElements).
+   * The wrapper is layout-only (no shadow DOM); the staff flattens each
+   * voice's children itself (flattenStaffSlotElements).
    *
    * @customElement music-voice
+   *
+   * @attr {NoteSize} size - `cue` draws every note and chord in the voice at ¾ size, e.g. sung or hummed pitches beside played ones. A note's or chord's own `size` wins.
    *
    * @example
    * <music-staff clef="treble" time="4/4">
@@ -47,6 +50,29 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    */
   class VoiceElement extends HTMLElement {
     #childObserver: MutationObserver | null = null;
+
+    static get observedAttributes(): string[] {
+      return ['size'];
+    }
+
+    attributeChangedCallback(
+      _name: string,
+      oldValue: string | null,
+      newValue: string | null
+    ): void {
+      if (oldValue === newValue || !this.isConnected) {
+        return;
+      }
+      if (newValue !== null && parseNoteSize(newValue) === null) {
+        console.warn(`[music-voice] size="${newValue}" isn't normal or cue`);
+      }
+      this.dispatchEvent(
+        new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
+          bubbles: true,
+          composed: true,
+        })
+      );
+    }
 
     connectedCallback(): void {
       this.#validateChildren();

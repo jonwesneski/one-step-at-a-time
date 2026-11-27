@@ -28,6 +28,11 @@ export type StaffStrutInputs = {
   // End-of-measure warnings that reserve width (see EndWarnings).
   endWarningWidth: number;
   totalSlackWeight: number;
+  // Least width at which the entries' minimum advances, every voice's
+  // together, all fit.
+  requiredWidth: number;
+  // Least width at which no entry is moved to fit what follows it.
+  uncrowdedWidth: number;
 };
 
 /**
@@ -140,6 +145,21 @@ export function calculateStaffNaturalWidth(
   totalSlackWeight: number
 ): number {
   return minWidth + totalSlackWeight;
+}
+
+/**
+ * The CSS min-width that holds a bar's collision floor, and beyond that as
+ * much of its container as the bar needs for nothing to be moved to fit what
+ * follows it. `container` is a CSS length.
+ */
+export function barMinWidthCss(
+  minWidth: number,
+  uncrowdedWidth: number,
+  container: string
+): string {
+  return uncrowdedWidth > minWidth
+    ? `max(${minWidth}px, min(${container}, ${uncrowdedWidth}px))`
+    : `${minWidth}px`;
 }
 
 /**

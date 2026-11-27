@@ -16,19 +16,44 @@ import {
   MUSIC_REST_NODE,
 } from '../utils/consts';
 import {
+  DYNAMIC_END_BARLINE_GAP_PX,
+  DYNAMIC_END_NEXT_GAP_PX,
+  DYNAMIC_TEXT_FONT_SIZE_PX,
+  DYNAMIC_TEXT_GAP_PX,
+  DYNAMIC_TEXT_PUNCTUATION_GAP_PX,
+  DYNAMICS_ABOVE_BASELINE_Y,
+  DYNAMICS_BASELINE_Y,
   DYNAMICS_CHAR_WIDTH_PX,
   HAIRPIN_DYNAMIC_GAP_PX,
+  HAIRPIN_JOINT_GAP_PX,
+  SWELL_MID_GAP_PX,
 } from '../utils/notationDimensions';
 import { NOTE_SVG_WIDTH } from '../utils/svgCreator/note';
 import {
   computeHairpinXSpan,
+  dynamicEndCenterX,
+  dynamicsRowY,
+  dynamicTextTrailingPx,
+  hairpinEndClearOf,
+  hairpinStartClearOf,
   pairHairpins,
   pairHairpinsWithLeftovers,
   pairSharedHairpinsAcrossStaves,
   resolveChainSpans,
   resolveHairpinSegments,
+  resolveSwellOwners,
+  resolveSwellRow,
+  resolveSwellSegments,
+  splitHairpinsAtJoint,
+  swellAttributeWarning,
+  swellChain,
+  swellConflicts,
+  swellGapForPhonemes,
+  swellGapPx,
+  swellMidpoint,
   type PositionedHairpinEndpoint,
 } from './dynamicsRules';
+import { estimateTextWidthPx } from './techniqueTextRules';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -468,6 +493,26 @@ describe('computeHairpinXSpan', () => {
     });
   });
 
+  it("starts past the start dynamic's text", () => {
+    const input = {
+      rawStartX: 10,
+      rawEndX: 400,
+      startTextCenterX: 26,
+      endTextCenterX: 384,
+      startMarking: 'p' as const,
+      endMarking: null,
+    };
+    const plain = computeHairpinXSpan(input);
+    const withText = computeHairpinXSpan({
+      ...input,
+      startDynamicText: 'sub.',
+    });
+    expect(withText.startX - plain.startX).toBeCloseTo(
+      dynamicTextTrailingPx('sub.')
+    );
+    expect(withText.endX).toBe(plain.endX);
+  });
+
   it('falls back to the raw ends and flags a collision when the shrunk ends cross', () => {
     expect(
       computeHairpinXSpan({
@@ -624,5 +669,407 @@ describe('pairHairpins with chord elements', () => {
     const pairs = pairHairpins([chord1, chord2], makeXPositions(2));
     expect(pairs).toHaveLength(1);
     expect(pairs[0].kind).toBe('crescendo');
+  });
+});
+
+describe('hairpins meeting on one note', () => {
+  it('part at the shared note’s centre instead of overlapping', () => {
+    // A crescendo E→A into a diminuendo A→A, 100px apart.
+    const elements = makeElements([
+      { crescendo: 'start' },
+      { crescendo: 'end', decrescendo: 'start' },
+      { decrescendo: 'end' },
+    ]);
+    const [crescendo, diminuendo] = pairHairpins(elements, makeXPositions(3));
+    const jointCenterX = 100 + NOTE_SVG_WIDTH / 2;
+    expect(crescendo.endX).toBeCloseTo(
+      jointCenterX - HAIRPIN_JOINT_GAP_PX / 2,
+      5
+    );
+    expect(diminuendo.startX).toBeCloseTo(
+      jointCenterX + HAIRPIN_JOINT_GAP_PX / 2,
+      5
+    );
+  });
+
+  it('leaves unlinked hairpins alone', () => {
+    const elements = makeElements([
+      { crescendo: 'start' },
+      { crescendo: 'end' },
+      { decrescendo: 'start' },
+      { decrescendo: 'end' },
+    ]);
+    const [crescendo] = pairHairpins(elements, makeXPositions(4));
+    expect(crescendo.endX).toBe(100 + NOTE_SVG_WIDTH);
+  });
+
+  it('only ever shortens, and keeps a hairpin too short to cut', () => {
+    const before = { startX: 0, endX: 50 };
+    const after = { startX: 70, endX: 120 };
+    splitHairpinsAtJoint(before, after, 60);
+    expect(before.endX).toBe(50);
+    expect(after.startX).toBe(70);
+
+    const tiny = { startX: 58, endX: 64 };
+    const next = { startX: 56, endX: 120 };
+    splitHairpinsAtJoint(tiny, next, 60);
+    expect(tiny.endX).toBe(64);
+    expect(next.startX).toBe(60 + HAIRPIN_JOINT_GAP_PX / 2);
+  });
+
+  it('splits a measure-level chain at each joint', () => {
+    const [crescendo, diminuendo] = resolveChainSpans(
+      [
+        { rawStartX: 0, rawEndX: 200 },
+        { rawStartX: 170, rawEndX: 320 },
+      ],
+      [null, null, null],
+      [185]
+    );
+    expect(crescendo.endX).toBe(185 - HAIRPIN_JOINT_GAP_PX / 2);
+    expect(diminuendo.startX).toBe(185 + HAIRPIN_JOINT_GAP_PX / 2);
+  });
+});
+
+describe('swellAttributeWarning', () => {
+  it('warns about an unknown shape or marking, quiet otherwise', () => {
+    expect(swellAttributeWarning('swell', 'louder')).toMatch(/both/);
+    expect(swellAttributeWarning('dynamic-end', 'loud')).toMatch(/dynamic/);
+    expect(swellAttributeWarning('swell', '')).toBeNull();
+    expect(swellAttributeWarning('swell', 'diminuendo')).toBeNull();
+    expect(swellAttributeWarning('dynamic-end', 'f')).toBeNull();
+    expect(swellAttributeWarning('swell', null)).toBeNull();
+  });
+});
+
+describe('swellChain', () => {
+  it('runs through each entry whose tie runs on', () => {
+    const elements = makeElements([
+      { tie: 'start' },
+      { tie: 'continue' },
+      { tie: 'end' },
+      {},
+    ]);
+    expect(swellChain(elements, 0)).toBe(2);
+    expect(swellChain(elements, 1)).toBe(2);
+    expect(swellChain(elements, 3)).toBe(3);
+  });
+
+  it('stops at a rest and at the end of the list', () => {
+    const rest = document.createElement(MUSIC_REST);
+    const elements = [
+      makeNote({ tie: 'start' }),
+      rest,
+    ] as NoteChordOrRestElementType[];
+    expect(swellChain(elements, 0)).toBe(0);
+    expect(swellChain(makeElements([{ tie: 'start' }]), 0)).toBe(0);
+  });
+});
+
+describe('resolveSwellOwners', () => {
+  it('lets the earlier swell of a chain cover the rest of it', () => {
+    const elements = makeElements([
+      { tie: 'start' },
+      { tie: 'continue', swell: '' },
+      { tie: 'end', swell: 'crescendo' },
+      { swell: '' },
+    ]);
+    expect(resolveSwellOwners(elements)).toEqual({
+      owners: [
+        { index: 1, lastIndex: 2 },
+        { index: 3, lastIndex: 3 },
+      ],
+      overridden: [2],
+    });
+  });
+});
+
+describe('swellGapPx', () => {
+  it('is a sixth of the swell, never under a space', () => {
+    expect(swellGapPx(300)).toBe(50);
+    expect(swellGapPx(30)).toBe(SWELL_MID_GAP_PX);
+  });
+});
+
+describe('swellMidpoint', () => {
+  it('is the middle beat, over the x its entry is drawn at', () => {
+    expect(
+      swellMidpoint([
+        { row: 0, startBeat: 0, endBeat: 1, startX: 0, endX: 300 },
+        { row: 0, startBeat: 1, endBeat: 1.5, startX: 300, endX: 400 },
+      ])
+    ).toEqual({ row: 0, x: 225 });
+  });
+
+  it('can fall in a later row', () => {
+    expect(
+      swellMidpoint([
+        { row: 0, startBeat: 0, endBeat: 1, startX: 500, endX: 600 },
+        { row: 1, startBeat: 1, endBeat: 3, startX: 50, endX: 250 },
+      ])
+    ).toEqual({ row: 1, x: 100 });
+  });
+});
+
+describe('resolveSwellSegments', () => {
+  const row = { startX: 0, endX: 300, centerY: 80 };
+
+  it('leaves its gap over the middle beat', () => {
+    const segments = resolveSwellSegments({
+      shape: 'both',
+      rows: [row],
+      mid: { row: 0, x: 120 },
+    });
+    expect(segments).toEqual([
+      expect.objectContaining({ kind: 'crescendo', startX: 0, endX: 95 }),
+      expect.objectContaining({ kind: 'decrescendo', startX: 145, endX: 300 }),
+    ]);
+  });
+
+  it('draws one wedge for a crescendo or diminuendo alone', () => {
+    expect(
+      resolveSwellSegments({
+        shape: 'diminuendo',
+        rows: [row],
+        mid: { row: 0, x: 150 },
+      })
+    ).toEqual([
+      {
+        kind: 'decrescendo',
+        startX: 0,
+        endX: 300,
+        centerY: 80,
+        openAtStart: false,
+        openAtEnd: false,
+      },
+    ]);
+  });
+
+  it('splits the wedge that holds a system break, open there', () => {
+    const segments = resolveSwellSegments({
+      shape: 'both',
+      rows: [
+        { startX: 400, endX: 600, centerY: 80 },
+        { startX: 50, endX: 450, centerY: 300 },
+      ],
+      mid: { row: 1, x: 150 },
+    });
+    expect(segments).toEqual([
+      {
+        kind: 'crescendo',
+        startX: 400,
+        endX: 600,
+        centerY: 80,
+        openAtStart: false,
+        openAtEnd: false,
+      },
+      {
+        kind: 'crescendo',
+        startX: 50,
+        endX: 100,
+        centerY: 300,
+        openAtStart: true,
+        openAtEnd: false,
+      },
+      {
+        kind: 'decrescendo',
+        startX: 200,
+        endX: 450,
+        centerY: 300,
+        openAtStart: false,
+        openAtEnd: false,
+      },
+    ]);
+  });
+
+  it('keeps its gap out of a system break', () => {
+    const segments = resolveSwellSegments({
+      shape: 'both',
+      rows: [
+        { startX: 0, endX: 300, centerY: 80 },
+        { startX: 50, endX: 350, centerY: 300 },
+      ],
+      mid: { row: 1, x: 60 },
+    });
+    expect(segments?.map(({ kind, centerY }) => [kind, centerY])).toEqual([
+      ['crescendo', 80],
+      ['decrescendo', 300],
+    ]);
+    expect(segments?.[1].startX).toBe(150);
+  });
+
+  it('is null when a wedge would be too short', () => {
+    expect(
+      resolveSwellSegments({
+        shape: 'both',
+        rows: [{ startX: 0, endX: 30, centerY: 80 }],
+        mid: { row: 0, x: 15 },
+      })
+    ).toBeNull();
+  });
+});
+
+describe('swellGapForPhonemes', () => {
+  it('is the width of the phoneme under the middle, else nothing', () => {
+    expect(
+      swellGapForPhonemes(100, [
+        { left: 20, right: 40 },
+        { left: 94, right: 110 },
+      ])
+    ).toBe(16);
+    expect(swellGapForPhonemes(100, [{ left: 20, right: 40 }])).toBe(0);
+  });
+
+  it('widens the gap of a short swell to it', () => {
+    const segments = resolveSwellSegments({
+      shape: 'both',
+      rows: [{ startX: 0, endX: 120, centerY: 80 }],
+      mid: { row: 0, x: 60 },
+      minGap: 30,
+    });
+    expect((segments?.[1].startX ?? 0) - (segments?.[0].endX ?? 0)).toBe(30);
+  });
+});
+
+describe('resolveSwellRow', () => {
+  it('starts after the entry’s own dynamic', () => {
+    const segments = resolveSwellRow({
+      shape: 'both',
+      rawStartX: 0,
+      endX: 200,
+      midX: 100,
+      centerY: 80,
+      startText: { marking: 'p', centerX: 16 },
+    });
+    expect(segments?.[0].startX).toBeGreaterThan(16);
+  });
+});
+
+describe('hairpin ends clear of dynamics', () => {
+  it('starts past a dynamic and its text, and ends before one', () => {
+    expect(hairpinStartClearOf(0, null)).toBe(0);
+    expect(
+      hairpinStartClearOf(0, { marking: 'p', centerX: 10, text: 'sub.' })
+    ).toBeCloseTo(
+      10 +
+        DYNAMICS_CHAR_WIDTH_PX / 2 +
+        dynamicTextTrailingPx('sub.') +
+        HAIRPIN_DYNAMIC_GAP_PX
+    );
+    expect(hairpinEndClearOf(200, { marking: 'f', centerX: 190 })).toBeCloseTo(
+      190 - DYNAMICS_CHAR_WIDTH_PX / 2 - HAIRPIN_DYNAMIC_GAP_PX
+    );
+  });
+});
+
+describe('dynamicEndCenterX', () => {
+  const input = {
+    marking: 'f' as const,
+    nextInkLeftX: null,
+    nextDynamicLeftX: null,
+    barlineX: 400,
+    minCenterX: 0,
+  };
+  const half = DYNAMICS_CHAR_WIDTH_PX / 2;
+
+  it('ends 1.5 spaces before the barline, or half a space before the next entry', () => {
+    expect(dynamicEndCenterX(input)).toBeCloseTo(
+      400 - DYNAMIC_END_BARLINE_GAP_PX - half
+    );
+    expect(dynamicEndCenterX({ ...input, nextInkLeftX: 300 })).toBeCloseTo(
+      300 - DYNAMIC_END_NEXT_GAP_PX - half
+    );
+  });
+
+  it("moves left to keep clear of the next entry's dynamic", () => {
+    expect(
+      dynamicEndCenterX({ ...input, nextInkLeftX: 300, nextDynamicLeftX: 280 })
+    ).toBeCloseTo(280 - DYNAMIC_END_NEXT_GAP_PX - half);
+  });
+
+  it('never moves left of its entry', () => {
+    expect(dynamicEndCenterX({ ...input, minCenterX: 395 })).toBe(395);
+  });
+});
+
+describe('swellConflicts', () => {
+  it('finds a swell whose chain a hairpin starts, ends or runs over', () => {
+    const elements = makeElements([
+      { crescendo: 'start', swell: '' },
+      { swell: '', tie: 'start' },
+      { tie: 'end' },
+      { crescendo: 'end' },
+      { swell: '' },
+    ]);
+    const pairs = pairHairpins(elements, makeXPositions(5));
+    const { owners } = resolveSwellOwners(elements);
+    expect(swellConflicts(elements, owners, pairs)).toEqual([
+      elements[0],
+      elements[1],
+    ]);
+  });
+
+  it('counts a hairpin end in the chain whose partner is outside the elements', () => {
+    const elements = makeElements([
+      { swell: '', tie: 'start' },
+      { tie: 'end', crescendo: 'start' },
+    ]);
+    const { owners } = resolveSwellOwners(elements);
+    expect(swellConflicts(elements, owners, [])).toEqual([]);
+    expect(
+      swellConflicts(
+        elements,
+        owners,
+        [],
+        [{ element: elements[1] as NoteElementType }]
+      )
+    ).toEqual([elements[0]]);
+  });
+});
+
+describe('dynamicsRowY', () => {
+  it('keeps its usual place beside ink that stays near the stave', () => {
+    expect(dynamicsRowY({ above: false, inkYs: [50, 68], curveYs: [60] })).toBe(
+      DYNAMICS_BASELINE_Y
+    );
+    expect(dynamicsRowY({ above: true, inkYs: [28, 50], curveYs: [40] })).toBe(
+      DYNAMICS_ABOVE_BASELINE_Y
+    );
+  });
+
+  it('moves out past the furthest ink, on either side', () => {
+    const below = dynamicsRowY({ above: false, inkYs: [90, 60], curveYs: [] });
+    expect(below).toBeGreaterThan(90);
+    expect(
+      dynamicsRowY({ above: false, inkYs: [100, 90], curveYs: [] }) - below
+    ).toBe(10);
+    expect(
+      dynamicsRowY({ above: true, inkYs: [0, 60], curveYs: [] })
+    ).toBeLessThan(0);
+  });
+
+  it('keeps closer to a curve than to a note', () => {
+    expect(
+      dynamicsRowY({ above: false, inkYs: [], curveYs: [90] })
+    ).toBeLessThan(dynamicsRowY({ above: false, inkYs: [90], curveYs: [] }));
+  });
+});
+
+describe('dynamicTextTrailingPx', () => {
+  it('is the gap and the italic text, nothing without text', () => {
+    expect(dynamicTextTrailingPx(null)).toBe(0);
+    expect(dynamicTextTrailingPx('sub.')).toBeCloseTo(
+      DYNAMIC_TEXT_GAP_PX +
+        estimateTextWidthPx('sub.', DYNAMIC_TEXT_FONT_SIZE_PX)
+    );
+  });
+
+  it('leaves a smaller gap before a comma or bracket', () => {
+    for (const text of [', ma distinto', '(sotto voce)', '[sic]']) {
+      expect(dynamicTextTrailingPx(text)).toBeCloseTo(
+        DYNAMIC_TEXT_PUNCTUATION_GAP_PX +
+          estimateTextWidthPx(text, DYNAMIC_TEXT_FONT_SIZE_PX)
+      );
+    }
   });
 });

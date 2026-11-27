@@ -95,7 +95,7 @@ describe('createCurveSvg', () => {
   it("clears a steep straight-style line across the label's full width, not just its midpoint", () => {
     const label = 'black-note gliss.';
     const from = { x: 0, y: 300 };
-    const to = { x: 100, y: 0 };
+    const to = { x: 200, y: 0 };
     const group = createCurveSvg({
       from,
       to,
@@ -115,6 +115,25 @@ describe('createCurveSvg', () => {
     const yAtRightEdge = trueMidY + slope * halfWidth;
 
     expect(labelY).toBeLessThan(yAtRightEdge);
+  });
+
+  it('keeps the label of a line shorter than it just above the line', () => {
+    const label = 'black-note gliss.';
+    const labelY = (dx: number): number =>
+      Number(
+        createCurveSvg({
+          from: { x: 0, y: 300 },
+          to: { x: dx, y: 0 },
+          bulge: 'above',
+          style: 'straight',
+          label,
+        })
+          .querySelector('text')!
+          .getAttribute('y')
+      );
+    // Never past the line's own top end, however steep the line.
+    expect(labelY(10)).toBeLessThan(0);
+    expect(labelY(10)).toBeCloseTo(labelY(40));
   });
 
   it('pushes the control point further out per nestingLevel', () => {

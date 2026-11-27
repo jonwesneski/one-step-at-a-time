@@ -18,6 +18,7 @@ import {
   MUSIC_ARPEGGIO_NODE,
   MUSIC_BARLINE_NODE,
   MUSIC_CLEF_NODE,
+  MUSIC_LYRICS_NODE,
   MUSIC_REST_NODE,
   MUSIC_TREMOLO_NODE,
   MUSIC_TUPLET_NODE,
@@ -219,8 +220,7 @@ export function flattenSlotElements(
             '`beam-group` and `shared-stem-for` are ignored on a two-note tremolo member',
           ]
         : []),
-      ...(note.getAttribute('tie') === 'start' ||
-      note.getAttribute('tie') === 'end'
+      ...(['start', 'continue', 'end'].includes(note.getAttribute('tie') ?? '')
         ? [
             'tying two-note tremolos is impractical; slur the whole figure instead',
           ]
@@ -329,8 +329,8 @@ export type StaffFlattenResult = {
 
 // Partitions a staff's slotted content into voices: no <music-voice>
 // children is one voice; otherwise each child is a voice, numbered by order.
-// Bare entries beside <music-voice> siblings are discarded. A <music-clef>
-// belongs inside the first <music-voice>.
+// Bare entries beside <music-voice> siblings are discarded; <music-lyrics>
+// belongs to the staff. A <music-clef> belongs inside the first <music-voice>.
 export function flattenStaffSlotElements(
   assigned: Element[],
   noteFamily: NoteFamily | null = null
@@ -372,7 +372,10 @@ export function flattenStaffSlotElements(
   // A bare top-level marker beside <music-voice> siblings can't mark a
   // mid-measure point; it belongs inside the first <music-voice>.
   for (const element of assigned) {
-    if (element.nodeName !== MUSIC_VOICE_NODE) {
+    if (
+      element.nodeName !== MUSIC_VOICE_NODE &&
+      element.nodeName !== MUSIC_LYRICS_NODE
+    ) {
       if (
         element.nodeName === MUSIC_CLEF_NODE ||
         element.nodeName === MUSIC_BARLINE_NODE

@@ -495,3 +495,75 @@ export const TwoVoicesDotted: Story = {
     </div>
   `,
 };
+
+// `size="cue"` on a voice draws every note and chord in it at ¾: heads keep
+// their stave positions, and stems, tails, beams, dots, accidentals, ledger
+// lines, marks and grace notes shrink with them. A cue run never beams with
+// a full-size note.
+export const CueSizedVoice: Story = {
+  render: () => html`
+    <music-measure>
+      <music-staff clef="treble" time="4/4">
+        <music-voice size="cue">
+          <music-note note="F#" octave="5" duration="eighth"></music-note>
+          <music-note note="A" octave="5" duration="sixteenth"></music-note>
+          <music-note note="Bb" octave="5" duration="sixteenth"></music-note>
+          <music-note
+            note="C"
+            octave="6"
+            duration="dotted-quarter"
+            articulation="accent"
+          ></music-note>
+          <music-note note="E" octave="5" duration="eighth"></music-note>
+          <music-chord duration="quarter" grace="G" grace-octave="5">
+            <music-note note="D#" octave="5"></music-note>
+            <music-note note="E" octave="5"></music-note>
+            <music-note note="G" octave="5"></music-note>
+          </music-chord>
+        </music-voice>
+        <music-voice>
+          <music-note note="G#" octave="4" duration="eighth"></music-note>
+          <music-note note="B" octave="4" duration="sixteenth"></music-note>
+          <music-note note="Eb" octave="4" duration="sixteenth"></music-note>
+          <music-note
+            note="D"
+            octave="4"
+            duration="dotted-quarter"
+            articulation="accent"
+          ></music-note>
+          <music-note note="F" octave="4" duration="eighth"></music-note>
+          <music-chord duration="quarter" grace="A" grace-octave="4">
+            <music-note note="C#" octave="4"></music-note>
+            <music-note note="D" octave="4"></music-note>
+            <music-note note="F" octave="4"></music-note>
+          </music-chord>
+        </music-voice>
+      </music-staff>
+    </music-measure>
+    <music-measure style="margin-top: 24px;">
+      <music-staff clef="treble" time="4/4">
+        <music-note note="D" octave="5" duration="eighth"></music-note>
+        <music-note
+          note="E"
+          octave="5"
+          duration="eighth"
+          size="cue"
+        ></music-note>
+        <music-note
+          note="F"
+          octave="5"
+          duration="eighth"
+          size="cue"
+        ></music-note>
+        <music-note note="G" octave="5" duration="eighth"></music-note>
+        <music-note
+          note="A"
+          octave="3"
+          duration="quarter"
+          size="cue"
+        ></music-note>
+        <music-note note="A" octave="3" duration="quarter"></music-note>
+      </music-staff>
+    </music-measure>
+  `,
+};

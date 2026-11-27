@@ -259,6 +259,9 @@ export type CrossStaffTupletGapInput = {
   topExtremeY: number | null;
   /** Highest point any bottom-staff member reaches into the gap, or null. */
   bottomExtremeY: number | null;
+  /** How far the label reaches above and below the bracket line. */
+  labelAscent?: number;
+  labelDescent?: number;
 };
 
 /**
@@ -271,13 +274,17 @@ export function crossStaffTupletGapBand({
   bottomGapEdgeY,
   topExtremeY,
   bottomExtremeY,
+  labelAscent = TUPLET_NUMERAL_FONT_SIZE / 2,
+  labelDescent = TUPLET_NUMERAL_FONT_SIZE / 2,
 }: CrossStaffTupletGapInput): { upper: number; lower: number } {
-  const clearance =
-    TUPLET_STAFF_CLEARANCE_PX +
-    Math.max(TUPLET_HOOK_LENGTH_PX, TUPLET_NUMERAL_FONT_SIZE / 2);
+  const clearance = (labelReach: number) =>
+    TUPLET_STAFF_CLEARANCE_PX + Math.max(TUPLET_HOOK_LENGTH_PX, labelReach);
   return {
-    upper: Math.max(topGapEdgeY, topExtremeY ?? -Infinity) + clearance,
-    lower: Math.min(bottomGapEdgeY, bottomExtremeY ?? Infinity) - clearance,
+    upper:
+      Math.max(topGapEdgeY, topExtremeY ?? -Infinity) + clearance(labelAscent),
+    lower:
+      Math.min(bottomGapEdgeY, bottomExtremeY ?? Infinity) -
+      clearance(labelDescent),
   };
 }
 

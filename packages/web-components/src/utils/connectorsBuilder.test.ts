@@ -12,6 +12,7 @@ import type {
 import type { DurationType } from '../types/theory';
 import {
   buildConnectorSvgs,
+  collectConnectorPairs,
   collectEntryObstacles,
   collectNoteLikeElements,
   collectPhraseSlurPairs,
@@ -30,7 +31,13 @@ import {
   MUSIC_STAFF,
   MUSIC_VOICE,
 } from './consts';
-import { SLUR_OBSTACLE_CLEARANCE_PX } from './notationDimensions';
+import {
+  GLISSANDO_GAP_PX,
+  GLISSANDO_OFF_LINE_PX,
+  SLUR_ARTICULATION_CLEARANCE_PX,
+  SLUR_NOTE_CLEARANCE_PX,
+  SLUR_OBSTACLE_CLEARANCE_PX,
+} from './notationDimensions';
 
 beforeEach(() => {
   jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -187,6 +194,21 @@ describe('collectPhraseSlurPairs', () => {
     expect(pairs[0].end).toBe(rightNote);
   });
 
+  it("marks each slur-group segment dotted from its own start's slur-style", () => {
+    const root = document.createElement('div');
+    const first = makePositionedNote(
+      { 'slur-group': 'phrase1', 'slur-style': 'dotted' },
+      0
+    );
+    const second = makePositionedNote({ 'slur-group': 'phrase1' }, 100);
+    const third = makePositionedNote({ 'slur-group': 'phrase1' }, 200);
+    root.append(first, second, third);
+
+    const pairs = collectPhraseSlurPairs(root);
+
+    expect(pairs.map((pair) => pair.dotted)).toEqual([true, false]);
+  });
+
   it('produces N-1 consecutive pairs for an N-member group', () => {
     const root = document.createElement('div');
     const notes = [0, 100, 200, 300].map((left) =>
@@ -258,6 +280,34 @@ describe('collectPhraseSlurPairs', () => {
   });
 });
 
+describe('collectConnectorPairs', () => {
+  const breathWarnings = () =>
+    (console.warn as jest.Mock).mock.calls.filter(([message]) =>
+      String(message).includes('breath-mark under a slur')
+    );
+
+  it('pairs connectors and warns once about a breath mark a slur carries on past', () => {
+    const root = document.createElement('div');
+    const start = makeNote({ slur: 'start' });
+    const inside = makeNote({ 'breath-mark': 'tick' });
+    const end = makeNote({ slur: 'end', 'breath-mark': 'tick' });
+    root.append(start, inside, end);
+
+    expect(collectConnectorPairs(root).pairs).toHaveLength(1);
+    expect(breathWarnings()).toHaveLength(1);
+    expect(breathWarnings()[0][1]).toBe(inside);
+
+    collectConnectorPairs(root);
+    expect(breathWarnings()).toHaveLength(1);
+
+    inside.removeAttribute('breath-mark');
+    collectConnectorPairs(root);
+    inside.setAttribute('breath-mark', 'comma');
+    collectConnectorPairs(root);
+    expect(breathWarnings()).toHaveLength(2);
+  });
+});
+
 describe('collectNoteLikeElements', () => {
   it('finds <music-note> and <music-guitar-note> descendants', () => {
     const root = document.createElement('div');
@@ -315,9 +365,9 @@ describe('partitionByVoice', () => {
     expect(byVoice.get(2)).toEqual([noteInVoice2]);
   });
 
-  it('regression: two voices both sustaining an open (for-less) tie across a measure boundary — partitioning prevents the LIFO stack from mispairing them', () => {
-    // Both voices tie across the barline. An unpartitioned walk would pair
-    // measure 2 voice 1's `end` with measure 1 voice 2's `start`.
+  it('regression: two voices both sustaining an open (for-less) tie on one pitch across a measure boundary — partitioning prevents the stack from mispairing them', () => {
+    // Both voices tie the same pitch across the barline. An unpartitioned walk
+    // would pair measure 2 voice 1's `end` with measure 1 voice 2's `start`.
     const m1Voice1 = document.createElement(MUSIC_VOICE);
     const m1Voice2 = document.createElement(MUSIC_VOICE);
     const m1Staff = document.createElement(MUSIC_STAFF);
@@ -327,9 +377,9 @@ describe('partitionByVoice', () => {
     const root = document.createElement('div');
 
     const v1Start = makeNote({ note: 'C', octave: '4', tie: 'start' });
-    const v2Start = makeNote({ note: 'E', octave: '4', tie: 'start' });
+    const v2Start = makeNote({ note: 'C', octave: '4', tie: 'start' });
     const v1End = makeNote({ note: 'C', octave: '4', tie: 'end' });
-    const v2End = makeNote({ note: 'E', octave: '4', tie: 'end' });
+    const v2End = makeNote({ note: 'C', octave: '4', tie: 'end' });
 
     m1Voice1.append(v1Start);
     m1Voice2.append(v2Start);
@@ -341,7 +391,7 @@ describe('partitionByVoice', () => {
     document.body.appendChild(root);
 
     // Without partitioning, pairing the flat document-order list directly
-    // mispairs voice 1's end with voice 2's start (LIFO stack top).
+    // mispairs voice 1's end with voice 2's start (the latest start of its pitch).
     const unpartitionedPairs = pairConnectors(collectNoteLikeElements(root));
     expect(unpartitionedPairs).toHaveLength(2);
     expect(unpartitionedPairs.find((p) => p.end === v1End)?.start).toBe(
@@ -370,6 +420,17 @@ describe('pairConnectors', () => {
     expect(pairs[0].end).toBe(b);
   });
 
+  it('ties a chain through a middle note with tie="continue"', () => {
+    const a = makeNote({ note: 'C', octave: '4', tie: 'start' });
+    const b = makeNote({ note: 'C', octave: '4', tie: 'continue' });
+    const c = makeNote({ note: 'C', octave: '4', tie: 'end' });
+    const pairs = pairConnectors([a, b, c]);
+    expect(pairs.map((pair) => [pair.start, pair.end])).toEqual([
+      [a, b],
+      [b, c],
+    ]);
+  });
+
   it('marks a tie dotted when its start sets tie-style="dotted"', () => {
     const a = makeNote({ note: 'C', octave: '4', tie: 'start' });
     a.setAttribute('tie-style', 'dotted');
@@ -378,6 +439,17 @@ describe('pairConnectors', () => {
     const solidEnd = makeNote({ note: 'D', octave: '4', tie: 'end' });
     const pairs = pairConnectors([a, b, solidStart, solidEnd]);
     expect(pairs.find((pair) => pair.start === a)?.dotted).toBe(true);
+    expect(pairs.find((pair) => pair.start === solidStart)?.dotted).toBe(false);
+  });
+
+  it('marks a slur dotted when its start sets slur-style="dotted"', () => {
+    const a = makeNote({ slur: 'start', 'slur-style': 'dotted' });
+    const b = makeNote({ slur: 'end' });
+    const solidStart = makeNote({ slur: 'start' });
+    const solidEnd = makeNote({ slur: 'end', 'slur-style': 'dotted' });
+    const pairs = pairConnectors([a, b, solidStart, solidEnd]);
+    expect(pairs.find((pair) => pair.start === a)?.dotted).toBe(true);
+    // Read from the start only.
     expect(pairs.find((pair) => pair.start === solidStart)?.dotted).toBe(false);
   });
 
@@ -437,6 +509,98 @@ describe('pairConnectors', () => {
     const pairs = pairConnectors([a, b]);
     expect(pairs).toHaveLength(1);
     expect(warn).toHaveBeenCalled();
+  });
+
+  describe('chords tied tone by tone', () => {
+    const tiedChord = (tones: string[], tie: string): HTMLElement => {
+      const chord = document.createElement(MUSIC_CHORD);
+      chord.setAttribute('duration', 'half');
+      for (const tone of tones) {
+        chord.append(
+          makeNote({ note: tone.slice(0, -1), octave: tone.slice(-1), tie })
+        );
+      }
+      return chord;
+    };
+    const pitchWarnings = () =>
+      (console.warn as jest.Mock).mock.calls.filter(([message]) =>
+        String(message).includes('different pitches')
+      );
+    const pairedPitches = (pairs: ConnectorPair[]) =>
+      pairs.map((pair) => [
+        (pair.start as NoteElementType).note,
+        (pair.end as NoteElementType).note,
+      ]);
+
+    it.each([[['C4', 'E4', 'G4']], [['C4', 'E4', 'G4', 'C5']]])(
+      'pairs %j level, inside one bar',
+      (tones) => {
+        const root = document.createElement('div');
+        root.append(tiedChord(tones, 'start'), tiedChord(tones, 'end'));
+        const pairs = pairConnectors(collectNoteLikeElements(root));
+        expect(pairs).toHaveLength(tones.length);
+        for (const pair of pairs) {
+          const start = pair.start as NoteElementType;
+          const end = pair.end as NoteElementType;
+          expect([end.note, end.octave]).toEqual([start.note, start.octave]);
+        }
+        expect(pitchWarnings()).toHaveLength(0);
+      }
+    );
+
+    it('pairs level over a barline', () => {
+      const root = document.createElement('div');
+      const tones = ['C4', 'E4', 'G4'];
+      for (const tie of ['start', 'end']) {
+        const measure = document.createElement(MUSIC_MEASURE);
+        const staff = document.createElement(MUSIC_STAFF);
+        staff.append(tiedChord(tones, tie));
+        measure.append(staff);
+        root.append(measure);
+      }
+      const pairs = pairConnectors(collectNoteLikeElements(root));
+      expect(pairedPitches(pairs).sort()).toEqual([
+        ['C', 'C'],
+        ['E', 'E'],
+        ['G', 'G'],
+      ]);
+      expect(pitchWarnings()).toHaveLength(0);
+    });
+
+    it('still warns about an end no start matches', () => {
+      const root = document.createElement('div');
+      root.append(
+        tiedChord(['C4', 'E4', 'G4'], 'start'),
+        tiedChord(['C4', 'F4', 'G4'], 'end')
+      );
+      const pairs = pairConnectors(collectNoteLikeElements(root));
+      expect(pairs).toHaveLength(3);
+      expect(pitchWarnings()).toHaveLength(1);
+    });
+
+    it('carries a chain on through tie="continue" by pitch', () => {
+      const root = document.createElement('div');
+      root.append(
+        tiedChord(['C4', 'E4', 'G4'], 'start'),
+        tiedChord(['C4', 'E4', 'G4'], 'continue'),
+        tiedChord(['C4', 'E4', 'G4'], 'end')
+      );
+      const pairs = pairConnectors(collectNoteLikeElements(root));
+      expect(pairs).toHaveLength(6);
+      expect(pairedPitches(pairs).every(([a, b]) => a === b)).toBe(true);
+      expect(pitchWarnings()).toHaveLength(0);
+    });
+
+    it('ties a chord tone to a lone note of its pitch', () => {
+      const root = document.createElement('div');
+      const chord = tiedChord(['C4', 'E4', 'G4'], 'start');
+      const lone = makeNote({ note: 'C', octave: '4', tie: 'end' });
+      root.append(chord, lone);
+      const pairs = pairConnectors(collectNoteLikeElements(root));
+      expect(pairs.find((pair) => pair.end === lone)?.start).toBe(
+        chord.children[0]
+      );
+    });
   });
 
   it('warns on orphan end (no matching start)', () => {
@@ -512,6 +676,14 @@ describe('pairConnectors', () => {
       end: b,
       label: 'white-note gliss.',
     });
+  });
+
+  it('labels a glissando-hint="gliss" pair "gliss."', () => {
+    const [pair] = pairConnectors([
+      makeNote({ glissando: 'start', 'glissando-hint': 'gliss' }),
+      makeNote({ glissando: 'end' }),
+    ]);
+    expect(pair.label).toBe('gliss.');
   });
 
   it('leaves a glissando pair with no label when no hint is set', () => {
@@ -685,7 +857,7 @@ describe('buildConnectorSvgs', () => {
 
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
 
     const d = svgGroup.querySelector('path')!.getAttribute('d')!;
@@ -705,7 +877,7 @@ describe('buildConnectorSvgs', () => {
 
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
 
     const d = svgGroup.querySelector('path')!.getAttribute('d')!;
@@ -728,7 +900,7 @@ describe('buildConnectorSvgs', () => {
 
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
 
     const d = svgGroup.querySelector('path')!.getAttribute('d')!;
@@ -752,7 +924,7 @@ describe('buildConnectorSvgs', () => {
 
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
 
     const path = parseCubicPath(
@@ -780,7 +952,7 @@ describe('buildConnectorSvgs', () => {
 
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
 
     const path = parsePath(svgGroup.querySelector('path')!.getAttribute('d')!);
@@ -803,7 +975,7 @@ describe('buildConnectorSvgs', () => {
 
     const [withoutObstacle] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const basePath = parseCubicPath(
       withoutObstacle.querySelector('path')!.getAttribute('d')!
@@ -819,7 +991,7 @@ describe('buildConnectorSvgs', () => {
     const rest = document.createElement('div');
     const [withObstacle] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
       entryObstacles: {
         entries: [
           makeEntry(rest, {
@@ -830,6 +1002,7 @@ describe('buildConnectorSvgs', () => {
           }),
         ],
         beamSlices: [],
+        decorationRects: [],
       },
     });
     const clearedPath = parseCubicPath(
@@ -857,7 +1030,7 @@ describe('buildConnectorSvgs', () => {
     };
     const [withoutEntries] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const anchorBox = (x: number, y: number) => ({
       left: x - 10,
@@ -871,7 +1044,7 @@ describe('buildConnectorSvgs', () => {
 
     const [withOwnEndpointsOnly] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
       entryObstacles: {
         entries: [
           makeEntry(startNote, {
@@ -886,6 +1059,7 @@ describe('buildConnectorSvgs', () => {
           }),
         ],
         beamSlices: [],
+        decorationRects: [],
       },
     });
 
@@ -909,7 +1083,7 @@ describe('buildConnectorSvgs', () => {
 
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
       entryObstacles: {
         entries: [
           makeEntry(startNote, { staffIndex: 0, centerX: 60 }),
@@ -924,6 +1098,7 @@ describe('buildConnectorSvgs', () => {
           makeEntry(endNote, { staffIndex: 1, centerX: 760 }),
         ],
         beamSlices: [],
+        decorationRects: [],
       },
     });
 
@@ -949,7 +1124,7 @@ describe('buildConnectorSvgs', () => {
     // is on the bottom staff.
     const [svgGroup] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
       groupSlurStaves: new Map([
         [pair, { topStaffIndex: 0, bottomStaffIndex: 1 }],
       ]),
@@ -971,6 +1146,7 @@ describe('buildConnectorSvgs', () => {
           makeEntry(endNote, { staffIndex: 0, centerX: 260 }),
         ],
         beamSlices: [],
+        decorationRects: [],
       },
     });
 
@@ -980,67 +1156,177 @@ describe('buildConnectorSvgs', () => {
     expect(path.pointAt(0.5).y).toBeGreaterThan((path.fromY + path.toY) / 2);
   });
 
-  it('slur uses start note stem direction for curve direction regardless of end note stem direction', () => {
-    // start stemUp=true (startBulge='below'), end stemUp=false (would be 'above' if independent)
-    // slur keeps startBulge for createCurveSvg → control point must be below the midpoint
-    const startNote = makeLayoutNote({ stemUp: true, left: 50 });
-    const endNote = makeLayoutNote({ stemUp: false, left: 150 });
-    const pair: ConnectorPair = {
-      kind: 'slur',
-      start: startNote,
-      end: endNote,
-      nestingLevel: 0,
+  it.each([
+    [true, false],
+    [false, true],
+  ])(
+    'a slur between opposite stems (first up: %s) goes above',
+    (startUp, endUp) => {
+      const [svgGroup] = buildConnectorSvgs(
+        [
+          {
+            kind: 'slur',
+            start: makeLayoutNote({ stemUp: startUp, left: 50 }),
+            end: makeLayoutNote({ stemUp: endUp, left: 150 }),
+            nestingLevel: 0,
+          },
+        ],
+        { rootRect, rowLeftOf: () => 0 }
+      );
+      const { fromY, cy, toY } = parsePath(
+        svgGroup.querySelector('path')!.getAttribute('d')!
+      );
+      expect(cy).toBeLessThan((fromY + toY) / 2);
+    }
+  );
+
+  describe('glissandos', () => {
+    type Box = { left: number; right: number; top: number; bottom: number };
+    const makeGlissandoNote = (
+      box: Box,
+      options: {
+        staffY?: number;
+        attributes?: Record<string, string>;
+        ink?: { className: string; rect: Box; tag?: string }[];
+      } = {}
+    ): NoteElementType => {
+      const note = makeLayoutNote({
+        stemUp: true,
+        left: box.left - 10,
+        top: box.top - 10,
+      });
+      for (const [name, value] of Object.entries(options.attributes ?? {})) {
+        note.setAttribute(name, value);
+      }
+      Object.defineProperty(note, 'staffY', {
+        get: () => options.staffY ?? 5,
+      });
+      const ink = [
+        { className: 'head', rect: box, tag: 'ellipse' },
+        ...(options.ink ?? []),
+      ].map(({ className, rect, tag = 'path' }) => {
+        const element = document.createElement(tag);
+        element.classList.add(className);
+        jest.spyOn(element, 'getBoundingClientRect').mockReturnValue({
+          ...rect,
+          width: rect.right - rect.left,
+          height: rect.bottom - rect.top,
+          x: rect.left,
+          y: rect.top,
+          toJSON: () => ({}),
+        } as DOMRect);
+        return element;
+      });
+      note.shadowRoot!.replaceChildren(...ink);
+      return note;
+    };
+    const box = (left: number, top: number): Box => ({
+      left,
+      right: left + 10,
+      top,
+      bottom: top + 8,
+    });
+    const draw = (
+      start: NoteElementType,
+      end: NoteElementType,
+      label?: string
+    ): SVGGElement[] => {
+      document.createElement(MUSIC_STAFF).append(start, end);
+      return buildConnectorSvgs(
+        [{ kind: 'glissando', start, end, nestingLevel: 0, label }],
+        { rootRect, rowLeftOf: () => 0 }
+      );
+    };
+    const lineOf = (svg: SVGGElement): number[] => {
+      const d = svg.querySelector('path')!.getAttribute('d')!;
+      expect(d).toMatch(/^M \S+ \S+ L \S+ \S+$/);
+      return d.match(/-?\d+(\.\d+)?/g)!.map(Number);
     };
 
-    const [svgGroup] = buildConnectorSvgs([pair], {
-      rootRect,
-      rowLeft: 0,
+    it('runs between the heads, half a space from each', () => {
+      const [svg] = draw(
+        makeGlissandoNote(box(50, 100)),
+        makeGlissandoNote(box(200, 60))
+      );
+      expect(lineOf(svg)).toEqual([
+        60 + GLISSANDO_GAP_PX,
+        104,
+        200 - GLISSANDO_GAP_PX,
+        64,
+      ]);
     });
 
-    const d = svgGroup.querySelector('path')!.getAttribute('d')!;
-    const { fromY, cy, toY } = parsePath(d);
-    expect(cy).toBeGreaterThan((fromY + toY) / 2);
-  });
-
-  it('glissando renders a straight line, not a curve', () => {
-    const startNote = makeLayoutNote({ stemUp: true, left: 50, top: 100 });
-    const endNote = makeLayoutNote({ stemUp: true, left: 150, top: 60 });
-    const pair: ConnectorPair = {
-      kind: 'glissando',
-      start: startNote,
-      end: endNote,
-      nestingLevel: 0,
-    };
-
-    const [svgGroup] = buildConnectorSvgs([pair], {
-      rootRect,
-      rowLeft: 0,
+    it("starts past a dot, at the dot's height", () => {
+      const [svg] = draw(
+        makeGlissandoNote(box(50, 100), {
+          ink: [
+            {
+              className: 'augmentation-dot',
+              rect: { left: 64, right: 68, top: 97, bottom: 101 },
+            },
+          ],
+        }),
+        makeGlissandoNote(box(200, 60))
+      );
+      expect(lineOf(svg).slice(0, 2)).toEqual([68 + GLISSANDO_GAP_PX, 99]);
     });
 
-    const d = svgGroup.querySelector('path')!.getAttribute('d')!;
-    expect(d).not.toContain('Q');
-    expect(d).toMatch(/^M \S+ \S+ L \S+ \S+$/);
-  });
-
-  it('glissando renders its hint text as a label near the line', () => {
-    const startNote = makeLayoutNote({ stemUp: true, left: 50, top: 100 });
-    const endNote = makeLayoutNote({ stemUp: true, left: 150, top: 60 });
-    const pair: ConnectorPair = {
-      kind: 'glissando',
-      start: startNote,
-      end: endNote,
-      nestingLevel: 0,
-      label: 'white-note gliss.',
-    };
-
-    const [svgGroup] = buildConnectorSvgs([pair], {
-      rootRect,
-      rowLeft: 0,
+    it("stops before an accidental it would cross, but not for ink it doesn't", () => {
+      const accidental = (top: number) =>
+        makeGlissandoNote(box(200, 60), {
+          ink: [
+            {
+              className: 'accidental-stroke',
+              rect: { left: 186, right: 194, top, bottom: top + 30 },
+            },
+          ],
+        });
+      const [crossed] = draw(makeGlissandoNote(box(50, 60)), accidental(50));
+      expect(lineOf(crossed)[2]).toBe(186 - GLISSANDO_GAP_PX);
+      const [clear] = draw(makeGlissandoNote(box(50, 60)), accidental(0));
+      expect(lineOf(clear)[2]).toBe(200 - GLISSANDO_GAP_PX);
     });
 
-    expect(svgGroup.querySelector('text')?.textContent).toBe(
-      'white-note gliss.'
-    );
+    it('ends before grace notes wherever they are', () => {
+      const [svg] = draw(
+        makeGlissandoNote(box(50, 60)),
+        makeGlissandoNote(box(200, 60), {
+          ink: [
+            {
+              className: 'grace-notes',
+              rect: { left: 170, right: 190, top: 10, bottom: 30 },
+              tag: 'g',
+            },
+          ],
+        })
+      );
+      expect(lineOf(svg)[2]).toBe(170 - GLISSANDO_GAP_PX);
+    });
+
+    it('keeps off the stave line its start is on', () => {
+      const [svg] = draw(
+        makeGlissandoNote(box(50, 100), { staffY: 40 }),
+        makeGlissandoNote(box(200, 60))
+      );
+      expect(lineOf(svg)[1]).toBe(104 + GLISSANDO_OFF_LINE_PX);
+    });
+
+    it("draws its start's shape and label", () => {
+      const start = makeGlissandoNote(box(50, 100), {
+        attributes: { 'glissando-shape': 'wave' },
+      });
+      const [svg] = draw(start, makeGlissandoNote(box(200, 60)), 'gliss.');
+      expect(svg.querySelector('path')!.getAttribute('d')).toContain('C');
+      expect(svg.querySelector('text')?.textContent).toBe('gliss.');
+    });
+
+    it('is left out, with one warning, where there is no room', () => {
+      const start = makeGlissandoNote(box(50, 100));
+      const end = makeGlissandoNote(box(65, 60));
+      expect(draw(start, end)).toHaveLength(0);
+      expect(draw(start, end)).toHaveLength(0);
+      expect(console.warn).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('slur across a pitch interval on a standalone staff renders one curve, not a split pair', () => {
@@ -1064,7 +1350,7 @@ describe('buildConnectorSvgs', () => {
 
     const groups = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
 
     expect(groups).toHaveLength(1);
@@ -1095,7 +1381,7 @@ describe('buildConnectorSvgs', () => {
 
     const svgs = buildConnectorSvgs(pairs, {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     expect(svgs).toHaveLength(3);
 
@@ -1124,7 +1410,7 @@ describe('buildConnectorSvgs', () => {
           label: 'l.v.',
         } as ConnectorPair,
       ],
-      { rootRect, rowLeft: 0 }
+      { rootRect, rowLeftOf: () => 0 }
     );
     expect(svgs).toHaveLength(1);
     const path = parsePath(svgs[0].querySelector('path')!.getAttribute('d')!);
@@ -1158,7 +1444,7 @@ describe('buildConnectorSvgs', () => {
 
     const svgs = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     // Two short stubs instead of one full curve.
     expect(svgs).toHaveLength(2);
@@ -1182,7 +1468,7 @@ describe('buildConnectorSvgs', () => {
 
     const [withoutBeam] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const basePath = parsePath(
       withoutBeam.querySelector('path')!.getAttribute('d')!
@@ -1204,7 +1490,7 @@ describe('buildConnectorSvgs', () => {
 
     const [withBeam] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
       beamRects: [beamRect],
     });
     const pushedPath = parsePath(
@@ -1232,7 +1518,7 @@ describe('buildConnectorSvgs', () => {
     };
     const [withoutBeam] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const basePath = parsePath(
       withoutBeam.querySelector('path')!.getAttribute('d')!
@@ -1251,7 +1537,7 @@ describe('buildConnectorSvgs', () => {
     } as DOMRect;
     const [withFarBeam] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
       beamRects: [farRect],
     });
     const farPath = parsePath(
@@ -1276,7 +1562,7 @@ describe('buildConnectorSvgs', () => {
     };
     const [withoutBeam] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const basePath = parsePath(
       withoutBeam.querySelector('path')!.getAttribute('d')!
@@ -1295,7 +1581,7 @@ describe('buildConnectorSvgs', () => {
     } as DOMRect;
     const [withBeam] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
       beamRects: [straddlingRect],
     });
     const pushedPath = parsePath(
@@ -1335,7 +1621,7 @@ describe('buildConnectorSvgs', () => {
     };
     const [withoutFlag] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const baseline = parsePath(
       withoutFlag.querySelector('path')!.getAttribute('d')!
@@ -1343,7 +1629,7 @@ describe('buildConnectorSvgs', () => {
 
     const [withFlag] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
       innerVoiceElements: new Set([startNote]),
     });
     const flagged = parsePath(
@@ -1405,7 +1691,7 @@ describe('buildConnectorSvgs', () => {
     };
     const [svg] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const path = parsePath(svg.querySelector('path')!.getAttribute('d')!);
 
@@ -1445,7 +1731,7 @@ describe('buildConnectorSvgs', () => {
     };
     const [svg] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const path = parseCubicPath(svg.querySelector('path')!.getAttribute('d')!);
 
@@ -1473,7 +1759,7 @@ describe('buildConnectorSvgs', () => {
     };
     const [withoutStem] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const baseline = parsePath(
       withoutStem.querySelector('path')!.getAttribute('d')!
@@ -1496,13 +1782,500 @@ describe('buildConnectorSvgs', () => {
 
     const [withStem] = buildConnectorSvgs([pair], {
       rootRect,
-      rowLeft: 0,
+      rowLeftOf: () => 0,
     });
     const withStemPath = parsePath(
       withStem.querySelector('path')!.getAttribute('d')!
     );
 
     expect(withStemPath.fromY).toBeCloseTo(baseline.fromY, 5);
+  });
+
+  // A stand-in for a note's `.articulations` group at a fixed rect.
+  const addMarks = (
+    note: Element,
+    rect: { left: number; top: number; right: number; bottom: number }
+  ): void => {
+    const marks = document.createElement('div');
+    marks.classList.add('articulations');
+    jest.spyOn(marks, 'getBoundingClientRect').mockReturnValue({
+      ...rect,
+      width: rect.right - rect.left,
+      height: rect.bottom - rect.top,
+      x: rect.left,
+      y: rect.top,
+      toJSON: () => ({}),
+    } as DOMRect);
+    note.shadowRoot!.appendChild(marks);
+  };
+
+  // Replaces what the note drew itself with one piece of ink at `rect`.
+  const setInk = (
+    note: Element,
+    className: 'head' | 'accidental' | 'stem',
+    rect: { left: number; top: number; right: number; bottom: number }
+  ): void => {
+    const ink = document.createElement('div');
+    ink.classList.add(className);
+    jest.spyOn(ink, 'getBoundingClientRect').mockReturnValue({
+      ...rect,
+      width: rect.right - rect.left,
+      height: rect.bottom - rect.top,
+      x: rect.left,
+      y: rect.top,
+      toJSON: () => ({}),
+    } as DOMRect);
+    note.shadowRoot!.replaceChildren(ink);
+  };
+
+  const quadraticYAt = (
+    path: ReturnType<typeof parsePath>,
+    x: number
+  ): number => {
+    const t = (x - path.fromX) / (path.toX - path.fromX);
+    const mt = 1 - t;
+    return mt * mt * path.fromY + 2 * mt * t * path.cy + t * t * path.toY;
+  };
+
+  describe('slurs and articulation marks', () => {
+    const slurBetween = (
+      start: NoteElementType,
+      end: NoteElementType
+    ): ConnectorPair => ({
+      kind: 'slur',
+      start: start as unknown as NoteLikeElementType,
+      end: end as unknown as NoteLikeElementType,
+      nestingLevel: 0,
+    });
+
+    const drawOne = (pair: ConnectorPair) =>
+      parsePath(
+        buildConnectorSvgs([pair], { rootRect, rowLeftOf: () => 0 })[0]
+          .querySelector('path')!
+          .getAttribute('d')!
+      );
+
+    it('moves a slur end below the staccato dot of its stem-up note', () => {
+      const start = makeLayoutNote({ stemUp: true, left: 50 });
+      const end = makeLayoutNote({ stemUp: true, left: 250 });
+      const pair = slurBetween(start, end);
+      const plain = drawOne(pair);
+
+      addMarks(start, {
+        left: 56,
+        right: 64,
+        top: plain.fromY - 3,
+        bottom: plain.fromY + 6,
+      });
+      const marked = drawOne(pair);
+
+      expect(marked.fromY).toBeCloseTo(
+        plain.fromY + 6 + SLUR_ARTICULATION_CLEARANCE_PX,
+        5
+      );
+      expect(marked.toY).toBeCloseTo(plain.toY, 5);
+    });
+
+    it('moves a slur end above the tenuto line of its stem-down note', () => {
+      const start = makeLayoutNote({ stemUp: false, left: 50 });
+      const end = makeLayoutNote({ stemUp: false, left: 250 });
+      const pair = slurBetween(start, end);
+      const plain = drawOne(pair);
+
+      addMarks(end, {
+        left: 252,
+        right: 268,
+        top: plain.toY - 5,
+        bottom: plain.toY + 2,
+      });
+      const marked = drawOne(pair);
+
+      expect(marked.toY).toBeCloseTo(
+        plain.toY - 5 - SLUR_ARTICULATION_CLEARANCE_PX,
+        5
+      );
+    });
+
+    it("ignores marks that don't span the end's x, such as a grace note's", () => {
+      const start = makeLayoutNote({ stemUp: true, left: 50 });
+      const end = makeLayoutNote({ stemUp: true, left: 250 });
+      const pair = slurBetween(start, end);
+      const plain = drawOne(pair);
+
+      addMarks(start, {
+        left: 30,
+        right: 40,
+        top: plain.fromY,
+        bottom: plain.fromY + 20,
+      });
+
+      expect(drawOne(pair).fromY).toBeCloseTo(plain.fromY, 5);
+    });
+
+    it('carries the arc outside the marks of every note between its ends', () => {
+      const staff = document.createElement(MUSIC_STAFF);
+      const start = makeLayoutNote({ stemUp: true, left: 50 });
+      const middle = makeLayoutNote({ stemUp: true, left: 150 });
+      const end = makeLayoutNote({ stemUp: true, left: 250 });
+      const after = makeLayoutNote({ stemUp: true, left: 350 });
+      staff.append(start, middle, end, after);
+      const pair = slurBetween(start, end);
+      const plain = drawOne(pair);
+
+      // Deeper than the default arc at the middle note's x.
+      const markBottom = quadraticYAt(plain, 160) + 15;
+      addMarks(middle, {
+        left: 155,
+        right: 165,
+        top: markBottom - 8,
+        bottom: markBottom,
+      });
+      // Marks outside the slur's span change nothing.
+      addMarks(after, {
+        left: 355,
+        right: 365,
+        top: markBottom + 40,
+        bottom: markBottom + 60,
+      });
+      const marked = drawOne(pair);
+
+      expect(marked.fromY).toBeCloseTo(plain.fromY, 5);
+      for (const x of [155, 160, 165]) {
+        expect(quadraticYAt(marked, x)).toBeGreaterThanOrEqual(
+          markBottom + SLUR_ARTICULATION_CLEARANCE_PX - 1e-6
+        );
+      }
+    });
+
+    it('leaves a slur over unmarked notes as it was', () => {
+      const staff = document.createElement(MUSIC_STAFF);
+      const start = makeLayoutNote({ stemUp: true, left: 50 });
+      const middle = makeLayoutNote({ stemUp: true, left: 150 });
+      const end = makeLayoutNote({ stemUp: true, left: 250 });
+      staff.append(start, middle, end);
+      const plain = parsePath(
+        buildConnectorSvgs(
+          [
+            {
+              kind: 'tie',
+              start: start as unknown as NoteLikeElementType,
+              end: end as unknown as NoteLikeElementType,
+              nestingLevel: 0,
+            },
+          ],
+          { rootRect, rowLeftOf: () => 0 }
+        )[0]
+          .querySelector('path')!
+          .getAttribute('d')!
+      );
+      const slur = drawOne(slurBetween(start, end));
+
+      // Same bulge as the default curve; only the head offset differs.
+      expect(slur.cy - (slur.fromY + slur.toY) / 2).toBeCloseTo(
+        plain.cy - (plain.fromY + plain.toY) / 2,
+        5
+      );
+    });
+
+    it("moves a cross-staff slur's end past its own marks", () => {
+      const treble = makeStaffWithRect(0, 100);
+      const bass = makeStaffWithRect(200, 300);
+      const start = makeLayoutNote({ stemUp: false, left: 50, top: 250 });
+      bass.appendChild(start);
+      const end = makeLayoutNote({ stemUp: false, left: 750, top: 50 });
+      treble.appendChild(end);
+      const pair = slurBetween(start, end);
+      const plain = drawOne(pair);
+
+      addMarks(start, {
+        left: 56,
+        right: 64,
+        top: plain.fromY - 8,
+        bottom: plain.fromY + 2,
+      });
+      const marked = drawOne(pair);
+
+      expect(marked.fromY).toBeCloseTo(
+        plain.fromY - 8 - SLUR_ARTICULATION_CLEARANCE_PX,
+        5
+      );
+    });
+
+    it('carries an enclosing slur outside the slur nested inside it, whatever order the pairs come in', () => {
+      // The inner notes sit lower, so the outer slur's default arc would cut
+      // through the inner one.
+      const notes = [50, 150, 250, 350].map((left, index) =>
+        makeLayoutNote({
+          stemUp: true,
+          left,
+          top: index === 1 || index === 2 ? 125 : 100,
+        })
+      );
+      document.createElement(MUSIC_STAFF).append(...notes);
+      const outer: ConnectorPair = {
+        ...slurBetween(notes[0], notes[3]),
+        nestingLevel: 1,
+      };
+      const inner = slurBetween(notes[1], notes[2]);
+      const alone = drawOne(outer);
+
+      const [outerSvg, innerSvg] = buildConnectorSvgs([outer, inner], {
+        rootRect,
+        rowLeftOf: () => 0,
+      }).sort(
+        (a, b) =>
+          parsePath(a.querySelector('path')!.getAttribute('d')!).fromX -
+          parsePath(b.querySelector('path')!.getAttribute('d')!).fromX
+      );
+      const outerPath = parsePath(
+        outerSvg.querySelector('path')!.getAttribute('d')!
+      );
+      const innerPath = parsePath(
+        innerSvg.querySelector('path')!.getAttribute('d')!
+      );
+
+      expect(outerPath.cy).toBeGreaterThan(alone.cy);
+      for (let k = 0; k <= 10; k++) {
+        const x =
+          innerPath.fromX + ((innerPath.toX - innerPath.fromX) * k) / 10;
+        expect(quadraticYAt(outerPath, x)).toBeGreaterThan(
+          quadraticYAt(innerPath, x)
+        );
+      }
+    });
+
+    it('leaves a slur alone beside one it does not enclose', () => {
+      const notes = [50, 150, 250, 350].map((left) =>
+        makeLayoutNote({ stemUp: true, left })
+      );
+      const first = slurBetween(notes[0], notes[1]);
+      const second = slurBetween(notes[2], notes[3]);
+      const alone = drawOne(second);
+
+      const svgs = buildConnectorSvgs([first, second], {
+        rootRect,
+        rowLeftOf: () => 0,
+      });
+      const secondPath = parsePath(
+        svgs[1].querySelector('path')!.getAttribute('d')!
+      );
+      expect(secondPath.cy).toBeCloseTo(alone.cy, 5);
+    });
+
+    describe('over the notes it spans', () => {
+      const makeRow = (lefts: number[], stemUp = true) => {
+        const notes = lefts.map((left) => makeLayoutNote({ stemUp, left }));
+        document.createElement(MUSIC_STAFF).append(...notes);
+        return notes;
+      };
+      const pathOf = (pair: ConnectorPair): string =>
+        buildConnectorSvgs([pair], { rootRect, rowLeftOf: () => 0 })[0]
+          .querySelector('path')!
+          .getAttribute('d')!;
+
+      it.each(['head', 'accidental'] as const)(
+        'carries the arc outside an inner %s, leaving its ends alone',
+        (className) => {
+          const [start, middle, end] = makeRow([50, 150, 250]);
+          const pair = slurBetween(start, end);
+          const plain = drawOne(pair);
+          const bottom = quadraticYAt(plain, 160) + 20;
+          setInk(middle, className, {
+            left: 155,
+            right: 165,
+            top: bottom - 9,
+            bottom,
+          });
+          const lifted = drawOne(pair);
+
+          expect(lifted.fromY).toBeCloseTo(plain.fromY, 5);
+          expect(lifted.toY).toBeCloseTo(plain.toY, 5);
+          for (const x of [155, 160, 165]) {
+            expect(quadraticYAt(lifted, x)).toBeGreaterThanOrEqual(
+              bottom + SLUR_NOTE_CLEARANCE_PX - 1e-6
+            );
+          }
+        }
+      );
+
+      it('is not moved by an inner note on its far side', () => {
+        const [start, middle, end] = makeRow([50, 150, 250]);
+        const pair = slurBetween(start, end);
+        const plain = drawOne(pair);
+        setInk(middle, 'head', {
+          left: 155,
+          right: 165,
+          top: plain.fromY - 60,
+          bottom: plain.fromY - 50,
+        });
+        expect(drawOne(pair).cy).toBeCloseTo(plain.cy, 5);
+      });
+
+      it('leaves a tie over the same note alone', () => {
+        const [start, middle, end] = makeRow([50, 150, 250]);
+        const pair: ConnectorPair = { ...slurBetween(start, end), kind: 'tie' };
+        const plain = drawOne(pair);
+        setInk(middle, 'head', {
+          left: 155,
+          right: 165,
+          top: plain.fromY + 20,
+          bottom: plain.fromY + 30,
+        });
+        expect(drawOne(pair).cy).toBeCloseTo(plain.cy, 5);
+      });
+
+      it('turns to a cubic for a low note close beside an end', () => {
+        const [start, middle, end] = makeRow([50, 90, 450]);
+        const pair = slurBetween(start, end);
+        expect(pathOf(pair)).toContain('Q');
+        const { fromY } = drawOne(pair);
+        setInk(middle, 'head', {
+          left: 95,
+          right: 105,
+          top: fromY + 20,
+          bottom: fromY + 30,
+        });
+        expect(pathOf(pair)).toContain('C');
+      });
+
+      describe('with mixed stems', () => {
+        const makeMixedRow = (stems: boolean[]) => {
+          const notes = stems.map((stemUp, i) =>
+            makeLayoutNote({ stemUp, left: 50 + i * 100 })
+          );
+          document.createElement(MUSIC_STAFF).append(...notes);
+          return notes;
+        };
+        // A stem-up note's stem at the right of its head.
+        const addStem = (note: Element, left: number, top: number) =>
+          setInk(note, 'stem', {
+            left: left + 16,
+            right: left + 17,
+            top,
+            bottom: top + 35,
+          });
+
+        it("ends beside an up-stem, on the slur's inside and below its tip", () => {
+          const [start, , end] = makeMixedRow([true, false, true]);
+          addStem(start, 50, 60);
+          addStem(end, 250, 60);
+          const { fromX, fromY, toX, toY } = drawOne(slurBetween(start, end));
+          expect(fromX).toBeGreaterThan(50 + 17);
+          expect(toX).toBeLessThan(250 + 16);
+          expect(fromY).toBeGreaterThan(60);
+          expect(toY).toBeGreaterThan(60);
+        });
+
+        it('goes outside the beam of a beamed up-stem', () => {
+          const [start, , end] = makeMixedRow([true, false, true]);
+          addStem(start, 50, 60);
+          addStem(end, 250, 60);
+          Object.defineProperty(start, 'noFlags', { get: () => true });
+          // A beam in the way below as well keeps the slur above.
+          const [, inner] = Array.from(start.parentElement!.children);
+          Object.defineProperty(inner, 'noFlags', { get: () => true });
+          const { fromX, fromY } = drawOne(slurBetween(start, end));
+          expect(fromX).toBeCloseTo(50 + 16.5);
+          expect(fromY).toBeLessThan(60);
+        });
+
+        it('does not tilt against the pitches', () => {
+          // The up-stem is the lower note but reaches higher.
+          const [start, end] = makeMixedRow([true, false]);
+          addStem(start, 50, 20);
+          const { fromY, toY } = drawOne(slurBetween(start, end));
+          expect(fromY).toBeGreaterThanOrEqual(toY);
+        });
+
+        it('passes outside an inner up-stem', () => {
+          const [start, inner, end] = makeMixedRow([false, true, false]);
+          const pair = slurBetween(start, end);
+          const plain = drawOne(pair);
+          const stemTop = quadraticYAt(plain, 166) - 20;
+          addStem(inner, 150, stemTop);
+          const lifted = drawOne(pair);
+          expect(quadraticYAt(lifted, 166)).toBeLessThanOrEqual(
+            stemTop - SLUR_NOTE_CLEARANCE_PX + 1e-6
+          );
+        });
+
+        it('keeps a slur inside it on its own side', () => {
+          // The inner pair is beamed up, so its slur is below; the outer one
+          // would join it there but for that.
+          const notes = makeMixedRow([true, true, false]);
+          for (const note of notes.slice(0, 2)) {
+            Object.defineProperty(note, 'noFlags', { get: () => true });
+          }
+          const outer = {
+            ...slurBetween(notes[0], notes[2]),
+            nestingLevel: 1,
+          };
+          const controlOffset = (svg: SVGGElement): number => {
+            const { fromY, cy, toY } = parsePath(
+              svg.querySelector('path')!.getAttribute('d')!
+            );
+            return cy - (fromY + toY) / 2;
+          };
+          const [alone] = buildConnectorSvgs([outer], {
+            rootRect,
+            rowLeftOf: () => 0,
+          });
+          expect(controlOffset(alone)).toBeGreaterThan(0);
+          const [inner, around] = buildConnectorSvgs(
+            [outer, slurBetween(notes[0], notes[1])],
+            { rootRect, rowLeftOf: () => 0 }
+          );
+          expect(controlOffset(inner)).toBeGreaterThan(0);
+          expect(controlOffset(around)).toBeLessThan(0);
+        });
+      });
+
+      describe('across a barline', () => {
+        const makeBars = (stems: boolean[]) => {
+          const composition = document.createElement('div');
+          const notes = stems.map((stemUp, i) => {
+            const note = makeLayoutNote({ stemUp, left: 50 + i * 100 });
+            const measure = document.createElement(MUSIC_MEASURE);
+            const staff = document.createElement(MUSIC_STAFF);
+            staff.append(note);
+            measure.append(staff);
+            composition.append(measure);
+            return note;
+          });
+          return notes;
+        };
+        const sideOf = (d: string): 'above' | 'below' => {
+          const ys = (d.match(/-?[\d.]+/g) ?? [])
+            .map(Number)
+            .filter((_, i) => i % 2 === 1);
+          return ys[1] > Math.max(ys[0], ys[ys.length - 1]) ? 'below' : 'above';
+        };
+
+        it('sits opposite the stems when they all agree', () => {
+          const up = makeBars([true, true]);
+          expect(sideOf(pathOf(slurBetween(up[0], up[1])))).toBe('below');
+          const down = makeBars([false, false]);
+          expect(sideOf(pathOf(slurBetween(down[0], down[1])))).toBe('above');
+        });
+
+        it('sits above the stave when they differ', () => {
+          const mixed = makeBars([true, false]);
+          expect(sideOf(pathOf(slurBetween(mixed[0], mixed[1])))).toBe('above');
+        });
+      });
+    });
+
+    it('draws a dotted slur with dashes', () => {
+      const start = makeLayoutNote({ stemUp: true, left: 50 });
+      const end = makeLayoutNote({ stemUp: true, left: 250 });
+      const [svg] = buildConnectorSvgs(
+        [{ ...slurBetween(start, end), dotted: true }],
+        { rootRect, rowLeftOf: () => 0 }
+      );
+      const path = svg.querySelector('path')!;
+      expect(path.classList.contains('dotted')).toBe(true);
+      expect(path.getAttribute('stroke-dasharray')).not.toBeNull();
+    });
   });
 });
 

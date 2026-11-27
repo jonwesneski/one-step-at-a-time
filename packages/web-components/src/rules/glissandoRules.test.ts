@@ -1,0 +1,572 @@
+import type { BendShape, Note, Octave, QuarterTone } from '../types/theory';
+import {
+  BEND_BARLINE_GAP_PX,
+  BEND_CONTOUR_POINT_PX,
+  BEND_FREE_MAX_TRAVEL_PX,
+  BEND_FREE_SLOPE,
+  BEND_FREE_TRAVEL_PX,
+  BEND_SAME_POSITION_TILT_PX,
+  BEND_TARGET_GAP_PX,
+  GLISSANDO_DIP_WIDTH_PX,
+  GLISSANDO_GAP_PX,
+  GLISSANDO_LEVEL_LIFT_PX,
+  GLISSANDO_MIN_DRAWN_PX,
+  GLISSANDO_MIN_GAP_PX,
+  GLISSANDO_MIN_LENGTH_PX,
+  GLISSANDO_OFF_LINE_PX,
+  GLISSANDO_WAVELENGTH_PX,
+  STAFF_Y_STEP,
+} from '../utils/notationDimensions';
+import {
+  bendConsistencyWarning,
+  bendDotYs,
+  bendLineLengthPx,
+  bendReserveWidthPx,
+  bendTargetsWidthPx,
+  glissandoDipWidthPx,
+  glissandoEndpoints,
+  glissandoEndYs,
+  glissandoHalfWaveCount,
+  glissandoShapeWarning,
+  glissandoXSpan,
+  layoutBends,
+  resolveBend,
+  splitGlissandoAcrossRows,
+  type BendHead,
+  type ResolvedBend,
+} from './glissandoRules';
+
+const heights = {
+  startHeadY: 60,
+  endHeadY: 30,
+  startDotY: null,
+  startOnLine: false,
+  endOnLine: false,
+  shape: 'straight' as const,
+};
+
+describe('glissandoEndYs', () => {
+  it("runs between the heads' centres when both are in spaces", () => {
+    expect(glissandoEndYs(heights)).toEqual({ fromY: 60, toY: 30 });
+  });
+
+  it('keeps a sloped line off the stave lines, away from its travel at the start', () => {
+    const rising = glissandoEndYs({
+      ...heights,
+      startOnLine: true,
+      endOnLine: true,
+    });
+    expect(rising).toEqual({
+      fromY: 60 + GLISSANDO_OFF_LINE_PX,
+      toY: 30 - GLISSANDO_OFF_LINE_PX,
+    });
+    const falling = glissandoEndYs({
+      ...heights,
+      startHeadY: 30,
+      endHeadY: 60,
+      startOnLine: true,
+    });
+    expect(falling).toEqual({ fromY: 30 - GLISSANDO_OFF_LINE_PX, toY: 60 });
+  });
+
+  it('moves a level line, and a wave, up into the space', () => {
+    const level = {
+      ...heights,
+      endHeadY: 60,
+      startOnLine: true,
+      endOnLine: true,
+    };
+    const lifted = 60 - GLISSANDO_LEVEL_LIFT_PX;
+    expect(glissandoEndYs(level)).toEqual({ fromY: lifted, toY: lifted });
+    expect(
+      glissandoEndYs({ ...heights, startOnLine: true, shape: 'wave' })
+    ).toEqual({ fromY: lifted, toY: 30 });
+  });
+
+  it('starts level with a dot', () => {
+    expect(
+      glissandoEndYs({ ...heights, startOnLine: true, startDotY: 55 }).fromY
+    ).toBe(55);
+  });
+});
+
+describe('glissandoXSpan', () => {
+  it('keeps the gap from the ink at both ends', () => {
+    expect(glissandoXSpan(10, 100)).toEqual({
+      fromX: 10 + GLISSANDO_GAP_PX,
+      toX: 100 - GLISSANDO_GAP_PX,
+    });
+  });
+
+  it('closes the gaps for a short span, then gives up', () => {
+    const tight = GLISSANDO_MIN_DRAWN_PX + 2 * GLISSANDO_MIN_GAP_PX;
+    expect(glissandoXSpan(0, tight)).toEqual({
+      fromX: GLISSANDO_MIN_GAP_PX,
+      toX: tight - GLISSANDO_MIN_GAP_PX,
+    });
+    expect(glissandoXSpan(0, tight - 1)).toBeNull();
+    expect(
+      glissandoEndpoints({ ...heights, startInkRight: 0, endInkLeft: 5 })
+    ).toBeNull();
+  });
+});
+
+describe('splitGlissandoAcrossRows', () => {
+  it('breaks where both halves keep one slope', () => {
+    const { breakRelY } = splitGlissandoAcrossRows({
+      fromRelY: 60,
+      toRelY: 20,
+      firstLength: 30,
+      secondLength: 10,
+    });
+    expect((breakRelY - 60) / 30).toBeCloseTo((20 - breakRelY) / 10);
+  });
+
+  it('copes with no length at all', () => {
+    expect(
+      splitGlissandoAcrossRows({
+        fromRelY: 60,
+        toRelY: 20,
+        firstLength: 0,
+        secondLength: 0,
+      })
+    ).toEqual({ breakRelY: 60 });
+  });
+});
+
+describe('glissando contours', () => {
+  it('narrows a dip to a short line', () => {
+    expect(glissandoDipWidthPx(200)).toBe(GLISSANDO_DIP_WIDTH_PX);
+    expect(glissandoDipWidthPx(15)).toBe(15);
+  });
+
+  it('fits whole half-waves, at least one', () => {
+    expect(glissandoHalfWaveCount(GLISSANDO_WAVELENGTH_PX * 2)).toBe(4);
+    expect(glissandoHalfWaveCount(GLISSANDO_WAVELENGTH_PX * 1.6)).toBe(3);
+    expect(glissandoHalfWaveCount(1)).toBe(1);
+  });
+});
+
+describe('glissandoShapeWarning', () => {
+  it('is silent for a straight line or on a start', () => {
+    expect(
+      glissandoShapeWarning({ shape: 'straight', glissando: null })
+    ).toBeNull();
+    expect(
+      glissandoShapeWarning({ shape: 'dip', glissando: 'start' })
+    ).toBeNull();
+  });
+
+  it('warns elsewhere', () => {
+    expect(
+      glissandoShapeWarning({ shape: 'wave', glissando: 'end' })
+    ).toContain('starts no glissando');
+  });
+});
+
+describe('resolveBend', () => {
+  const resolve = (
+    note: Note,
+    {
+      bend = null,
+      bendTo = null,
+      bendToQuarterTone = null,
+      octave = 4,
+      quarterTone = null,
+    }: {
+      bend?: BendShape | null;
+      bendTo?: Note | null;
+      bendToQuarterTone?: QuarterTone | null;
+      octave?: Octave;
+      quarterTone?: QuarterTone | null;
+    }
+  ) => resolveBend(bend, bendTo, bendToQuarterTone, note, octave, quarterTone);
+
+  it('is nothing without bend or bend-to, and free without bend-to', () => {
+    expect(resolve('C', {})).toBeNull();
+    expect(resolve('C', { bend: 'dip' })).toEqual({
+      shape: 'dip',
+      target: null,
+    });
+  });
+
+  it('counts the arrow in the direction of a target on the same letter', () => {
+    const up = resolve('C#', { bendTo: 'C#', bendToQuarterTone: 'up' });
+    expect(up?.shape).toBe('up');
+    expect(up?.target).toEqual({
+      letter: 'C',
+      octave: 4,
+      accidental: 'sharp-up',
+      steps: 0,
+    });
+    const down = resolve('C#', { bendTo: 'C#', bendToQuarterTone: 'down' });
+    expect(down?.shape).toBe('down');
+    expect(
+      resolve('C', { quarterTone: 'up', bendTo: 'C#', bendToQuarterTone: null })
+        ?.shape
+    ).toBe('up');
+  });
+
+  it('counts staff steps across the octave', () => {
+    expect(resolve('B', { bendTo: 'C' })?.target?.steps).toBe(1);
+    expect(resolve('D', { octave: 5, bendTo: 'C' })?.target?.steps).toBe(-1);
+  });
+
+  it('takes the octave nearest the note', () => {
+    expect(resolve('B', { bendTo: 'C' })?.target?.octave).toBe(5);
+    expect(resolve('C', { bendTo: 'B' })?.target?.octave).toBe(3);
+    expect(resolve('C', { bendTo: 'G' })?.target?.octave).toBe(3);
+  });
+
+  it('goes the way bend says when the target is a tritone either way', () => {
+    expect(resolve('F', { bendTo: 'B' })?.target?.octave).toBe(4);
+    expect(resolve('F', { bendTo: 'B', bend: 'down' })?.target?.octave).toBe(3);
+  });
+
+  it('keeps a dip or wave, and turns an up or down toward the target', () => {
+    expect(resolve('C', { bendTo: 'D', bend: 'wave' })?.shape).toBe('wave');
+    expect(resolve('C', { bendTo: 'D', bend: 'down' })?.shape).toBe('up');
+  });
+
+  it('replaces bend with a contour, its target the last point', () => {
+    const withContour = resolveBend('wave', 'D', null, 'C', 4, null, [
+      { letter: 'G', octave: 4 },
+      { letter: 'A', octave: 3 },
+    ]);
+    expect(withContour?.contour).toEqual([4, -2]);
+    expect(withContour?.target?.steps).toBe(1);
+  });
+
+  it("cancels the note's own accidental on a plain target letter", () => {
+    expect(resolve('C#', { bendTo: 'C' })?.target?.accidental).toBe('natural');
+    expect(resolve('C', { bendTo: 'D' })?.target?.accidental).toBeNull();
+  });
+});
+
+describe('bendReserveWidthPx', () => {
+  it('adds a target and its gap to the line and both gaps', () => {
+    const free = GLISSANDO_MIN_LENGTH_PX + 2 * GLISSANDO_GAP_PX;
+    expect(bendReserveWidthPx(0)).toBe(free);
+    expect(bendReserveWidthPx(18)).toBe(free + 18 + GLISSANDO_GAP_PX);
+  });
+
+  it('keeps a longer line for a contour', () => {
+    expect(bendReserveWidthPx(0, 100)).toBe(100 + 2 * GLISSANDO_GAP_PX);
+    expect(
+      bendLineLengthPx([
+        { bend: { shape: 'up', target: null, contour: Array(8).fill(1) } },
+      ])
+    ).toBe(8 * BEND_CONTOUR_POINT_PX);
+    expect(bendLineLengthPx([{ bend: { shape: 'up', target: null } }])).toBe(
+      GLISSANDO_MIN_LENGTH_PX
+    );
+  });
+});
+
+describe('layoutBends', () => {
+  const TARGET_WIDTH = 20;
+  // In a space on staff Y 45; on a line on 50.
+  const headAt = (
+    bend: Partial<ResolvedBend> & { steps?: number } = {},
+    { y = 50, staffY = 45 as number | null, dotY = null as number | null } = {}
+  ): BendHead => ({
+    y,
+    dotY,
+    staffY,
+    bend: {
+      shape: bend.shape ?? 'down',
+      target:
+        bend.steps === undefined
+          ? null
+          : { letter: 'C', octave: 4, accidental: null, steps: bend.steps },
+    },
+  });
+  const base = {
+    heads: [headAt()],
+    inkRight: 20,
+    tail: null,
+    limit: { kind: 'ink' as const, left: 70 },
+    targetWidthPx: () => TARGET_WIDTH,
+  };
+  const linesOf = (input: Partial<Parameters<typeof layoutBends>[0]>) => {
+    const layout = layoutBends({ ...base, ...input });
+    if (layout === null) {
+      throw new Error('no layout');
+    }
+    return layout.lines;
+  };
+  const lineOf = (input: Partial<Parameters<typeof layoutBends>[0]>) =>
+    linesOf(input)[0];
+
+  it('passes a contour through its pitches, evenly spaced, from the dot', () => {
+    const line = lineOf({
+      heads: [
+        {
+          ...headAt({}, { dotY: 47 }),
+          bend: { shape: 'up', target: null, contour: [2, -1] },
+        },
+      ],
+    });
+    const fromX = 20 + GLISSANDO_GAP_PX;
+    const toX = 70 - GLISSANDO_GAP_PX;
+    expect(line.contour).toEqual([
+      { x: fromX, y: 47 },
+      { x: (fromX + toX) / 2, y: 50 - 2 * STAFF_Y_STEP },
+      { x: toX, y: 50 + STAFF_Y_STEP },
+    ]);
+    expect(line.to).toEqual({ x: toX, y: 50 + STAFF_Y_STEP });
+  });
+
+  it('measures a contour from the written pitch of a head drawn elsewhere', () => {
+    const line = lineOf({
+      heads: [
+        {
+          ...headAt({}, { y: 20, staffY: null }),
+          contourFromY: 60,
+          bend: { shape: 'up', target: null, contour: [0] },
+        },
+      ],
+    });
+    expect(line.from.y).toBe(20);
+    expect(line.to.y).toBe(60);
+  });
+
+  it('ends a contour on its bracketed target', () => {
+    const line = lineOf({
+      heads: [
+        {
+          ...headAt(),
+          bend: {
+            shape: 'up',
+            target: { letter: 'C', octave: 4, accidental: null, steps: 3 },
+            contour: [1],
+          },
+        },
+      ],
+    });
+    expect(line.contour?.map(({ y }) => y)).toEqual([
+      50,
+      50 - STAFF_Y_STEP,
+      50 - 3 * STAFF_Y_STEP,
+    ]);
+    expect(line.target?.centerY).toBe(50 - 3 * STAFF_Y_STEP);
+  });
+
+  it('runs from its note to the next ink, half a space from each', () => {
+    const { from, to } = lineOf({});
+    expect(from).toEqual({ x: 20 + GLISSANDO_GAP_PX, y: 50 });
+    expect(to).toEqual({
+      x: 70 - GLISSANDO_GAP_PX,
+      y: 50 + BEND_FREE_TRAVEL_PX,
+    });
+  });
+
+  it('moves a set amount, then keeps its slope over a longer note, up to a limit', () => {
+    const travelTo = (left: number) => {
+      const { from, to } = lineOf({ limit: { kind: 'ink', left } });
+      return { travel: to.y - from.y, length: to.x - from.x };
+    };
+    expect(travelTo(50).travel).toBe(BEND_FREE_TRAVEL_PX);
+    const longer = travelTo(150);
+    expect(longer.travel).toBeCloseTo(longer.length * BEND_FREE_SLOPE);
+    expect(longer.travel).toBeGreaterThan(BEND_FREE_TRAVEL_PX);
+    expect(travelTo(800).travel).toBe(BEND_FREE_MAX_TRAVEL_PX);
+  });
+
+  it('starts just off a stave line, away from its travel', () => {
+    const onLine = { staffY: 50 };
+    expect(lineOf({ heads: [headAt({}, onLine)] }).from.y).toBe(
+      50 - GLISSANDO_OFF_LINE_PX
+    );
+    expect(lineOf({ heads: [headAt({ shape: 'up' }, onLine)] }).from.y).toBe(
+      50 + GLISSANDO_OFF_LINE_PX
+    );
+  });
+
+  it('keeps off no lines outside a staff', () => {
+    expect(lineOf({ heads: [headAt({}, { staffY: null })] }).from.y).toBe(50);
+  });
+
+  it('lifts a wave or dip into the space, and starts level with a dot', () => {
+    for (const shape of ['wave', 'dip'] as const) {
+      const { from, to } = lineOf({
+        heads: [headAt({ shape }, { staffY: 50 })],
+      });
+      expect(from.y).toBe(50 - GLISSANDO_LEVEL_LIFT_PX);
+      expect(to.y).toBe(from.y);
+    }
+    expect(
+      lineOf({ heads: [headAt({}, { staffY: 50, dotY: 45 })] }).from.y
+    ).toBe(45);
+  });
+
+  it('drops a level line where a neighbouring head has the space above', () => {
+    const lines = linesOf({
+      heads: [
+        headAt({ shape: 'wave' }, { y: 50, staffY: 50 }),
+        headAt({ shape: 'wave' }, { y: 45, staffY: 45 }),
+      ],
+    });
+    expect(lines.map(({ from }) => from.y)).toEqual([55, 45]);
+  });
+
+  it('keeps off a barline as far as its room allows', () => {
+    expect(lineOf({ limit: { kind: 'barline', left: 100 } }).to.x).toBe(
+      100 - BEND_BARLINE_GAP_PX
+    );
+    const tight = 20 + bendReserveWidthPx(0);
+    expect(lineOf({ limit: { kind: 'barline', left: tight } }).to.x).toBe(
+      tight - GLISSANDO_GAP_PX
+    );
+  });
+
+  it('puts a target before the limit and runs to it', () => {
+    const { to, target } = lineOf({
+      heads: [headAt({ shape: 'up', steps: 2 })],
+      limit: { kind: 'ink', left: 100 },
+    });
+    expect(target?.leftX).toBe(100 - GLISSANDO_GAP_PX - TARGET_WIDTH);
+    expect(target?.centerY).toBe(40);
+    expect(target?.staffY).toBe(35);
+    expect(to).toEqual({ x: 100 - 2 * GLISSANDO_GAP_PX - TARGET_WIDTH, y: 40 });
+  });
+
+  it('tilts toward a target on its own position', () => {
+    const toY = (shape: BendShape) =>
+      lineOf({
+        heads: [headAt({ shape, steps: 0 })],
+        limit: { kind: 'ink', left: 100 },
+      }).to.y;
+    expect(toY('up')).toBe(50 - BEND_SAME_POSITION_TILT_PX);
+    expect(toY('down')).toBe(50 + BEND_SAME_POSITION_TILT_PX);
+  });
+
+  it('clears a tail only where the line would cross it', () => {
+    const tail = { right: 30, bottomY: 46 };
+    expect(lineOf({ tail }).from.x).toBe(20 + GLISSANDO_GAP_PX);
+    expect(lineOf({ tail, heads: [headAt({ shape: 'wave' })] }).from.x).toBe(
+      30 + GLISSANDO_GAP_PX
+    );
+    // A long rise is past the tail before it gets that high.
+    expect(
+      lineOf({
+        tail,
+        heads: [headAt({ shape: 'up' })],
+        limit: { kind: 'ink', left: 400 },
+      }).from.x
+    ).toBe(20 + GLISSANDO_GAP_PX);
+  });
+
+  it('closes its first gap before giving up', () => {
+    const short = 20 + GLISSANDO_MIN_GAP_PX + GLISSANDO_MIN_DRAWN_PX;
+    const limitAt = (left: number) => ({
+      ...base,
+      limit: { kind: 'ink' as const, left: left + GLISSANDO_GAP_PX },
+    });
+    expect(layoutBends(limitAt(short))?.lines[0].from.x).toBe(
+      20 + GLISSANDO_MIN_GAP_PX
+    );
+    expect(layoutBends(limitAt(short - 1))).toBeNull();
+  });
+
+  it('is a set length standalone', () => {
+    const { from, to } = lineOf({ limit: { kind: 'length', length: 50 } });
+    expect(to.x - from.x).toBe(50);
+  });
+
+  it('ends every line of a chord at one x, whatever each does', () => {
+    const lines = linesOf({
+      heads: [
+        headAt({ shape: 'up', steps: 1 }),
+        headAt({ shape: 'down' }, { y: 10, staffY: 5 }),
+      ],
+      limit: { kind: 'ink', left: 120 },
+    });
+    expect(new Set(lines.map(({ to }) => to.x)).size).toBe(1);
+    expect(lines.map(({ target }) => target === null)).toEqual([false, true]);
+  });
+
+  it('puts targets too close for one column side by side', () => {
+    const lefts = (gap: number) =>
+      linesOf({
+        heads: [
+          headAt({ steps: 0 }),
+          headAt({ steps: 0 }, { y: 50 + gap, staffY: 45 + gap }),
+        ],
+        limit: { kind: 'ink', left: 160 },
+      }).map(({ target }) => target?.leftX ?? 0);
+    const [first, second] = lefts(20);
+    expect(first).toBe(second);
+    const [upper, lower] = lefts(10);
+    expect(lower - upper).toBe(TARGET_WIDTH + BEND_TARGET_GAP_PX);
+    expect(
+      bendTargetsWidthPx(
+        [headAt({ steps: 0 }), headAt({ steps: 0 }, { y: 60 })],
+        () => TARGET_WIDTH
+      )
+    ).toBe(2 * TARGET_WIDTH + BEND_TARGET_GAP_PX);
+  });
+});
+
+describe('bendDotYs', () => {
+  it('pairs rows with heads, top to bottom', () => {
+    expect(bendDotYs([50, 45], [45, 55])).toEqual([55, 45]);
+  });
+
+  it('takes the nearest row when they do not pair up', () => {
+    expect(bendDotYs([50], [45, 55])).toEqual([45]);
+    expect(bendDotYs([50], [])).toEqual([null]);
+  });
+});
+
+describe('bendConsistencyWarning', () => {
+  const fine = {
+    bend: 'down' as BendShape | null,
+    bendTo: null as Note | null,
+    glissando: null,
+    isChord: false,
+    inTremoloGroup: false,
+    onTriangle: false,
+    targetDirection: null,
+  };
+  it('names what stops a bend or overrules it', () => {
+    expect(bendConsistencyWarning(fine)).toBeNull();
+    expect(bendConsistencyWarning({ ...fine, glissando: 'start' })).toContain(
+      'glissando="start"'
+    );
+    expect(bendConsistencyWarning({ ...fine, inTremoloGroup: true })).toContain(
+      '<music-tremolo>'
+    );
+    expect(bendConsistencyWarning({ ...fine, onTriangle: true })).toContain(
+      'triangle'
+    );
+    expect(
+      bendConsistencyWarning({ ...fine, isChord: true, bendTo: 'D' })
+    ).toContain('on a chord');
+    expect(
+      bendConsistencyWarning({ ...fine, bendTo: 'D', targetDirection: 'up' })
+    ).toContain('disagrees');
+    expect(
+      bendConsistencyWarning({
+        ...fine,
+        bend: 'wave',
+        bendTo: 'D',
+        targetDirection: 'up',
+      })
+    ).toBeNull();
+    expect(
+      bendConsistencyWarning({ ...fine, bend: null, glissando: 'start' })
+    ).toBeNull();
+  });
+
+  it('refuses a contour where it refuses a bend, and ignores bend beside it', () => {
+    const contour = { ...fine, bend: null, contour: true };
+    expect(bendConsistencyWarning(contour)).toBeNull();
+    expect(
+      bendConsistencyWarning({ ...contour, glissando: 'start' })
+    ).toContain('bend-contour is ignored on a glissando');
+    expect(bendConsistencyWarning({ ...contour, bend: 'up' })).toContain(
+      'bend="up" is ignored beside bend-contour'
+    );
+  });
+});

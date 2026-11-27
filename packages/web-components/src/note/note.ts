@@ -1,23 +1,49 @@
-import { accidentalSymbolWidth } from '../rules/accidentalRules';
+import {
+  accidentalInkRect,
+  accidentalReach,
+  accidentalSymbolWidth,
+  pitchAccidental,
+} from '../rules/accidentalRules';
 import {
   computeArpeggioFootprintWidth,
   computeArpeggioHairpinFootprintWidth,
 } from '../rules/arpeggioRules';
 import {
+  bendContourWarning,
+  parseBendContour,
+} from '../rules/bendContourRules';
+import { slurStyleWarning } from '../rules/connectorPlacementRules';
+import { swellAttributeWarning } from '../rules/dynamicsRules';
+import { resolveGlissandoLabel } from '../rules/glissandoLabelRules';
+import {
+  bendConsistencyWarning,
+  bendTargetDirection,
+  glissandoShapeWarning,
+  resolveBend,
+  type ResolvedBend,
+} from '../rules/glissandoRules';
+import {
   applyGraceHeadOverhangs,
   applyResolvedGraceAccidentals,
   buildGraceNoteDescriptors,
+  flattenUnpitchedGraces,
   rebaseGraceSteps,
   type GraceNoteDescriptor,
 } from '../rules/graceRules';
 import {
   forcedStemUp,
+  graceNoteheadWarning,
+  headlessDurationWarning,
   isTriangle,
   suppressesAccidental,
   suppressesLedgerLines,
   triangleDurationWarning,
   triangleUnsupportedWarning,
+  unpitchedWarnings,
 } from '../rules/noteheadRules';
+import { parsePhonemes, phonemesWarning } from '../rules/phonemeRules';
+import { parseSigns, signWarning } from '../rules/signRules';
+import { textAttributeWarning } from '../rules/techniqueTextRules';
 import {
   articulationRepeatCount,
   drawnTremoloTuplet,
@@ -32,18 +58,25 @@ import type {
   GraceNoteheadsType,
   GraceNotesType,
   GraceOctavesType,
+  GraceQuarterTonesType,
   INoteElement,
+  SignPlacement,
   StaffPosition,
   TieValue,
   UnisonPart,
 } from '../types/elements';
 import type {
+  AccidentalReminder,
   AccidentalType,
   ArpeggioType,
   ArticulationType,
+  BendShape,
+  BreathMark,
+  ConventionalAccidentalType,
   DurationType,
   DynamicMarking,
   GlissandoHint,
+  GlissandoShape,
   GraceDuration,
   GraceSlur,
   GraceType,
@@ -52,18 +85,27 @@ import type {
   Note,
   NoteheadType,
   NoteLetter,
+  NoteSign,
+  NoteSize,
   Octave,
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
+  QuarterTone,
+  SlurStyle,
   StemDirection,
+  StemMark,
   StressType,
+  SwellShape,
+  TextPlacement,
+  TextStyle,
   TieStyle,
   TremoloLabel,
   TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  UnpitchedPlacement,
 } from '../types/theory';
 import {
   ACCIDENTAL_NOTE_GAP,
@@ -83,23 +125,31 @@ import {
   parseAccidentalType,
   parseArpeggio,
   parseArticulation,
+  parseBendShape,
+  parseBreathMark,
   parseConnectorRole,
   parseDynamicMarking,
   parseGlissandoHint,
+  parseGlissandoShape,
   parseGraceArticulations,
   parseGraceDuration,
   parseGraceNoteheads,
   parseGraceNotes,
   parseGraceOctaves,
+  parseGraceQuarterTones,
   parseGraceSlur,
   parseGraceType,
   parseHairpinKind,
+  parseNote,
   parseNotehead,
   parseOctaveContinuationMode,
   parseOctaveDisplayMode,
   parseOctaveShiftAmount,
+  parseQuarterTone,
+  parseSlurStyle,
   parseStemDirection,
   parseStress,
+  parseSwellShape,
   parseTieStyle,
   parseTieValue,
   parseTremolo,
@@ -108,22 +158,40 @@ import {
   parseTrillContinuationMode,
   parseTrillFinishSlur,
   parseTrillLineMode,
-  stemUpTipYPx,
 } from '../utils';
 import {
   CHORD_TAGS,
+  isChordNodeName,
   MUSIC_NOTE,
+  MUSIC_TREMOLO,
   MUSIC_TREMOLO_NODE,
   NOTE_EVENTS,
   OCTAVES,
   STAFF_TAGS,
+  STEM_MARKS,
+  TREMOLO_LABELS,
 } from '../utils/consts';
 import { MaybeHTMLElement } from '../utils/maybeHTMLElement';
-import { parseDuration, warnIfInvalidDuration } from '../utils/parsers';
 import {
+  isAccidentalReminder,
+  parseAccidentalReminder,
+  parseDuration,
+  parseNoteSize,
+  parseStemMark,
+  parseTextPlacement,
+  parseTextStyle,
+  parseUnpitched,
+  resolveNoteSize,
+  warnIfInvalidDuration,
+} from '../utils/parsers';
+import {
+  cueLeftShiftPx,
   NOTE_SVG_WIDTH,
   noteAugmentationDotLayout,
+  noteSizeScale,
+  stemTipPosition,
 } from '../utils/svgCreator/note';
+import { techniqueTextLabel } from '../utils/svgCreator/techniqueLabel';
 import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
 
 /**
@@ -134,18 +202,36 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  *
  * @customElement music-note
  * @attr {Note} note - Pitch letter with optional accidental, e.g. `C`, `F#`, `Bb`.
+ * @attr {QuarterTone} quarter-tone - `up` / `down`: raises or lowers `note` by a quarter-tone, drawn as an arrow on its accidental (on a natural for a plain letter). On a note slotted in a chord it marks just that tone.
  * @attr {Octave} octave - Scientific-pitch octave (2–6). Falls back to the staff's clef range when unset.
  * @attr {DurationType} duration - Note value: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, …, optionally dotted with a `dotted-`, `double-dotted-` or `triple-dotted-` prefix (`dotted-quarter`). Defaults to `quarter`.
- * @attr {'start' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie to the same pitch, or `laissez-vibrer` (alias `lv`) for an open-ended "let ring" tie.
+ * @attr {'start' | 'continue' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie to the same pitch, `continue` for the middle of a tie chain (tied into and on to the next), or `laissez-vibrer` (alias `lv`) for an open-ended "let ring" tie.
  * @attr {boolean} lv-label - Draw an `l.v.` label on a `tie="laissez-vibrer"` tie.
  * @attr {'start' | 'end'} slur - Marks this note as the start or end of a slur.
- * @attr {'start' | 'end'} glissando - Marks this note as the start or end of a glissando (a straight line indicating a continuous slide between pitches).
- * @attr {'white-key' | 'black-key'} glissando-hint - Shown as text near a `glissando="start"` line ("white-note gliss." / "black-note gliss.") clarifying which keys it slides across.
+ * @attr {'start' | 'end'} glissando - Marks this note as the start or end of a glissando or pitch bend: a line between two pitches, beside their noteheads.
+ * @attr {'white-key' | 'black-key' | 'gliss'} glissando-hint - Text above the line of a `glissando="start"`: which keys it slides across ("white-note gliss." / "black-note gliss."), or plain "gliss.".
+ * @attr {'straight' | 'dip' | 'wave'} glissando-shape - Contour of the line a `glissando="start"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`.
+ * @attr {string} glissando-label - Text above the stave over this note: `gliss` ("gliss.", for a passage with no line), `quasi-gliss` ("quasi gliss."), `chrom` / `chromatic` (above the first grace note when there are grace notes), `lip`, `bend`, or any other text drawn as written, `|` starting a new line. It shifts left rather than run past the bar.
+ * @attr {string} technique-text - Technique text over the note (`sing`, `hum`, `key slaps`, any instruction), `|` starting a new line. It starts at the head (the first grace note's, with grace notes) and may run on over later bars of its row, up to the next technique text of the staff; past the row's end it shifts left, then wraps. In text of several lines an opening quote or bracket hangs left of the margin.
+ * @attr {TextPlacement} technique-text-placement - `below` draws the technique text under the stave, beneath what is drawn there but above the dynamics (and a vocal staff's lyrics). Defaults to `above`.
+ * @attr {TextStyle} technique-text-style - `italic` sets the technique text in italics. Defaults to `normal` (upright).
+ * @attr {string} dynamic-text - Italic text straight after the dynamic, on its baseline (", ma distinto"). It moves with the marking and runs on over later bars of its row. Needs `dynamic`.
+ * @attr {'up' | 'down' | 'dip' | 'wave'} bend - A pitch bend: a line after this note, ending inside its own duration. `up` / `down` slide away, `dip` sinks a little and returns, `wave` oscillates. Ignored, with a warning, beside `glissando="start"`, on a `<music-tremolo>` member and on a triangle notehead. On a note slotted in a chord it bends just that tone, whatever the chord's own `bend`.
+ * @attr {Note} bend-to - The pitch the bend runs to, in the octave nearest this note: a small notehead in parentheses at the end of the line. Alone, it draws a straight line there.
+ * @attr {string} bend-contour - Approximate pitches a free line passes through after the note, comma-separated with their octaves (`G5,B4,D6`; an accidental is ignored): evenly spaced along the line, the last at its end, joined by a smooth curve that is level at each peak and trough. One pitch draws a straight line. `bend` beside it is ignored, with a warning; `bend-to` becomes its last point, drawn in parentheses. On a note slotted in a chord it bends just that tone. Allowed on an unpitched note.
+ * @attr {QuarterTone} bend-to-quarter-tone - `up` / `down`: raises or lowers `bend-to` by a quarter-tone.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
  * @attr {DynamicMarking} dynamic - Dynamic marking under the note (`p`, `mf`, `ff`, `sfz`, …).
+ * @attr {SwellShape} swell - A swell under this note over its tie chain (just its own value when untied): bare or `both` draws `< >`, louder to the middle and softer after it; `crescendo` or `diminuendo` draws that wedge alone. On a note tied into, it covers the rest of the chain; with swells on two notes of one chain, the earlier wins. Inside a `<music-composition>` it crosses barlines and system breaks. A hairpin starting, ending or running over any note of the chain wins.
+ * @attr {string} phonemes - Vowels or phonemes to form while the note sounds, below the stave in square brackets: `,` separates them (`i,u`), `>` (or `→`) joins them with an arrow (`oo>ah`), and a trailing `>` leads to the next note's first phoneme, over a barline too. The first stands under the head; with an arrow out they are spaced evenly toward the next phoneme, else the last ends with the note's value.
+ * @attr {DynamicMarking} dynamic-end - A second dynamic at the end of the note's span (its tie chain's, with `swell`), just before the next entry or the barline. A `swell` ends before it.
  * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this note starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement.
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
- * @attr {boolean} accidental-reminder - Shows the accidental already in force in parentheses, "(♮)", as a reminder, e.g. at the start of a repeated section. An accidental that is required anyway draws plainly.
+ * @attr {AccidentalReminder} accidental-reminder - Shows the accidental already in force as a reminder, e.g. at the start of a repeated section: bare or `bracketed` in parentheses, "(♮)", `plain` without. An accidental that is required anyway draws plainly.
+ * @attr {UnpitchedPlacement} unpitched - Marks an unpitched sound (breath, key or valve noise): no accidental or ledger line, and no effect on later accidentals. `top` draws it in the space above the stave, `bottom` below it, and bare or `written` at its `note`/`octave` (which `top` and `bottom` don't need). Ignored on a triangle notehead. Its grace notes stand at the same place.
+ * @attr {string} sign - Comma-separated signs above the note, stacked upward in that order: `circle` ○ (a harmonic, two for a double harmonic; horn open; a bright timbre), `filled` ● (a dark timbre), `half` ◑ (between them), `plus` + (a key slap or clapped key; horn stopped), `cross` × (a key slap). Always above, outside an articulation there (`articulation="tenuto" sign="plus"` draws ±), clear of the stave; the signs of neighbouring notes line up level. Unknown entries are dropped with a warning; on a chord's own note it is ignored (set it on the chord). The property is a `NoteSign[]`.
+ * @attr {StemMark} stem-mark - `cross` draws a small × through the stem, near its end: air blown through the instrument with the given fingering. `multiphonic` draws an M there: a multiphonic on the written pitch. With tremolo strokes either stands between them and the head.
+ * @attr {NoteSize} size - `cue` draws the note at ¾ size (head, stem, tails, beams, dots, accidental and marks), e.g. for sung or hummed pitches; the head keeps its place on the stave. Unset, a note takes its `<music-voice>`'s `size`. A cue note never beams with a full-size one. On a chord's own note it is ignored: set it on the chord.
  * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin spanning to another note.
  * @attr {'start' | 'end'} decrescendo - Start or end of a decrescendo hairpin.
  * @attr {'start' | 'end'} diminuendo - Alias of `decrescendo`.
@@ -159,19 +245,22 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {'start' | 'end'} arpeggiate - Marks the start or end of a `sempre arpeggiando` passage (every chord in it rolls unless it sets its own `arpeggio`).
  * @attr {string} grace - Comma-separated grace-note pitches preceding this note, e.g. `"F#,G"`. The property also accepts a `Note[]`.
  * @attr {string} grace-octave - Comma-separated octaves aligned by index with `grace`; empty slots use this note's octave. The property also accepts an `(Octave | null)[]`.
+ * @attr {string} grace-quarter-tone - Comma-separated quarter-tones (`up` / `down`) aligned by index with `grace`, e.g. `"up,,down"`; an empty slot is an ordinary pitch. The property also accepts a `(QuarterTone | null)[]`.
  * @attr {string} grace-articulation - Comma-separated per-grace articulation aligned by index with `grace`; empty slots mean none. The property also accepts an `(ArticulationType | null)[]`.
  * @attr {'acciaccatura' | 'appoggiatura' | 'trill'} grace-type - Grace-note style. `trill` is a plain unslashed notehead (unlike `acciaccatura`'s crossed-through slash), for a leading grace note that introduces a trill. Defaults to `acciaccatura`.
  * @attr {GraceDuration} grace-duration - Note value drawn for the grace notes.
  * @attr {'auto' | 'none'} grace-slur - Whether to draw the slur from the grace group to the main note. Defaults to `auto`.
  * @attr {DynamicMarking} grace-dynamic - A single dynamic for the whole grace group, independent of `dynamic`.
  * @attr {boolean} trill - Marks a trill start: draws the "tr" sign above the stave. Requires a staff (absent on a standalone note). The wavy line spans forward through this note's own `tie` chain — set `trill` once, not on every tied note.
- * @attr {'auto' | 'none'} trill-line - `auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value).
+ * @attr {TrillLineMode} trill-line - `auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value); `double` draws two lines after the sign, a double trill.
  * @attr {boolean} trill-stop - Draws a vertical end-notch here instead of letting the line run to the next notehead.
- * @attr {AccidentalType} trill-accidental - Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature. Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set.
+ * @attr {ConventionalAccidentalType} trill-accidental - Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature. Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set.
  * @attr {Note} trill-note - Full override of the trilling pitch (letter + accidental), rendered as a small written notehead in parentheses after the main notehead — required when the trilling pitch shares this note's own letter (a chromatic/semitone trill) or otherwise isn't the plain diatonic neighbor. Wins over `trill-accidental` when both are set.
+ * @attr {QuarterTone} trill-quarter-tone - `up` / `down`: raises or lowers the trilling pitch by a quarter-tone, whether it comes from `trill-note`, `trill-accidental` or the diatonic neighbor.
  * @attr {'bracketed' | 'line-only'} trill-continuation - Controls a trill's line restatement after a system break, once its tie chain has carried it there. `bracketed` (default) redraws the sign in parentheses; `line-only` resumes with no restated sign. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the note that started the trill.
  * @attr {string} trill-finish - Comma-separated grace-note pitch(es) placed *after* this note (a trill's finishing/closing figure), e.g. `"F#,G"`. The property also accepts a `Note[]`. Always a plain unslashed notehead (no `grace-type` equivalent).
  * @attr {string} trill-finish-octave - Comma-separated octaves aligned by index with `trill-finish`; empty slots use this note's octave. The property also accepts an `(Octave | null)[]`.
+ * @attr {string} trill-finish-quarter-tone - Comma-separated quarter-tones aligned by index with `trill-finish`, as `grace-quarter-tone`.
  * @attr {'none' | 'to-main' | 'to-next' | 'both'} trill-finish-slur - Which slur(s) the finishing grace note(s) draw: back to this note (`to-main`, default), forward to the next note/chord (`to-next`), `both`, or `none`.
  * @attr {OctaveShiftAmount} octave-shift - Starts (or, if the same value as an already-open span, continues) an octave-transposition span at this note: `8va`/`15ma`/`22ma` shift the written pitch up, `8vb`/`15mb`/`22mb` shift it down. Requires a staff (absent on a standalone note).
  * @attr {OctaveDisplayMode} octave-mode - Set on the note that starts an octave-transposition span: `col` renders the span's label as prose ("col 8va"/"col 8va bassa" for the matching amount) instead of a bare numeral. Defaults to `sign`. Meaningless without a matching `octave-shift`.
@@ -181,13 +270,15 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note). Ignored, with a warning, on a `triangle-up`/`triangle-down` note.
  * @attr {string} shared-stem-for - `id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note).
  * @attr {string} slur-group - `id` shared by every breakpoint note of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone note).
- * @attr {NoteheadType} notehead - Notehead shape: `normal` (default); `x` ("x-head", circled at half-note length and longer — a dead / muted (ghost) note, cymbal or cross-stick, spoken text, indefinite pitch); `diamond` (black or white by duration — guitar harmonics, silently depressed piano keys); `diamond-white` (white at every duration — the "harmonic" notehead for bowed strings and woodwinds, also multiphonics and unvoiced vocal sounds); `triangle-up` / `triangle-down` ("highest / lowest possible note"). A triangle ignores `note`/`octave`: inside a staff it is placed outside the stave (or beyond the run of notes it follows), never takes ledger lines, an accidental or a beam, and its stem always points away from its tip. Standalone, a triangle draws at the note's own position.
- * @attr {string} grace-notehead - Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`.
+ * @attr {NoteheadType} notehead - Notehead shape: `normal` (default); `x` ("x-head", circled at half-note length and longer — a dead / muted (ghost) note, cymbal or cross-stick, spoken text, indefinite pitch); `x-plain` (a cross never circled, for multiphonics); `diamond` (black or white by duration — guitar harmonics, silently depressed piano keys); `diamond-white` (white at every duration — the "harmonic" notehead for bowed strings and woodwinds, also multiphonics and unvoiced vocal sounds); `triangle-up` / `triangle-down` ("highest / lowest possible note"). A triangle ignores `note`/`octave`: inside a staff it is placed outside the stave (or beyond the run of notes it follows), never takes ledger lines, an accidental or a beam, and its stem always points away from its tip. Standalone, a triangle draws at the note's own position. `none` draws the stem alone, from where the head would stand (key clicks, clapped keys): no head, ledger line, accidental, dot or arpeggio, while the pitch still sets the stem and beam; it needs a stem, so a semibreve warns.
+ * @attr {string} grace-notehead - Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles and `none` are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`.
  * @attr {TremoloValue} tremolo - Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the note's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the note's own). A semibreve takes them above or below its head. The stem lengthens to carry them. Ignored on a `<music-tremolo>` member.
  * @attr {number} tremolo-tuplet - Tuplet numeral for a measured tremolo, drawn beyond the stem's end: the number of notes the note stands for (`3`, `5`, `6`, …). Needs a `tremolo` stroke count.
- * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one.
+ * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one; `flz` / `flt` / `frull` mark a flutter-tongued single-note tremolo and run on over later tremolos until `ord` / `nat` / `norm` ("ord.") or another label, which goes on the ordinary note a flutter-tongued tie runs into.
+ * @attr {BreathMark} breath-mark - A breath after this note: `tick` (✓, a break in the sound) or `comma` (a short pause or lift). Drawn above the stave in the gap before the next entry; standalone, just after the note.
  * @attr {boolean} articulation-repeat - Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head; a row of more than 32 draws the mark once. Accents, fermatas and stress marks stay single.
  * @attr {TieStyle} tie-style - `dotted` draws the tie this note starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in note then repeats its accidental across a barline. Defaults to `solid`.
+ * @attr {SlurStyle} slur-style - `dotted` draws the slur this note starts as a dotted line, to mark phrase structure apart from a legato slur. Defaults to `solid`.
  * @attr {StemDirection} stem-direction - Forces this note's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves the pitch, voice or beam-group default. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged.
  *
  * @example
@@ -208,10 +299,22 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       'slur',
       'glissando',
       'glissando-hint',
+      'glissando-shape',
+      'glissando-label',
+      'technique-text',
+      'technique-text-placement',
+      'technique-text-style',
+      'dynamic-text',
+      'dynamic-end',
+      'bend',
+      'bend-to',
+      'bend-to-quarter-tone',
+      'bend-contour',
       'dynamic',
       'dynamic-shared',
       'dynamic-reminder',
       'accidental-reminder',
+      'quarter-tone',
       'crescendo',
       'decrescendo',
       'diminuendo',
@@ -225,6 +328,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       'arpeggiate',
       'grace',
       'grace-octave',
+      'grace-quarter-tone',
       'grace-articulation',
       'grace-type',
       'grace-duration',
@@ -235,9 +339,11 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       'trill-stop',
       'trill-accidental',
       'trill-note',
+      'trill-quarter-tone',
       'trill-continuation',
       'trill-finish',
       'trill-finish-octave',
+      'trill-finish-quarter-tone',
       'trill-finish-slur',
       'octave-shift',
       'octave-mode',
@@ -249,12 +355,20 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       'slur-group',
       'stem-direction',
       'notehead',
+      'unpitched',
+      'stem-mark',
+      'sign',
+      'size',
       'grace-notehead',
       'tremolo',
       'tremolo-tuplet',
       'tremolo-label',
       'articulation-repeat',
       'tie-style',
+      'slur-style',
+      'breath-mark',
+      'swell',
+      'phonemes',
     ];
   }
 
@@ -262,6 +376,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
   #stemExtension = 0;
   #dottedTieAcrossBarline = false;
   #trillSignExtraLift = 0;
+  #signPlacement: SignPlacement | null = null;
   #articulationStemAnchorBeamLevels: number | null = null;
   #augmentationDotRows: number[] | null = null;
   #unisonPart: UnisonPart | null = null;
@@ -322,6 +437,17 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     }
   }
 
+  get quarterTone(): QuarterTone | null {
+    return parseQuarterTone(this.readAttribute('quarter-tone'));
+  }
+  set quarterTone(value: QuarterTone | null) {
+    if (value === null) {
+      this.removeAttribute('quarter-tone');
+    } else {
+      this.setAttribute('quarter-tone', value);
+    }
+  }
+
   get octave(): Octave | null {
     const attribute = this.readAttribute('octave');
     if (attribute === null) {
@@ -372,6 +498,24 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       return;
     }
     this.#trillSignExtraLift = v;
+    this.#scheduleRender();
+  }
+
+  // Where the staff puts this note's signs; null standalone.
+  get signPlacement(): SignPlacement | null {
+    return this.#signPlacement;
+  }
+  set signPlacement(v: SignPlacement | null) {
+    if (
+      v === this.#signPlacement ||
+      (v !== null &&
+        this.#signPlacement !== null &&
+        v.bottomY === this.#signPlacement.bottomY &&
+        v.articulationLiftPx === this.#signPlacement.articulationLiftPx)
+    ) {
+      return;
+    }
+    this.#signPlacement = v;
     this.#scheduleRender();
   }
 
@@ -534,6 +678,116 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     }
   }
 
+  get glissandoShape(): GlissandoShape {
+    return parseGlissandoShape(this.readAttribute('glissando-shape'));
+  }
+  set glissandoShape(value: GlissandoShape) {
+    if (value === 'straight') {
+      this.removeAttribute('glissando-shape');
+    } else {
+      this.setAttribute('glissando-shape', value);
+    }
+  }
+
+  get glissandoLabel(): string | null {
+    return this.readAttribute('glissando-label');
+  }
+  set glissandoLabel(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('glissando-label');
+    } else {
+      this.setAttribute('glissando-label', value);
+    }
+  }
+
+  get techniqueText(): string | null {
+    return this.readAttribute('technique-text');
+  }
+  set techniqueText(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('technique-text');
+    } else {
+      this.setAttribute('technique-text', value);
+    }
+  }
+
+  get techniqueTextPlacement(): TextPlacement {
+    return (
+      parseTextPlacement(this.readAttribute('technique-text-placement')) ??
+      'above'
+    );
+  }
+  set techniqueTextPlacement(value: TextPlacement) {
+    this.setAttribute('technique-text-placement', value);
+  }
+
+  get techniqueTextStyle(): TextStyle {
+    return (
+      parseTextStyle(this.readAttribute('technique-text-style')) ?? 'normal'
+    );
+  }
+  set techniqueTextStyle(value: TextStyle) {
+    this.setAttribute('technique-text-style', value);
+  }
+
+  get dynamicText(): string | null {
+    const value = this.readAttribute('dynamic-text')?.trim() ?? '';
+    return value === '' ? null : value;
+  }
+  set dynamicText(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('dynamic-text');
+    } else {
+      this.setAttribute('dynamic-text', value);
+    }
+  }
+
+  get bend(): BendShape | null {
+    return parseBendShape(this.readAttribute('bend'));
+  }
+  set bend(value: BendShape | null) {
+    if (value === null) {
+      this.removeAttribute('bend');
+    } else {
+      this.setAttribute('bend', value);
+    }
+  }
+
+  get bendTo(): Note | null {
+    return this.unpitched === null
+      ? parseNote(this.readAttribute('bend-to'))
+      : null;
+  }
+  set bendTo(value: Note | null) {
+    if (value === null) {
+      this.removeAttribute('bend-to');
+    } else {
+      this.setAttribute('bend-to', value);
+    }
+  }
+
+  get bendContour(): string | null {
+    return this.readAttribute('bend-contour');
+  }
+  set bendContour(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('bend-contour');
+    } else {
+      this.setAttribute('bend-contour', value);
+    }
+  }
+
+  get bendToQuarterTone(): QuarterTone | null {
+    return parseQuarterTone(this.readAttribute('bend-to-quarter-tone'));
+  }
+  set bendToQuarterTone(value: QuarterTone | null) {
+    if (value === null) {
+      this.removeAttribute('bend-to-quarter-tone');
+    } else {
+      this.setAttribute('bend-to-quarter-tone', value);
+    }
+  }
+
   get dynamic(): DynamicMarking | null {
     return parseDynamicMarking(this.readAttribute('dynamic'));
   }
@@ -563,11 +817,73 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     this.toggleAttribute('dynamic-reminder', value);
   }
 
-  get accidentalReminder(): boolean {
-    return this.readsAttribute('accidental-reminder');
+  get accidentalReminder(): AccidentalReminder | null {
+    return parseAccidentalReminder(this.readAttribute('accidental-reminder'));
   }
-  set accidentalReminder(value: boolean) {
-    this.toggleAttribute('accidental-reminder', value);
+  set accidentalReminder(value: AccidentalReminder | boolean | null) {
+    if (value === null || value === false) {
+      this.removeAttribute('accidental-reminder');
+    } else {
+      this.setAttribute(
+        'accidental-reminder',
+        value === true || value === 'bracketed' ? '' : value
+      );
+    }
+  }
+
+  // Null on a triangle, which places itself.
+  get unpitched(): UnpitchedPlacement | null {
+    return isTriangle(this.notehead)
+      ? null
+      : parseUnpitched(this.readAttribute('unpitched'));
+  }
+  set unpitched(value: UnpitchedPlacement | boolean | null) {
+    if (value === null || value === false) {
+      this.removeAttribute('unpitched');
+    } else {
+      this.setAttribute(
+        'unpitched',
+        value === true || value === 'written' ? '' : value
+      );
+    }
+  }
+
+  get stemMark(): StemMark | null {
+    return parseStemMark(this.readAttribute('stem-mark'));
+  }
+  set stemMark(value: StemMark | null) {
+    if (value === null) {
+      this.removeAttribute('stem-mark');
+    } else {
+      this.setAttribute('stem-mark', value);
+    }
+  }
+
+  get sign(): NoteSign[] | null {
+    return parseSigns(this.readAttribute('sign'));
+  }
+  set sign(value: NoteSign[] | null) {
+    if (value === null || value.length === 0) {
+      this.removeAttribute('sign');
+    } else {
+      this.setAttribute('sign', value.join(','));
+    }
+  }
+
+  // The note's own `size`, else its voice's.
+  get size(): NoteSize {
+    return resolveNoteSize(this.readAttribute('size'), this);
+  }
+  set size(value: NoteSize | null) {
+    if (value === null) {
+      this.removeAttribute('size');
+    } else {
+      this.setAttribute('size', value);
+    }
+  }
+
+  #scale(): number {
+    return noteSizeScale(this.size);
   }
 
   get crescendo(): HairpinRole | null {
@@ -703,7 +1019,12 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
 
   // See noteHeadLeftOverhangPx.
   get headLeftOverhangPx(): number {
-    return noteHeadLeftOverhangPx(this.stemUp, this.duration, this.notehead);
+    return noteHeadLeftOverhangPx(
+      this.stemUp,
+      this.duration,
+      this.notehead,
+      this.#scale()
+    );
   }
 
   get augmentationDotsRightEdgePx(): number | null {
@@ -718,6 +1039,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
         staffY: this.#staffY,
         rowStaffYs: this.#augmentationDotRows,
         columnShiftPx: this.#augmentationDotShiftPx,
+        scale: this.#scale(),
       })?.rightEdgeX ?? null
     );
   }
@@ -791,6 +1113,61 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     }
   }
 
+  get slurStyle(): SlurStyle {
+    return parseSlurStyle(this.readAttribute('slur-style'));
+  }
+  set slurStyle(value: SlurStyle) {
+    if (value === 'solid') {
+      this.removeAttribute('slur-style');
+    } else {
+      this.setAttribute('slur-style', value);
+    }
+  }
+
+  get swell(): SwellShape | null {
+    return parseSwellShape(this.readAttribute('swell'));
+  }
+  set swell(value: SwellShape | boolean | null) {
+    if (value === null || value === false) {
+      this.removeAttribute('swell');
+    } else {
+      this.setAttribute('swell', value === true ? '' : value);
+    }
+  }
+
+  get phonemes(): string | null {
+    return this.readAttribute('phonemes');
+  }
+  set phonemes(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('phonemes');
+    } else {
+      this.setAttribute('phonemes', value);
+    }
+  }
+
+  get dynamicEnd(): DynamicMarking | null {
+    return parseDynamicMarking(this.readAttribute('dynamic-end'));
+  }
+  set dynamicEnd(value: DynamicMarking | null) {
+    if (value === null) {
+      this.removeAttribute('dynamic-end');
+    } else {
+      this.setAttribute('dynamic-end', value);
+    }
+  }
+
+  get breathMark(): BreathMark | null {
+    return parseBreathMark(this.readAttribute('breath-mark'));
+  }
+  set breathMark(value: BreathMark | null) {
+    if (value === null) {
+      this.removeAttribute('breath-mark');
+    } else {
+      this.setAttribute('breath-mark', value);
+    }
+  }
+
   get dottedTieAcrossBarline(): boolean {
     return this.#dottedTieAcrossBarline;
   }
@@ -825,6 +1202,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     }
     return unbeamedTremoloStemExtensionPx({
       tremolo: this.tremolo,
+      stemMark: this.stemMark,
       duration: this.duration,
       headYs: [0],
       stemUp: this.stemUp,
@@ -941,7 +1319,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
   // `tie` chain — see NOTE_EVENTS.TRILL_ATTRIBUTE_CHANGE in
   // attributeChangedCallback.
   get trill(): boolean {
-    return this.readsAttribute('trill');
+    return this.readsAttribute('trill') && this.unpitched === null;
   }
   set trill(value: boolean) {
     if (value) {
@@ -972,10 +1350,10 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
   // Overrides only the accidental of the trilling (auxiliary) pitch —
   // normally the diatonic upper neighbor as modified by the key signature.
   // Ignored (with a warning) when trill-note is also set.
-  get trillAccidental(): AccidentalType | null {
+  get trillAccidental(): ConventionalAccidentalType | null {
     return parseAccidentalType(this.readAttribute('trill-accidental'));
   }
-  set trillAccidental(value: AccidentalType | null) {
+  set trillAccidental(value: ConventionalAccidentalType | null) {
     if (value === null) {
       this.removeAttribute('trill-accidental');
     } else {
@@ -994,6 +1372,19 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       this.removeAttribute('trill-note');
     } else {
       this.setAttribute('trill-note', value);
+    }
+  }
+
+  // Applies to the trilling pitch wherever it comes from: trill-note,
+  // trill-accidental or the diatonic neighbor.
+  get trillQuarterTone(): QuarterTone | null {
+    return parseQuarterTone(this.readAttribute('trill-quarter-tone'));
+  }
+  set trillQuarterTone(value: QuarterTone | null) {
+    if (value === null) {
+      this.removeAttribute('trill-quarter-tone');
+    } else {
+      this.setAttribute('trill-quarter-tone', value);
     }
   }
 
@@ -1039,6 +1430,18 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       this.removeAttribute('grace-octave');
     } else {
       this.setAttribute('grace-octave', attr);
+    }
+  }
+
+  get graceQuarterTone(): (QuarterTone | null)[] | null {
+    return parseGraceQuarterTones(this.readAttribute('grace-quarter-tone'));
+  }
+  set graceQuarterTone(value: GraceQuarterTonesType) {
+    const attr = graceListToAttr(value, parseGraceQuarterTones);
+    if (attr === null) {
+      this.removeAttribute('grace-quarter-tone');
+    } else {
+      this.setAttribute('grace-quarter-tone', attr);
     }
   }
 
@@ -1152,6 +1555,20 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     }
   }
 
+  get trillFinishQuarterTone(): (QuarterTone | null)[] | null {
+    return parseGraceQuarterTones(
+      this.readAttribute('trill-finish-quarter-tone')
+    );
+  }
+  set trillFinishQuarterTone(value: GraceQuarterTonesType) {
+    const attr = graceListToAttr(value, parseGraceQuarterTones);
+    if (attr === null) {
+      this.removeAttribute('trill-finish-quarter-tone');
+    } else {
+      this.setAttribute('trill-finish-quarter-tone', attr);
+    }
+  }
+
   get trillFinishSlur(): TrillFinishSlur {
     return parseTrillFinishSlur(this.readAttribute('trill-finish-slur'));
   }
@@ -1171,7 +1588,9 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
   // resolves the span over its own element stream — see
   // NOTE_EVENTS.OCTAVE_ATTRIBUTE_CHANGE in attributeChangedCallback.
   get octaveShift(): OctaveShiftAmount | null {
-    return parseOctaveShiftAmount(this.readAttribute('octave-shift'));
+    return this.unpitched === null
+      ? parseOctaveShiftAmount(this.readAttribute('octave-shift'))
+      : null;
   }
   set octaveShift(value: OctaveShiftAmount | null) {
     if (value === null) {
@@ -1250,9 +1669,10 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
   }
 
   #warnedDynamicReminder = false;
+  #warnedDynamicText = false;
 
-  // A bracketed reminder needs a dynamic to bracket; warns once until one
-  // is set.
+  // A bracketed reminder needs a dynamic to bracket, and a dynamic-text a
+  // dynamic to follow; each warns once until one is set.
   #warnAboutDynamicReminder(): void {
     const missing = this.dynamicReminder && this.dynamic === null;
     if (missing && this.isConnected && !this.#warnedDynamicReminder) {
@@ -1261,11 +1681,19 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       );
     }
     this.#warnedDynamicReminder = missing && this.isConnected;
+    const textMissing = this.dynamicText !== null && this.dynamic === null;
+    if (textMissing && this.isConnected && !this.#warnedDynamicText) {
+      console.warn(`[music-note] dynamic-text needs a dynamic to follow`);
+    }
+    this.#warnedDynamicText = textMissing && this.isConnected;
   }
 
   connectedCallback(): void {
     upgradeShadowedProperties(this);
     this.#warnAboutTremolo(null, null);
+    this.#warnAboutSlurStyle(null, null);
+    this.#warnAboutGlissandoShape(null, null);
+    this.#warnAboutBend(null, null);
     this.#warnAboutDynamicReminder();
     this.render();
   }
@@ -1309,16 +1737,52 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
           ? this.parentElement?.closest(CHORD_TAGS)
             ? triangleUnsupportedWarning([this.notehead], 'a chord tone')
             : null
-          : triangleUnsupportedWarning(
-              this.graceNotehead ?? [],
-              'a grace note'
-            );
+          : graceNoteheadWarning(this.graceNotehead ?? []);
       if (warning) {
         console.warn(`[music-note] ${warning}`);
       }
     }
 
     this.#warnAboutTremolo(name, newValue);
+    this.#warnAboutSlurStyle(name, newValue);
+    this.#warnAboutGlissandoShape(name, newValue);
+    this.#warnAboutBend(name, newValue);
+    if (
+      name === 'glissando-label' &&
+      newValue !== null &&
+      resolveGlissandoLabel(newValue) === null
+    ) {
+      console.warn(`[music-note] glissando-label is empty; drawing no label`);
+    }
+    const textWarning = textAttributeWarning(name, newValue);
+    if (textWarning !== null) {
+      console.warn(`[music-note] ${textWarning}`);
+    }
+    const swellWarning = swellAttributeWarning(name, newValue);
+    if (swellWarning !== null) {
+      console.warn(`[music-note] ${swellWarning}`);
+    }
+    if (name === 'phonemes') {
+      const phonemeWarning = phonemesWarning(newValue);
+      if (phonemeWarning !== null) {
+        console.warn(`[music-note] ${phonemeWarning}`);
+      }
+    }
+    if (name === 'sign') {
+      const warning = signWarning(newValue);
+      if (warning !== null) {
+        console.warn(`[music-note] ${warning}`);
+      }
+    }
+    if (
+      name === 'breath-mark' &&
+      newValue !== null &&
+      parseBreathMark(newValue) === null
+    ) {
+      console.warn(
+        `[music-note] breath-mark="${newValue}" is not "tick" or "comma"; ignoring it`
+      );
+    }
 
     if (!this.isConnected) {
       return;
@@ -1330,8 +1794,10 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       name === 'lv-label' ||
       name === 'glissando' ||
       name === 'glissando-hint' ||
+      name === 'glissando-shape' ||
       name === 'slur-group' ||
       name === 'tie-style' ||
+      name === 'slur-style' ||
       name === 'for'
     ) {
       this.dispatchEvent(
@@ -1340,11 +1806,21 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
           composed: true,
         })
       );
+      if (name === 'glissando') {
+        // The staff keeps room after a glissando's start.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+      }
       return;
     }
 
     if (
       name === 'note' ||
+      name === 'quarter-tone' ||
       name === 'octave' ||
       name === 'instrument' ||
       name === 'stem-direction'
@@ -1369,7 +1845,8 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       name === 'decrescendo' ||
       name === 'grace-dynamic' ||
       name === 'dynamic-shared' ||
-      name === 'dynamic-reminder'
+      name === 'dynamic-reminder' ||
+      name === 'dynamic-text'
     ) {
       this.#warnAboutDynamicReminder();
       this.dispatchEvent(
@@ -1493,20 +1970,39 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       name === 'arpeggiate' ||
       name === 'grace' ||
       name === 'grace-octave' ||
+      name === 'grace-quarter-tone' ||
       name === 'grace-articulation' ||
       name === 'grace-notehead' ||
       name === 'notehead' ||
+      name === 'unpitched' ||
+      name === 'stem-mark' ||
+      name === 'sign' ||
+      name === 'size' ||
       name === 'grace-type' ||
       name === 'grace-duration' ||
       name === 'grace-slur' ||
       name === 'trill-note' ||
+      name === 'trill-quarter-tone' ||
       name === 'trill-finish' ||
       name === 'trill-finish-octave' ||
+      name === 'trill-finish-quarter-tone' ||
       name === 'trill-finish-slur' ||
       name === 'duration' ||
       name === 'tremolo' ||
       name === 'tremolo-tuplet' ||
       name === 'tremolo-label' ||
+      name === 'breath-mark' ||
+      name === 'swell' ||
+      name === 'phonemes' ||
+      name === 'dynamic-end' ||
+      name === 'glissando-label' ||
+      name === 'technique-text' ||
+      name === 'technique-text-placement' ||
+      name === 'technique-text-style' ||
+      name === 'bend' ||
+      name === 'bend-to' ||
+      name === 'bend-to-quarter-tone' ||
+      name === 'bend-contour' ||
       name === 'articulation-repeat'
     ) {
       // Each of these changes layout (beat time, a leftward or rightward
@@ -1560,6 +2056,56 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     }
   }
 
+  #lastAttributeWarnings = new Set<string>();
+
+  // Each warning once while it holds.
+  #warnOnce(warnings: readonly string[]): void {
+    for (const warning of warnings) {
+      if (!this.#lastAttributeWarnings.has(warning)) {
+        console.warn(`[music-note] ${warning}`);
+      }
+    }
+    this.#lastAttributeWarnings = new Set(warnings);
+  }
+
+  #attributeWarnings(): string[] {
+    const reminder = this.readAttribute('accidental-reminder');
+    return [
+      ...(isAccidentalReminder(reminder)
+        ? []
+        : [
+            `accidental-reminder="${reminder}" isn't bracketed or plain; drawing it bracketed`,
+          ]),
+      ...(this.readAttribute('size') !== null &&
+      parseNoteSize(this.readAttribute('size')) === null
+        ? [`size="${this.readAttribute('size')}" isn't normal or cue`]
+        : []),
+      ...(this.readAttribute('size') !== null &&
+      isChordNodeName(this.parentElement?.nodeName ?? '')
+        ? ["size on a chord's note is ignored; set it on the chord"]
+        : []),
+      ...(this.readAttribute('stem-mark') !== null && this.stemMark === null
+        ? [
+            `stem-mark="${this.readAttribute(
+              'stem-mark'
+            )}" isn't ${STEM_MARKS.join(' or ')}; drawing no mark`,
+          ]
+        : []),
+      ...(this.readAttribute('sign') !== null &&
+      isChordNodeName(this.parentElement?.nodeName ?? '')
+        ? ["sign on a chord's note is ignored; set it on the chord"]
+        : []),
+      ...unpitchedWarnings({
+        value: this.readAttribute('unpitched'),
+        placement: parseUnpitched(this.readAttribute('unpitched')),
+        notehead: this.notehead,
+        ignored: ['octave-shift', 'trill', 'bend-to'].filter((name) =>
+          this.readsAttribute(name)
+        ),
+      }),
+    ];
+  }
+
   // A value that doesn't parse warns as soon as it's set. Attributes that
   // don't fit together warn once connected, so markup built one attribute
   // at a time doesn't warn about a state it passes through.
@@ -1572,7 +2118,9 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
         : changed === 'tremolo-tuplet' && parseTremoloTuplet(newValue) === null
         ? 'is not a whole number of at least 2'
         : changed === 'tremolo-label' && parseTremoloLabel(newValue) === null
-        ? 'is not "trem" or "non-trem"'
+        ? `is not one of ${TREMOLO_LABELS.map((label) => `"${label}"`).join(
+            ', '
+          )}`
         : null;
     if (invalid !== null) {
       console.warn(
@@ -1590,7 +2138,139 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       articulationRepeat: this.articulationRepeat,
       articulation: this.articulation,
       duration: this.duration,
+      label: this.tremoloLabel,
+      inTremoloGroup: this.parentElement?.nodeName === MUSIC_TREMOLO_NODE,
     })) {
+      console.warn(`[music-note] ${warning}`);
+    }
+  }
+
+  #warnAboutGlissandoShape(
+    changed: string | null,
+    newValue: string | null
+  ): void {
+    if (
+      changed !== null &&
+      changed !== 'glissando-shape' &&
+      changed !== 'glissando'
+    ) {
+      return;
+    }
+    if (
+      changed === 'glissando-shape' &&
+      newValue !== null &&
+      newValue !== parseGlissandoShape(newValue)
+    ) {
+      console.warn(
+        `[music-note] glissando-shape="${newValue}" is not "straight", "dip" or "wave"; ignoring it`
+      );
+      return;
+    }
+    if (!this.isConnected) {
+      return;
+    }
+    const warning = glissandoShapeWarning({
+      shape: this.glissandoShape,
+      glissando: this.glissando,
+    });
+    if (warning !== null) {
+      console.warn(`[music-note] ${warning}`);
+    }
+  }
+
+  #lastBendWarning: string | null = null;
+
+  // An invalid value warns as soon as it's set; what doesn't fit together
+  // warns once connected.
+  #warnAboutBend(changed: string | null, newValue: string | null): void {
+    const invalid =
+      newValue === null
+        ? null
+        : changed === 'bend' && parseBendShape(newValue) === null
+        ? 'is not "up", "down", "dip" or "wave"'
+        : changed === 'bend-to' && parseNote(newValue) === null
+        ? 'is not a pitch such as "C#"'
+        : changed === 'bend-to-quarter-tone' &&
+          parseQuarterTone(newValue) === null
+        ? 'is not "up" or "down"'
+        : null;
+    if (invalid !== null) {
+      console.warn(
+        `[music-note] ${changed}="${newValue}" ${invalid}; ignoring it`
+      );
+      return;
+    }
+    if (changed === 'bend-contour') {
+      const contourWarning = bendContourWarning(newValue);
+      if (contourWarning !== null) {
+        console.warn(`[music-note] ${contourWarning}`);
+      }
+    }
+    if (
+      !this.isConnected ||
+      (changed !== null &&
+        changed !== 'bend' &&
+        changed !== 'bend-to' &&
+        changed !== 'bend-to-quarter-tone' &&
+        changed !== 'bend-contour' &&
+        changed !== 'glissando')
+    ) {
+      return;
+    }
+    const warning = bendConsistencyWarning({
+      bend: this.bend,
+      bendTo: this.bendTo,
+      contour: parseBendContour(this.bendContour) !== null,
+      glissando: this.glissando,
+      isChord: false,
+      inTremoloGroup: this.closest(MUSIC_TREMOLO) !== null,
+      onTriangle: isTriangle(this.notehead),
+      targetDirection:
+        this.bendTo === null
+          ? null
+          : bendTargetDirection({
+              bend: this.bend,
+              bendTo: this.bendTo,
+              bendToQuarterTone: this.bendToQuarterTone,
+              note: this.note,
+              octave: this.octave ?? 4,
+              quarterTone: this.quarterTone,
+            }),
+    });
+    if (warning !== null && warning !== this.#lastBendWarning) {
+      console.warn(`[music-note] ${warning}`);
+    }
+    this.#lastBendWarning = warning;
+  }
+
+  #warnAboutSlurStyle(changed: string | null, newValue: string | null): void {
+    if (
+      changed !== null &&
+      changed !== 'slur-style' &&
+      changed !== 'slur' &&
+      changed !== 'slur-group'
+    ) {
+      return;
+    }
+    if (
+      changed === 'slur-style' &&
+      newValue !== null &&
+      newValue !== parseSlurStyle(newValue)
+    ) {
+      console.warn(
+        `[music-note] slur-style="${newValue}" is not "solid" or "dotted"; ignoring it`
+      );
+      return;
+    }
+    if (!this.isConnected) {
+      return;
+    }
+    const warning = slurStyleWarning({
+      slurStyle: this.slurStyle,
+      slur: this.slur,
+      slurGroup: this.slurGroup,
+    });
+    if (warning !== null) {
       console.warn(`[music-note] ${warning}`);
     }
   }
@@ -1604,32 +2284,28 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     `;
 
     const notehead = this.notehead;
-    const durationWarning = triangleDurationWarning(notehead, this.duration);
+    const durationWarning =
+      triangleDurationWarning(notehead, this.duration) ??
+      headlessDurationWarning(notehead, this.duration);
     if (durationWarning && durationWarning !== this.#lastNoteheadWarning) {
       console.warn(`[music-note] ${durationWarning}`);
     }
     this.#lastNoteheadWarning = durationWarning;
+    this.#warnOnce(this.#attributeWarnings());
     const stemUp = this.stemUp;
+    const unpitched = this.unpitched !== null;
 
     let accidental: AccidentalType | undefined;
     let accidentalParenthesized = false;
-    if (suppressesAccidental(notehead)) {
+    if (suppressesAccidental(notehead) || unpitched) {
       accidental = undefined;
     } else if (this.#showAccidental === undefined) {
-      const suffix = this.note.slice(1);
-      if (suffix === '##') {
-        accidental = 'double-sharp';
-      } else if (suffix === 'bb') {
-        accidental = 'double-flat';
-      } else if (suffix === '#') {
-        accidental = 'sharp';
-      } else if (suffix === 'b') {
-        accidental = 'flat';
-      }
-      // Standalone, a reminder brackets the note's own accidental.
-      if (this.accidentalReminder) {
+      accidental = pitchAccidental(this.note, this.quarterTone) ?? undefined;
+      // Standalone, a reminder shows the note's own accidental.
+      const reminder = this.accidentalReminder;
+      if (reminder !== null) {
         accidental ??= 'natural';
-        accidentalParenthesized = true;
+        accidentalParenthesized = reminder === 'bracketed';
       }
     } else if (this.#showAccidental !== null) {
       accidental = this.#showAccidental;
@@ -1673,24 +2349,45 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
         this.tremolo === null
           ? 0
           : resolveStrokeCount(this.tremolo, this.duration),
+      stemMark: this.stemMark,
+      signs: this.sign,
+      signPlacement: this.#signPlacement,
       tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
       articulationRepeatCount: this.#repeatCount(),
       tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,
+      glissandoLabel: this.closest(STAFF_TAGS) ? null : this.glissandoLabel,
+      techniqueText: this.closest(STAFF_TAGS)
+        ? null
+        : techniqueTextLabel(this.techniqueText, this.techniqueTextStyle),
+      techniqueTextBelow: this.techniqueTextPlacement === 'below',
+      phonemes: this.closest(STAFF_TAGS) ? null : parsePhonemes(this.phonemes),
+      breathMark: this.closest(STAFF_TAGS) ? null : this.breathMark,
+      bend: this.#standaloneBend(),
+      scale: this.#scale(),
     });
 
-    if (this.#staffY !== null && !suppressesLedgerLines(notehead)) {
+    if (
+      this.#staffY !== null &&
+      !suppressesLedgerLines(notehead) &&
+      !unpitched
+    ) {
       const { cx, halfWidth } = noteHeadGeometry(
         stemUp,
         this.duration,
         this.#noFlags,
-        notehead
+        notehead,
+        this.#scale()
       );
       addLedgerLines(
         noteSvg,
         [this.#staffY],
         stemUp,
         yHeadOffset - NOTE_HEAD_Y_OFFSET_CORRECTION - this.#staffY,
-        { cxPx: cx * NOTE_SCALE, halfWidthPx: halfWidth * NOTE_SCALE }
+        {
+          cxPx: cx * NOTE_SCALE,
+          halfWidthPx: halfWidth * NOTE_SCALE,
+          scale: this.#scale(),
+        }
       );
     }
 
@@ -1749,6 +2446,27 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     });
   }
 
+  // A staff draws its notes' bends itself.
+  #standaloneBend(): ResolvedBend | null {
+    if (
+      this.closest(STAFF_TAGS) ||
+      this.glissando === 'start' ||
+      isTriangle(this.notehead) ||
+      this.parentElement?.nodeName === MUSIC_TREMOLO_NODE
+    ) {
+      return null;
+    }
+    return resolveBend(
+      this.bend,
+      this.bendTo,
+      this.bendToQuarterTone,
+      this.note,
+      this.octave ?? 4,
+      this.quarterTone,
+      parseBendContour(this.bendContour)
+    );
+  }
+
   #appendGraceNotes(
     noteSvg: SVGElement,
     accidental: AccidentalType | undefined,
@@ -1765,15 +2483,20 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       this.note[0] as NoteLetter,
       this.octave ?? 4,
       this.graceArticulation ?? [],
-      this.graceNotehead
+      this.graceNotehead,
+      this.graceQuarterTone
     );
     applyResolvedGraceAccidentals(graceNotes, this.#resolvedGraceAccidentals);
     applyGraceHeadOverhangs(graceNotes, this.graceHeadLeftOverhangsPx);
     this.#rebaseOrnamentSteps(graceNotes);
 
+    const scale = this.#scale();
+    const leftShift = cueLeftShiftPx(this.stemUp, scale);
     const accidentalFootprint = accidental
-      ? accidentalSymbolWidth(accidental, accidentalParenthesized) +
-        ACCIDENTAL_NOTE_GAP
+      ? scale *
+          (accidentalReach(accidental, accidentalParenthesized) +
+            ACCIDENTAL_NOTE_GAP) -
+        leftShift
       : 0;
     const arpeggioFootprint =
       computeArpeggioFootprintWidth(
@@ -1789,7 +2512,8 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       this.stemUp,
       this.duration,
       this.#noFlags,
-      this.notehead
+      this.notehead,
+      scale
     );
     // Only used for a descending grace group's stem-tip slur anchoring
     // (see buildGraceSlur) — the real stem tip when this note is
@@ -1797,7 +2521,13 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     // project to). Unused (and harmless to compute) otherwise.
     const mainSlurTargetXPx = cx * NOTE_SCALE;
     const mainSlurTargetYPx = this.stemUp
-      ? stemUpTipYPx(this.#drawnStemExtension())
+      ? stemTipPosition(
+          true,
+          this.duration,
+          this.#noFlags,
+          this.#drawnStemExtension(),
+          scale
+        ).y * NOTE_SCALE
       : cy * NOTE_SCALE;
     const graceGroup = createGraceNotesSvg({
       graceNotes,
@@ -1816,15 +2546,33 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
         arpeggioFootprint -
         this.headLeftOverhangPx -
         GRACE_MAIN_GAP_PX,
-      mainAccidentalShown: accidental !== undefined,
+      mainAccidentalRects: accidental
+        ? [
+            accidentalInkRect(
+              accidental,
+              leftShift -
+                scale *
+                  (accidentalSymbolWidth(accidental, accidentalParenthesized) +
+                    ACCIDENTAL_NOTE_GAP) -
+                this.headLeftOverhangPx,
+              cy * NOTE_SCALE,
+              { parenthesized: accidentalParenthesized, scale }
+            ),
+          ]
+        : [],
       mainStemUp: this.stemUp,
       mainStaffY: this.#staffY,
+      ratio: scale,
     });
     noteSvg.setAttribute('overflow', 'visible');
     noteSvg.appendChild(graceGroup);
   }
 
   #rebaseOrnamentSteps(ornaments: GraceNoteDescriptor[]): void {
+    if (this.unpitched !== null) {
+      flattenUnpitchedGraces(ornaments);
+      return;
+    }
     if (this.#staffY !== null && this.#nominalStaffY !== null) {
       rebaseGraceSteps(ornaments, this.#staffY, this.#nominalStaffY);
     }
@@ -1844,7 +2592,10 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       trillFinishLetters,
       this.trillFinishOctave ?? [],
       this.note[0] as NoteLetter,
-      this.octave ?? 4
+      this.octave ?? 4,
+      [],
+      null,
+      this.trillFinishQuarterTone
     );
     applyResolvedGraceAccidentals(
       trillFinishNotes,
@@ -1856,7 +2607,8 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       this.stemUp,
       this.duration,
       this.#noFlags,
-      this.notehead
+      this.notehead,
+      this.#scale()
     );
     const { element } = createTrillFinishNotesSvg({
       trillFinishNotes,
@@ -1867,6 +2619,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
         Math.max(NOTE_SVG_WIDTH, this.augmentationDotsRightEdgePx ?? 0) +
         GRACE_MAIN_GAP_PX,
       mainStaffY: this.#staffY,
+      ratio: this.#scale(),
     });
     noteSvg.setAttribute('overflow', 'visible');
     noteSvg.appendChild(element);

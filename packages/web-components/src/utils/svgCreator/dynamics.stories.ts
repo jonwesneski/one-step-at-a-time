@@ -134,3 +134,198 @@ export const WithHairpins: Story = {
     </music-staff>
   `,
 };
+
+/** A crescendo into a diminuendo: the two part at the note they share. */
+export const CrescendoIntoDiminuendo: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-note note="E" octave="4" duration="quarter"></music-note>
+      <music-note
+        note="E"
+        octave="4"
+        duration="quarter"
+        crescendo="start"
+      ></music-note>
+      <music-note
+        note="A"
+        octave="4"
+        duration="quarter"
+        crescendo="end"
+        decrescendo="start"
+      ></music-note>
+      <music-note
+        note="A"
+        octave="4"
+        duration="quarter"
+        decrescendo="end"
+      ></music-note>
+    </music-staff>
+  `,
+};
+
+/** A `< >` swell under one held note: louder to the middle, then softer. */
+export const SwellOnOneNote: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-note
+        note="E"
+        octave="4"
+        duration="whole"
+        articulation="fermata"
+        swell
+      ></music-note>
+    </music-staff>
+  `,
+};
+
+/** A swell on a tied-into note covers the rest of its chain only. */
+export const SwellOnATiedNote: Story = {
+  render: () => html`
+    <music-composition>
+      <music-measure>
+        <music-staff clef="treble" time="4/4">
+          <music-note note="A" octave="4" duration="half"></music-note>
+          <music-note
+            note="A"
+            octave="4"
+            duration="half"
+            tie="start"
+          ></music-note>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble" time="4/4">
+          <music-note
+            note="A"
+            octave="4"
+            duration="whole"
+            tie="end"
+            swell
+          ></music-note>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+/** A swell starts after its note's dynamic and stops before the next one. */
+export const SwellWithDynamics: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="4/4">
+      <music-note
+        note="G"
+        octave="4"
+        duration="half"
+        dynamic="p"
+        swell
+      ></music-note>
+      <music-note note="G" octave="4" duration="half" dynamic="mf"></music-note>
+    </music-staff>
+  `,
+};
+
+/** With dynamic-shared, the swell sits in the gap between the two hands. */
+export const SharedSwell: Story = {
+  render: () => html`
+    <music-measure>
+      <music-staff clef="treble" time="4/4">
+        <music-chord
+          chord="Cmaj"
+          duration="whole"
+          dynamic="p"
+          dynamic-shared
+          swell
+        ></music-chord>
+      </music-staff>
+      <music-staff clef="bass" time="4/4">
+        <music-note note="C" octave="3" duration="whole"></music-note>
+      </music-staff>
+    </music-measure>
+  `,
+};
+
+const swellChain = html`
+  <music-measure>
+    <music-staff clef="bass" time="4/4">
+      <music-voice>
+        <music-rest duration="half"></music-rest>
+        <music-note
+          note="B"
+          octave="3"
+          duration="half"
+          technique-text="hum"
+        ></music-note>
+      </music-voice>
+      <music-voice>
+        <music-note
+          note="B"
+          octave="2"
+          duration="whole"
+          tie="start"
+          swell
+        ></music-note>
+      </music-voice>
+    </music-staff>
+  </music-measure>
+  <music-measure>
+    <music-staff clef="bass" time="4/4">
+      <music-voice>
+        <music-note note="A#" octave="3" duration="whole"></music-note>
+      </music-voice>
+      <music-voice>
+        <music-note
+          note="B"
+          octave="2"
+          duration="whole"
+          tie="continue"
+        ></music-note>
+      </music-voice>
+    </music-staff>
+  </music-measure>
+  <music-measure>
+    <music-staff clef="bass" time="4/4">
+      <music-voice>
+        <music-note note="B" octave="3" duration="whole"></music-note>
+      </music-voice>
+      <music-voice>
+        <music-note note="B" octave="2" duration="whole" tie="end"></music-note>
+      </music-voice>
+    </music-staff>
+  </music-measure>
+`;
+
+/**
+ * A swell follows its note's tie chain over barlines, its gap at the chain's
+ * middle beat. Narrower, it becomes two rows of wedges, the one holding the
+ * break open there.
+ */
+export const SwellOverATie: Story = {
+  render: () => html`
+    <music-composition>${swellChain}</music-composition>
+    <div style="max-width: 300px; margin-top: 24px;">
+      <music-composition>${swellChain}</music-composition>
+    </div>
+  `,
+};
+
+/**
+ * `dynamic-end` stands at the end of the note's span; the crescendo ends
+ * before it.
+ */
+export const DynamicAtTheEnd: Story = {
+  render: () => html`
+    <music-staff clef="treble" time="2/4">
+      <music-chord
+        duration="quarter"
+        stem-direction="down"
+        dynamic="p"
+        swell="crescendo"
+        dynamic-end="f"
+      >
+        <music-note note="A" octave="4" notehead="diamond-white"></music-note>
+        <music-note note="C" octave="6" notehead="x" unpitched></music-note>
+      </music-chord>
+      <music-rest duration="quarter"></music-rest>
+    </music-staff>
+  `,
+};

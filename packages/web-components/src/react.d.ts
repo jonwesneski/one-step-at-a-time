@@ -5,22 +5,27 @@
  *   /// <reference types="@one-step-at-a-time/web-components/react" />
  */
 import type {
-  AccidentalType,
+  AccidentalReminder,
   ArpeggioType,
   ArticulationType,
   BarlineType,
+  BendShape,
+  BreathMark,
   Chord,
   ClefType,
   ConnectorRole,
+  ConventionalAccidentalType,
   DurationType,
   DynamicMarking,
   EndingNumbering,
   GlissandoHint,
+  GlissandoShape,
   GraceArticulationsType,
   GraceDuration,
   GraceNoteheadsType,
   GraceNotesType,
   GraceOctavesType,
+  GraceQuarterTonesType,
   GraceSlur,
   GraceType,
   GuitarFret,
@@ -31,15 +36,22 @@ import type {
   Mode,
   Note,
   NoteheadType,
+  NoteSize,
   Octave,
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
   PercussionInstrument,
+  QuarterTone,
   RestStaffSide,
+  SlurStyle,
   StaffGroupType,
   StemDirection,
+  StemMark,
   StressType,
+  SwellShape,
+  TextPlacement,
+  TextStyle,
   TieStyle,
   TieValue,
   TimeSignature,
@@ -51,8 +63,10 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  TupletBracket,
   TupletPlacement,
   TupletRatio,
+  UnpitchedPlacement,
   VocalType,
 } from '@one-step-at-a-time/web-components';
 import 'react';
@@ -65,23 +79,38 @@ type DrumNotationProps = {
   tie?: TieValue;
   'lv-label'?: boolean;
   'tie-style'?: TieStyle;
+  'slur-style'?: SlurStyle;
   slur?: ConnectorRole;
   'slur-group'?: string;
   for?: string;
   dynamic?: DynamicMarking;
   'dynamic-shared'?: boolean;
   'dynamic-reminder'?: boolean;
+  // Italic text after `dynamic`.
+  'dynamic-text'?: string;
+  // Technique text, `|` starting a new line.
+  'technique-text'?: string;
+  'technique-text-placement'?: TextPlacement;
+  'technique-text-style'?: TextStyle;
+  swell?: boolean | SwellShape;
+  // A second dynamic at the end of the entry's span.
+  'dynamic-end'?: DynamicMarking;
   crescendo?: HairpinRole;
   decrescendo?: HairpinRole;
   diminuendo?: HairpinRole;
   articulation?: ArticulationType;
   'articulation-repeat'?: boolean;
   stress?: StressType;
+  'stem-mark'?: StemMark;
+  // Comma-separated NoteSign list, nearest the note first.
+  sign?: string;
+  size?: NoteSize;
   'stem-direction'?: StemDirection;
   'beam-group'?: string;
   'shared-stem-for'?: string;
   tremolo?: TremoloValue;
   'tremolo-tuplet'?: number;
+  /** `trem`/`non-trem`; flutter-tongue `flz`/`flt`/`frull`, cancelled by `ord`/`nat`/`norm`. */
   'tremolo-label'?: TremoloLabel;
 };
 
@@ -170,9 +199,18 @@ declare module 'react' {
         duration?: DurationType;
         'beam-group'?: string;
         'rest-staff-side'?: RestStaffSide;
+        /** Joins the beam of the notes beside it. */
+        'beam-over'?: boolean;
         hidden?: boolean;
+        // Technique text, `|` starting a new line.
+        'technique-text'?: string;
+        'technique-text-placement'?: TextPlacement;
+        'technique-text-style'?: TextStyle;
       };
-      'music-voice': WebComponentProps;
+      'music-voice': WebComponentProps & {
+        /** `cue` draws every note and chord in the voice at ¾ size. */
+        size?: NoteSize;
+      };
       'music-tremolo': WebComponentProps & {
         strokes?: TremoloStrokeCount;
         'beam-attach'?: TremoloBeamAttach;
@@ -183,6 +221,9 @@ declare module 'react' {
         ratio?: TupletRatio;
         'tuplet-group'?: string;
         placement?: TupletPlacement;
+        /** Draws the ratio as a note value, `5=♩`. */
+        'note-value'?: DurationType;
+        bracket?: TupletBracket;
       };
       'music-arpeggio': WebComponentProps & {
         'run-duration'?: DurationType;
@@ -197,11 +238,26 @@ declare module 'react' {
         slur?: ConnectorRole;
         glissando?: ConnectorRole;
         'glissando-hint'?: GlissandoHint;
+        'glissando-shape'?: GlissandoShape;
+        // A GlissandoLabel, or any other text, `|` starting a new line.
+        'glissando-label'?: string;
+        bend?: BendShape;
+        'bend-to'?: Note;
+        'bend-to-quarter-tone'?: QuarterTone;
         for?: string;
         dynamic?: DynamicMarking;
         'dynamic-shared'?: boolean;
         'dynamic-reminder'?: boolean;
-        'accidental-reminder'?: boolean;
+        // Italic text after `dynamic`.
+        'dynamic-text'?: string;
+        // Technique text, `|` starting a new line.
+        'technique-text'?: string;
+        'technique-text-placement'?: TextPlacement;
+        'technique-text-style'?: TextStyle;
+        'accidental-reminder'?: boolean | AccidentalReminder;
+        'stem-mark'?: StemMark;
+        sign?: string;
+        size?: NoteSize;
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;
@@ -215,6 +271,7 @@ declare module 'react' {
         arpeggiate?: ConnectorRole;
         grace?: GraceNotesType;
         'grace-octave'?: GraceOctavesType;
+        'grace-quarter-tone'?: GraceQuarterTonesType;
         'grace-articulation'?: GraceArticulationsType;
         'grace-notehead'?: GraceNoteheadsType;
         'grace-type'?: GraceType;
@@ -224,11 +281,13 @@ declare module 'react' {
         trill?: boolean;
         'trill-line'?: TrillLineMode;
         'trill-stop'?: boolean;
-        'trill-accidental'?: AccidentalType;
+        'trill-accidental'?: ConventionalAccidentalType;
+        'trill-quarter-tone'?: QuarterTone;
         'trill-note'?: Note;
         'trill-continuation'?: TrillContinuationMode;
         'trill-finish'?: GraceNotesType;
         'trill-finish-octave'?: GraceOctavesType;
+        'trill-finish-quarter-tone'?: GraceQuarterTonesType;
         'trill-finish-slur'?: TrillFinishSlur;
         'octave-shift'?: OctaveShiftAmount;
         'octave-mode'?: OctaveDisplayMode;
@@ -242,9 +301,16 @@ declare module 'react' {
         notehead?: NoteheadType;
         tremolo?: TremoloValue;
         'tremolo-tuplet'?: number;
+        /** `trem`/`non-trem`; flutter-tongue `flz`/`flt`/`frull`, cancelled by `ord`/`nat`/`norm`. */
         'tremolo-label'?: TremoloLabel;
         'articulation-repeat'?: boolean;
         'tie-style'?: TieStyle;
+        'slur-style'?: SlurStyle;
+        'breath-mark'?: BreathMark;
+        swell?: boolean | SwellShape;
+        'dynamic-end'?: DynamicMarking;
+        // `,` separates phonemes, `>` draws an arrow.
+        phonemes?: string;
       };
       'music-drum-note': WebComponentNoChildrenProps &
         DrumNotationProps & {
@@ -253,6 +319,7 @@ declare module 'react' {
       'music-drum-chord': WebComponentProps & DrumNotationProps;
       'music-note': WebComponentNoChildrenProps & {
         note?: Note;
+        'quarter-tone'?: QuarterTone;
         duration?: DurationType;
         octave?: Octave;
         tie?: TieValue;
@@ -260,11 +327,29 @@ declare module 'react' {
         slur?: ConnectorRole;
         glissando?: ConnectorRole;
         'glissando-hint'?: GlissandoHint;
+        'glissando-shape'?: GlissandoShape;
+        // A GlissandoLabel, or any other text, `|` starting a new line.
+        'glissando-label'?: string;
+        bend?: BendShape;
+        'bend-to'?: Note;
+        'bend-to-quarter-tone'?: QuarterTone;
+        // Approximate pitches a free line passes through, `G5,B4`.
+        'bend-contour'?: string;
         for?: string;
         dynamic?: DynamicMarking;
         'dynamic-shared'?: boolean;
         'dynamic-reminder'?: boolean;
-        'accidental-reminder'?: boolean;
+        // Italic text after `dynamic`.
+        'dynamic-text'?: string;
+        // Technique text, `|` starting a new line.
+        'technique-text'?: string;
+        'technique-text-placement'?: TextPlacement;
+        'technique-text-style'?: TextStyle;
+        unpitched?: boolean | UnpitchedPlacement;
+        'accidental-reminder'?: boolean | AccidentalReminder;
+        'stem-mark'?: StemMark;
+        sign?: string;
+        size?: NoteSize;
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;
@@ -278,6 +363,7 @@ declare module 'react' {
         arpeggiate?: ConnectorRole;
         grace?: GraceNotesType;
         'grace-octave'?: GraceOctavesType;
+        'grace-quarter-tone'?: GraceQuarterTonesType;
         'grace-articulation'?: GraceArticulationsType;
         'grace-notehead'?: GraceNoteheadsType;
         'grace-type'?: GraceType;
@@ -287,11 +373,13 @@ declare module 'react' {
         trill?: boolean;
         'trill-line'?: TrillLineMode;
         'trill-stop'?: boolean;
-        'trill-accidental'?: AccidentalType;
+        'trill-accidental'?: ConventionalAccidentalType;
+        'trill-quarter-tone'?: QuarterTone;
         'trill-note'?: Note;
         'trill-continuation'?: TrillContinuationMode;
         'trill-finish'?: GraceNotesType;
         'trill-finish-octave'?: GraceOctavesType;
+        'trill-finish-quarter-tone'?: GraceQuarterTonesType;
         'trill-finish-slur'?: TrillFinishSlur;
         'octave-shift'?: OctaveShiftAmount;
         'octave-mode'?: OctaveDisplayMode;
@@ -305,9 +393,16 @@ declare module 'react' {
         notehead?: NoteheadType;
         tremolo?: TremoloValue;
         'tremolo-tuplet'?: number;
+        /** `trem`/`non-trem`; flutter-tongue `flz`/`flt`/`frull`, cancelled by `ord`/`nat`/`norm`. */
         'tremolo-label'?: TremoloLabel;
         'articulation-repeat'?: boolean;
         'tie-style'?: TieStyle;
+        'slur-style'?: SlurStyle;
+        'breath-mark'?: BreathMark;
+        swell?: boolean | SwellShape;
+        'dynamic-end'?: DynamicMarking;
+        // `,` separates phonemes, `>` draws an arrow.
+        phonemes?: string;
       };
       'music-guitar-note': WebComponentNoChildrenProps & {
         fret?: GuitarFret;

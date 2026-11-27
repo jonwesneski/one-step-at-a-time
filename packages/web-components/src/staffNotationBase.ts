@@ -1,16 +1,23 @@
 import {
-  accidentalSymbolWidth,
+  accidentalArrowOverhangs,
+  accidentalReach,
+  accidentalSuffix,
+  accidentalVerticalExtent,
   computeInterNoteSpacing,
   computeNoteAccidentals,
   type NoteAccidentals,
-  parseAccidentalSuffix,
-  suffixToType,
+  pitchAccidental,
+  quarterToneOf,
   totalChordAccidentalWidth,
 } from './rules/accidentalRules';
 import {
   computeArpeggioFootprintWidth,
   computeArpeggioHairpinFootprintWidth,
 } from './rules/arpeggioRules';
+import {
+  resolveChordDotStaffYs,
+  resolveNoteDotStaffY,
+} from './rules/augmentationDotRules';
 import {
   barlineGlyphWidth,
   midBarBarlineSlotWidth,
@@ -22,25 +29,81 @@ import {
   computeTremoloScaleByIndex,
   durationContribution,
 } from './rules/beatRules';
-import { computeAdjacentDisplacements } from './rules/chordRules';
+import {
+  contourSegments,
+  contourTopUnder,
+  type CubicSegment,
+  parseBendContour,
+} from './rules/bendContourRules';
+import { breathMarkBottomY, breathMarkCenterX } from './rules/breathMarkRules';
 import { CLEF_DEFINITIONS, getClefRenderData } from './rules/clefRules';
+import {
+  type CurveSide,
+  estimatedSlurReachY,
+  pickSlurSide,
+  SlurReachEntry,
+  SlurSpan,
+  slurSpans,
+} from './rules/connectorPlacementRules';
 import type { CrossStaffTremoloRole } from './rules/crossStaffTremoloRules';
 import { CrossStaffTupletRole } from './rules/crossStaffTupletRules';
 import {
+  dynamicEndCenterX,
+  dynamicEndReachPx,
+  dynamicsRowY,
+  dynamicTextHalfWidth,
+  dynamicTextTrailingPx,
+  hairpinEndClearOf,
   type HairpinPair,
+  type HairpinSegment,
+  hairpinStartClearOf,
   pairHairpinsWithLeftovers,
+  resolveSwellOwners,
+  resolveSwellRow,
+  swellConflicts,
+  swellGapForPhonemes,
+  swellMidpoint,
+  type SwellOwner,
 } from './rules/dynamicsRules';
+import {
+  flutterEntryOf,
+  missingFlutterCancelWarning,
+  resolveFlutterPassages,
+} from './rules/flutterTongueRules';
+import {
+  arcTopUnder,
+  type LabelSpan,
+  lineTopUnder,
+} from './rules/glissandoLabelRules';
+import {
+  bendDotYs,
+  type BendHead,
+  type BendLimit,
+  type BendLine,
+  bendLineLengthPx,
+  bendReserveWidthPx,
+  bendTargetsWidthPx,
+  contourYs,
+  glissandoReserveWidthPx,
+  layoutBends,
+  type LinePoint,
+  resolveBend,
+  type ResolvedBend,
+} from './rules/glissandoRules';
 import {
   applyResolvedGraceAccidentals,
   buildGraceNoteDescriptors,
   computeFirstGraceHeadX,
   computeGraceFootprintWidth,
   computeGraceLayout,
+  flattenUnpitchedGraces,
 } from './rules/graceRules';
 import type {
   CrossStaffDynamicsOverride,
   DynamicsPlacement,
   DynamicsSide,
+  HairpinEndpointText,
+  SharedDynamicsRows,
   StaffHairpinDefaults,
   StaffHairpinPlacement,
 } from './rules/hairpinPlacementRules';
@@ -61,6 +124,8 @@ import {
   resolveNoteheadGlyph,
   resolveStemTipY,
   resolveTriangleStaffYs,
+  resolveUnpitchedStaffY,
+  suppressesLedgerLines,
   type TrianglePlacementEntry,
 } from './rules/noteheadRules';
 import {
@@ -71,14 +136,34 @@ import {
   splitOctaveSpanIntoRuns,
 } from './rules/octaveRules';
 import {
+  parsePhonemes,
+  phonemeArrow,
+  phonemeBracketWidthPx,
+  type PhonemeEntry,
+  phonemeRowY,
+  type PhonemeRun,
+  phonemeSpacingPx,
+  phonemeWidthPx,
+  phonemeXs,
+  resolvePhonemeRuns,
+} from './rules/phonemeRules';
+import {
   type Component,
   type DescribeReminder,
   describeReminderEquals,
 } from './rules/repeatWarningRules';
-import { restToYCoordinate } from './rules/restRules';
+import { restShiftClearOfBeam, restToYCoordinate } from './rules/restRules';
 import {
-  computeMeasureProportionalOffsets,
+  levelSignRows,
+  signStackHeightPx,
+  signStackPlacement,
+} from './rules/signRules';
+import {
+  type BarSpacing,
+  columnOffsetAt,
   computeSpacingWeights,
+  layOutBar,
+  type VoiceRooms,
 } from './rules/spacingRules';
 import { getStaffYs } from './rules/staffNoteRules';
 import {
@@ -101,12 +186,17 @@ import {
   totalMarkerWidth,
 } from './rules/streamMarkerRules';
 import {
+  belowTextPlacement,
+  techniqueTextSpan,
+} from './rules/techniqueTextRules';
+import {
   durationToBase,
   durationToDotCount,
   durationToFlagCountMap,
   isStemlessDuration,
 } from './rules/theoryConsts';
 import { extrapolateYCoordinate } from './rules/theoryHelpers';
+import { tiesOn } from './rules/tieRules';
 import {
   STAFF_BAND,
   stemlessTremoloReachPx,
@@ -129,12 +219,15 @@ import {
   resolveTupletBracketAbove,
   stemTipYFromStaffY,
   TupletBracketGeometry,
+  tupletDisplayOf,
   TupletGroup,
+  tupletLabelExtents,
 } from './rules/tupletRules';
 import {
   resolveStemlessClusters,
   type UnisonPartDescriptor,
 } from './rules/unisonRules';
+import type { VerticalBand } from './rules/verticalSpaceRules';
 import {
   CombinedGroup,
   detectCombinableGroups,
@@ -162,6 +255,7 @@ import type {
   ArpeggioGroupPlacement,
   ChordElementType,
   ChordNote,
+  ConnectorRole,
   IChordElement,
   INoteElement,
   NoteChordOrRestElementType,
@@ -182,25 +276,36 @@ import type {
   BarlineType,
   BeatsInMeasure,
   BeatTypeInMeasure,
+  BreathMark,
   ClefType,
   DurationType,
   DynamicMarking,
+  GlissandoHint,
+  GlissandoShape,
   HairpinKind,
   Mode,
   Note,
+  NoteheadType,
   NoteLetter,
   Octave,
   OctaveShiftAmount,
   TimeSignature,
-  TremoloLabel,
   TupletPlacement,
   VoiceNumber,
 } from './types/theory';
 import {
   BeamsBuilder,
+  bendTargetWidthPx,
+  breathMarkHeightPx,
+  breathMarkReservedWidthPx,
+  breathMarkWidthPx,
+  BULGE_STEP_PX,
   computeYHeadOffset,
   createBarlineSvg,
+  createBendSvg,
+  createBreathMarkSvg,
   createDynamicMarkingSvg,
+  createDynamicTextSvg,
   createFlatSvg,
   createHairpinSvg,
   createNaturalSvg,
@@ -210,16 +315,25 @@ import {
   createOctaveSignSvg,
   createOrnamentConnectorSlur,
   createParenthesisSvg,
+  createPhonemeArrowSvg,
+  createPhonemeBracketSvg,
+  createPhonemeSvg,
   createSempreArpeggiandoText,
   createSharpSvg,
   createStartRepeatSvg,
+  createSwellSvg,
   createTimeSignatureSvg,
+  DEFAULT_BULGE_HEIGHT,
+  NOTE_HEAD_CX_STEM_DOWN_PX,
+  NOTE_HEAD_CX_STEM_UP_PX,
   NOTE_HEAD_RADIUS_PX,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   octaveSignWidth,
+  phonemeArrowY,
   TRILL_FINISH_HEAD_RY,
   trillFinishTailOverhangPx,
 } from './utils';
+import { GLISSANDO_HINT_LABELS } from './utils/connectorsBuilder';
 import {
   CLEF_EVENTS,
   COMMON_ATTRIBUTES,
@@ -246,6 +360,7 @@ import {
   TUPLET_EVENTS,
 } from './utils/consts';
 import {
+  ACCIDENTAL_ARROW_BEAM_GAP_PX,
   ACCIDENTAL_SYMBOL_HEIGHT,
   ARPEGGIO_HAIRPIN_DYNAMIC_GAP_PX,
   ARPEGGIO_HAIRPIN_VERTICAL_OVERSHOOT_PX,
@@ -254,17 +369,27 @@ import {
   BARLINE_THICK_PX,
   BASE_STEM_LENGTH_PX,
   BEAM_THICKNESS_PX,
+  BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX,
+  BREATH_MARK_INK_GAP_PX,
   CLEF_CHANGE_RESERVED_WIDTH_PX,
   CLEF_X_OFFSET,
   CLUSTER_BRACKET_RISE_PX,
   COURTESY_CLEF_SCALE,
   COURTESY_CLEF_WIDTH_PX,
   CROSS_STAFF_TUPLET_BEAM_Y_EPSILON_PX,
+  CUE_SCALE,
+  DYNAMIC_END_BARLINE_GAP_PX,
+  DYNAMIC_END_NEXT_GAP_PX,
   DYNAMICS_ABOVE_BASELINE_Y,
   DYNAMICS_BASELINE_Y,
   DYNAMICS_FONT_SIZE,
+  DYNAMICS_ROW_EPSILON_PX,
   END_WARNING_GAP_PX,
+  GLISSANDO_WAVE_AMPLITUDE_PX,
   GRACE_MAIN_GAP_PX,
+  GRACE_SCALE,
+  HAIRPIN_AXIS_RISE_PX,
+  HAIRPIN_DYNAMIC_GAP_PX,
   HAIRPIN_OPEN_HEIGHT,
   KEY_SIG_CANCEL_GAP_PX,
   KEY_SIG_FLAT_WIDTH,
@@ -272,6 +397,7 @@ import {
   KEY_SIG_NATURAL_WIDTH,
   KEY_SIG_NATURAL_Y_OFFSET,
   KEY_SIG_SHARP_WIDTH,
+  LAST_ENTRY_GAP_PX,
   LEADING_NOTE_GAP_PX,
   MID_BAR_BARLINE_PADDING_PX,
   MID_BAR_WARNING_CLEF_WIDTH_PX,
@@ -289,12 +415,25 @@ import {
   OCTAVE_SIGN_LEADING_GAP_PX,
   OCTAVE_SIGN_NOTEHEAD_CLEARANCE_PX,
   OCTAVE_SIGN_TRAILING_GAP_PX,
+  PHONEME_BARLINE_GAP_PX,
+  PHONEME_DESCENT_RATIO,
+  PHONEME_FONT_SIZE_PX,
+  PHONEME_INK_GAP_PX,
+  PHONEME_ROW_GAP_PX,
+  PHONEME_SPAN_END_GAP_PX,
   REMINDER_PAREN_GAP_PX,
   REMINDER_PAREN_OVERHANG_PX,
   REMINDER_PAREN_WIDTH_PX,
   REPEAT_START_LEAD_PX,
   REST_AFTER_DOWN_TAIL_EXTRA_ADVANCE_PX,
   REST_AFTER_UP_TAIL_EXTRA_ADVANCE_PX,
+  REST_HALF_WIDTH_PX,
+  SLUR_ARTICULATION_CLEARANCE_PX,
+  SLUR_BEYOND_BEAM_CLEARANCE_PX,
+  SLUR_MAX_EXTRA_BULGE_PX,
+  SLUR_NESTED_CLEARANCE_PX,
+  SLUR_NOTE_CLEARANCE_PX,
+  SLUR_NOTEHEAD_OFFSET_PX,
   STAFF_BOTTOM_LINE_Y,
   STAFF_LINE_SPACING,
   STAFF_LINE_START,
@@ -302,10 +441,13 @@ import {
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
   STAFF_Y_STEP,
+  SWELL_MIN_SPAN_PX,
+  TECHNIQUE_LABEL_FONT_SIZE_PX,
+  TECHNIQUE_LABEL_GAP_PX,
+  TECHNIQUE_TEXT_BELOW_GAP_PX,
+  TIE_REACH_PX,
   TIME_SIG_GLYPH_CENTER_X_PX,
   TIME_SIG_Y_TRANSLATE,
-  TREMOLO_LABEL_FONT_SIZE_PX,
-  TREMOLO_LABEL_GAP_PX,
   TRIANGLE_OUTSIDE_STAFF_PX,
   TRIANGLE_RUN_CLEARANCE_PX,
   TRILL_ABOVE_STAFF_GAP_PX,
@@ -324,26 +466,43 @@ import {
   flattenStaffSlotElements,
   VoiceFlattenResult,
 } from './utils/slotElements';
-import { articulationStackDepth } from './utils/svgCreator/articulations';
+import {
+  articulationStackDepth,
+  articulationStackNearDepth,
+} from './utils/svgCreator/articulations';
 import {
   chordHeadExtentPx,
   chordToneHeadCenterY,
   chordToneHeadExtentPx,
+  chordUpTailInk,
 } from './utils/svgCreator/chord';
+import { lineLabelBox } from './utils/svgCreator/curve';
+import { graceHeadsBottomY, graceInkTopY } from './utils/svgCreator/graceNotes';
+import { ledgerLineOverhangPx } from './utils/svgCreator/ledgerLines';
 import {
   ACCIDENTAL_NOTE_GAP,
+  cueLeftShiftPx,
   flagStemExtensionPx,
   NOTE_SCALE,
   NOTE_SVG_WIDTH,
+  noteHeadCenterShiftPx,
   noteHeadGeometry,
+  noteSizeScale,
   stemTipPosition,
   TAIL_UP_WIDTH_PX,
   trillSignLeftX,
 } from './utils/svgCreator/note';
+import { restInkBottomPx, restInkTopPx } from './utils/svgCreator/rest';
 import {
-  createTremoloLabel,
-  tremoloLabelWidthPx,
-} from './utils/svgCreator/tremolo';
+  createTechniqueLabel,
+  type TechniqueLabel,
+  techniqueLabelHangPx,
+  techniqueLabelHeightPx,
+  techniqueLabels,
+  techniqueLabelWidthPx,
+  techniqueTextLabel,
+  wrapTechniqueLabel,
+} from './utils/svgCreator/techniqueLabel';
 import {
   computeWrittenTrillNoteWidth,
   createTrillLineSvg,
@@ -353,25 +512,6 @@ import {
 } from './utils/svgCreator/trill';
 import { createTupletBracketSvg } from './utils/svgCreator/tuplet';
 import { createUnisonBracketSvg } from './utils/svgCreator/unison';
-
-// The `Note` suffix for an accidental — the inverse of
-// rules/accidentalRules.ts's parseAccidentalSuffix/suffixToType, needed to
-// rebuild a resolved trilling pitch (letter + AccidentalType) into a `Note`
-// string for noteToYCoordinate.
-function accidentalSuffix(accidental: AccidentalType | null): string {
-  switch (accidental) {
-    case 'sharp':
-      return '#';
-    case 'flat':
-      return 'b';
-    case 'double-sharp':
-      return '##';
-    case 'double-flat':
-      return 'bb';
-    default:
-      return '';
-  }
-}
 
 // Undoes what the staff's cross-voice pass sets on an element, so a note or
 // chord that leaves the staff draws as its own again.
@@ -478,20 +618,25 @@ function footprintArpeggioHairpin(
   return null;
 }
 
-// A stem-down chord's adjacent second shifts its head left by
-// ADJACENT_NOTE_X_DISPLACEMENT_PX, past the notehead inset the arpeggio
-// footprint constants assume — reserve that delta when the chord shows a sign.
-function chordLeftHeadDisplacementPx(chord: ChordElementType): number {
-  const coords = chord.staffYCoordinates;
-  if (coords === null || coords.length < 2) {
+// How far (px) a chord's displaced heads reach left of its own box.
+function chordHeadsLeftReachPx(element: NoteChordOrRestElementType): number {
+  if (!isChordNodeName(element.nodeName)) {
     return 0;
   }
-  return Math.max(
-    0,
-    ...computeAdjacentDisplacements(coords, chord.stemUp).map(
-      (displacement) => -displacement.xOffset
-    )
-  );
+  const chord = element as ChordElementType;
+  const coords = chord.staffYCoordinates;
+  return coords === null || coords.length < 2
+    ? 0
+    : Math.max(
+        0,
+        -chordHeadExtentPx({
+          duration: chord.duration,
+          staffYCoordinates: coords,
+          stemUp: chord.stemUp,
+          noFlags: chord.noFlags,
+          noteheads: chord.toneNoteheads,
+        }).left
+      );
 }
 
 // Whether a note/chord currently shows an accidental — the arpeggio sign sits
@@ -529,13 +674,172 @@ type OctaveContinuationRow = {
   starts: boolean;
 };
 
-function tremoloLabelOf(
-  element: NoteChordOrRestElementType
-): TremoloLabel | null {
+function breathMarkOf(element: NoteChordOrRestElementType): BreathMark | null {
   return element.nodeName === MUSIC_REST_NODE
     ? null
-    : (element as NoteElementType | ChordElementType).tremoloLabel ?? null;
+    : (element as NoteElementType | ChordElementType).breathMark ?? null;
 }
+
+// The outermost of rows or reaches on one side of the stave.
+const outermost = (ys: readonly number[], above: boolean): number =>
+  above ? Math.min(...ys) : Math.max(...ys);
+
+// Heights a space apart over the range of `ys`, so a head anywhere in it is
+// within a space of one.
+const spanOfYs = (ys: readonly number[]): number[] => {
+  if (ys.length === 0) {
+    return [];
+  }
+  const [low, high] = [Math.min(...ys), Math.max(...ys)];
+  const count = Math.ceil((high - low) / STAFF_LINE_SPACING);
+  return Array.from({ length: count + 1 }, (_, i) =>
+    Math.min(high, low + i * STAFF_LINE_SPACING)
+  );
+};
+
+const outermostOrNull = (
+  ys: readonly number[],
+  above: boolean
+): number | null => (ys.length === 0 ? null : outermost(ys, above));
+
+const isUnpitchedNote = (element: Element): boolean =>
+  isNoteNodeName(element.nodeName) &&
+  (element as NoteElementType).unpitched !== null;
+
+const staffYOfContainerY = (containerY: number): number =>
+  containerY - STAFF_Y_PADDING + NOTE_HEAD_Y_OFFSET_CORRECTION;
+
+// A staff Y's height in the transcription containers.
+const containerYOfStaffY = (staffY: number): number =>
+  STAFF_Y_PADDING + staffY - NOTE_HEAD_Y_OFFSET_CORRECTION;
+
+// Whether a glissando's end closes the one `start` opens.
+const endsGlissando = (
+  end: NoteOrChordElementType,
+  start: NoteOrChordElementType
+): boolean => {
+  const wanted = end.getAttribute('for');
+  return wanted === null || wanted === start.id;
+};
+
+// A glissando line starts or ends on this entry or one of a chord's tones.
+function hasGlissandoRole(
+  element: NoteChordOrRestElementType,
+  role: ConnectorRole
+): boolean {
+  return (
+    element.nodeName !== MUSIC_REST_NODE &&
+    ((element as NoteElementType | ChordElementType).glissando === role ||
+      (isChordNodeName(element.nodeName) &&
+        element.querySelector(`:scope > [glissando="${role}"]`) !== null))
+  );
+}
+
+// A placed above-staff label or mark (container px), which later ones clear.
+type PlacedAboveStaffRect = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
+type PlacedTechniqueLabel = PlacedAboveStaffRect & {
+  voiceKey: VoiceKey;
+  element: NoteChordOrRestElementType;
+  label: TechniqueLabel;
+  // Where its lines start; hanging punctuation reaches left of it.
+  margin: number;
+};
+
+/**
+ * Set by the ancestor <music-composition> for each technique text: how far
+ * right it may run on over later bars of its row, and the outermost ink
+ * under it there toward its side (both local), or null with none.
+ */
+export type TechniqueTextRunOn = { maxRight: number; inkY: number | null };
+
+/**
+ * A technique text of an earlier bar running on over this staff (local), set
+ * by the ancestor <music-composition>; this staff's own labels clear it.
+ */
+export type CarriedTechniqueText = PlacedAboveStaffRect & { above: boolean };
+
+/** A phoneme as a staff draws it (container px). */
+type PlacedPhoneme = {
+  element: NoteChordOrRestElementType;
+  index: number;
+  text: string;
+  centerX: number;
+  width: number;
+  open: boolean;
+  close: boolean;
+};
+
+/** One voice's phoneme row in a staff. */
+type VoicePhonemes = {
+  baselineY: number;
+  phonemes: PlacedPhoneme[];
+  arrows: { fromX: number; toX: number; head: boolean }[];
+};
+
+/**
+ * What the composition hands a staff for phoneme runs over a barline: where
+ * an arrow out of an entry aims (client px: the next phoneme's head, or the
+ * end of the system), the entries whose run began in an earlier bar, and each
+ * voice's row shared with the bars its runs cross (local px).
+ */
+export type PhonemeContinuations = {
+  nextAnchors: ReadonlyMap<Element, number>;
+  continued: ReadonlySet<Element>;
+  rows: ReadonlyMap<VoiceKey, number>;
+};
+
+/** What the composition hands a staff for swells over a barline. */
+export type SwellContinuations = {
+  covered: ReadonlySet<Element>;
+  dynamicEnds: ReadonlyMap<Element, DynamicMarking>;
+};
+
+/** A placed technique text, reported to the ancestor <music-composition>. */
+export type TechniqueTextPlacement = PlacedAboveStaffRect & {
+  element: Element;
+  above: boolean;
+};
+
+const techniqueTextOf = (
+  element: NoteChordOrRestElementType
+): TechniqueLabel | null =>
+  techniqueTextLabel(
+    element.techniqueText ?? null,
+    element.techniqueTextStyle ?? 'normal'
+  );
+
+const hasTechniqueTextBelow = (element: NoteChordOrRestElementType): boolean =>
+  element.techniqueTextPlacement === 'below' &&
+  techniqueTextOf(element) !== null;
+
+function techniqueLabelsOf(
+  element: NoteChordOrRestElementType
+): TechniqueLabel[] {
+  const text =
+    element.techniqueTextPlacement === 'below'
+      ? null
+      : techniqueTextOf(element);
+  if (element.nodeName === MUSIC_REST_NODE) {
+    return text === null ? [] : [text];
+  }
+  const { tremoloLabel, glissandoLabel } = element as
+    | NoteElementType
+    | ChordElementType;
+  return techniqueLabels(tremoloLabel ?? null, glissandoLabel ?? null, text);
+}
+
+type StaffBarSpacing = BarSpacing & {
+  unisonReserves: ReadonlyMap<VoiceKey, Map<number, number>>;
+  // This staff's own voices.
+  own: VoiceRooms[];
+  roomAfterByVoice: Map<VoiceKey, number[]>;
+};
 
 // One voice's snapshot of a render pass; one per active VoiceKey.
 type VoiceRenderState = {
@@ -572,6 +876,44 @@ type VoiceRenderState = {
   // single-voice staff, or the 'combined' track).
   direction: VoiceDirection | null;
 };
+
+// The notehead of a note, or a chord's first.
+const entryNotehead = (element: NoteChordOrRestElementType): NoteheadType =>
+  isNoteNodeName(element.nodeName)
+    ? (element as NoteElementType).notehead
+    : (element as ChordElementType).toneNoteheads?.[0] ?? 'normal';
+
+// How large an entry is drawn: CUE_SCALE for a cue note or chord.
+const entryScale = (element: NoteChordOrRestElementType): number =>
+  element.nodeName === MUSIC_REST_NODE
+    ? 1
+    : noteSizeScale((element as NoteElementType | ChordElementType).size);
+
+// How far (px) right of its box's centre an entry's head is centred: a
+// semibreve's further, a cue head's less.
+const entryCenterShiftPx = (element: NoteChordOrRestElementType): number =>
+  element.nodeName === MUSIC_REST_NODE
+    ? 0
+    : noteHeadCenterShiftPx(
+        element.duration,
+        entryNotehead(element),
+        entryScale(element)
+      );
+
+const entryHeadHalfWidthPx = (element: NoteChordOrRestElementType): number =>
+  entryCenterShiftPx(element) === 0
+    ? NOTE_HEAD_RADIUS_PX
+    : noteHeadGeometry(
+        true,
+        element.duration,
+        false,
+        entryNotehead(element),
+        entryScale(element)
+      ).halfWidth * NOTE_SCALE;
+
+// The side of a voice's own ties and slurs; null with one voice on the staff.
+const voiceSideOf = ({ direction }: VoiceRenderState): CurveSide | null =>
+  direction === null ? null : direction === 'up' ? 'above' : 'below';
 
 // How far `oldIndex` shifts down once every index in `removedIndices` has
 // been spliced out; re-anchors a voice's tupletsByIndex/arpeggioGroups after
@@ -692,6 +1034,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     NoteOrChordElementType,
     CrossStaffDynamicsOverride
   > | null = null;
+  #sharedDynamicsRows: SharedDynamicsRows = {};
   #crossStaffOctaveBreakAfter: ReadonlySet<NoteChordOrRestElementType> | null =
     null;
   #octaveContinuations: ReadonlyMap<Element, OctaveContinuationRow> | null =
@@ -702,6 +1045,15 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // Where each mid-bar barline's slot would sit from this staff's own
   // entries, per #spaceElements() pass (see ownBarlineSlotLefts).
   #ownBarlineSlotLefts: BarlineSlotLeft[] = [];
+  #ownVoiceRooms: VoiceRooms[] | null = null;
+  // The markers this pass spaces entries around: the measure's, and those with
+  // a slot on this staff.
+  #spacingMarkers: {
+    all: readonly MarkerBeat[];
+    slots: readonly MarkerBeat[];
+  } = { all: [], slots: [] };
+  // Where the bar's beats go, for the unison reserves it was computed with.
+  #cachedBarSpacing: StaffBarSpacing | null = null;
   // Voice 1's beat-offsets, per #renderNotes() pass: clef markers and
   // noteToYCoordinate()'s `elementIndex` both index into voice 1.
   #voice1BeatOffsets: number[] = [];
@@ -728,11 +1080,63 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // Every note and chord the last pass laid out: what it set on them (dot
   // rows, unison parts) is cleared once they leave.
   #crossVoiceElements = new Set<NoteElementType | ChordElementType>();
+  // Top (container Y) of each placed sign stack, and the elements placed.
+  #signTopYs = new Map<Element, number>();
+  #signedElements = new Set<NoteElementType | ChordElementType>();
   // Px a unison on an entry's beat moves a part right, per voice and index:
   // the entry after it keeps clear of that (see #reserveUnisonRoom).
   #unisonReserves = new Map<VoiceKey, Map<number, number>>();
   #octaveSignsContainers: Map<VoiceKey, SVGSVGElement> = new Map();
-  #tremoloLabelContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  #techniqueLabelContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  #placedTechniqueLabels: PlacedTechniqueLabel[] = [];
+  #placedBelowTexts: PlacedTechniqueLabel[] = [];
+  #techniqueTextRunOn: ReadonlyMap<Element, TechniqueTextRunOn> | null = null;
+  #carriedTechniqueTexts: readonly CarriedTechniqueText[] = [];
+  // The right end of this staff's row in its composition (local px).
+  #rowRightX: number | null = null;
+  #breathMarkContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  #bendContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  #warnedBends = new WeakSet<NoteOrChordElementType>();
+  #bendTargetAccidentals = new Map<NoteElementType, AccidentalType | null>();
+  #bendsByEntry = new Map<Element, (ResolvedBend | null)[]>();
+  #chordBendTargetAccidentals = new Map<
+    ChordElementType,
+    (AccidentalType | null)[]
+  >();
+  // The box of each drawn bend (container px), target included.
+  #bendInk = new Map<
+    NoteChordOrRestElementType,
+    {
+      left: number;
+      right: number;
+      top: number;
+      bottom: number;
+      // Contours, which a label clears only where it passes over them.
+      contours: CubicSegment[][];
+    }
+  >();
+  // What a bend never crosses: this staff's clef changes and every barline
+  // (container px).
+  #markerInk: { beat: number; left: number; kind: MarkerBeat['kind'] }[] = [];
+  // Where entries stop, before end-of-measure warnings and the end barline,
+  // in the voice containers' frame (which starts at the describe area's end).
+  #notesAreaEndX = 0;
+  #warnedSwells = new WeakSet<NoteOrChordElementType>();
+  #phonemeContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  #placedPhonemes = new Map<VoiceKey, VoicePhonemes>();
+  #warnedPhonemes = new WeakSet<Element>();
+  #phonemeContinuations: PhonemeContinuations = {
+    nextAnchors: new Map(),
+    continued: new Set(),
+    rows: new Map(),
+  };
+  #swellContinuations: SwellContinuations = {
+    covered: new Set(),
+    dynamicEnds: new Map(),
+  };
+  #flutterCarryIn: ReadonlySet<VoiceNumber> = new Set();
+  #flutterTongued = new Set<NoteChordOrRestElementType>();
+  #warnedFlutterCancels = new WeakSet<NoteChordOrRestElementType>();
   #boundDrawConnectors = (event?: Event) => {
     const path =
       (event as CustomEvent | undefined)?.composedPath?.() ??
@@ -752,6 +1156,14 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     // A trill span's end and a written trilling notehead's footprint depend
     // on `tie`, so with a trill present a tie change needs a full re-layout.
     if (this.#hasTrillMarkedElement()) {
+      this.#boundNoteYChange();
+      return;
+    }
+    // The dynamics row and labels clear this staff's slurs (#slurReaches).
+    if (
+      this.#hasDynamicsMarkedElement() ||
+      this.#placedTechniqueLabels.length > 0
+    ) {
       this.#boundNoteYChange();
       return;
     }
@@ -1218,6 +1630,23 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     this.#boundRenderDynamics();
   }
 
+  // Set by the ancestor <music-composition>: the voices whose flutter-tongue
+  // passage is still open entering this measure. Compared by content.
+  get flutterCarryIn(): ReadonlySet<VoiceNumber> {
+    return this.#flutterCarryIn;
+  }
+  set flutterCarryIn(value: ReadonlySet<VoiceNumber>) {
+    const current = this.#flutterCarryIn;
+    if (
+      current.size === value.size &&
+      [...current].every((voice) => value.has(voice))
+    ) {
+      return;
+    }
+    this.#flutterCarryIn = value;
+    this.#renderNotes();
+  }
+
   // Set by the ancestor <music-measure>: this staff's octave lines break
   // after these elements, so a one-hand line under a double-stemmed beam
   // encloses only its own notes (see measure.ts#crossStaffOctaveBreaks).
@@ -1326,7 +1755,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       pairs: [],
       unpairedStarts: [],
       orphanEnds: [],
+      swells: [],
     };
+    // The voice containers' frame starts at the describe area's end.
+    const containerLeft =
+      this.transcribeContainer.getBoundingClientRect().left + this.describeEndX;
     for (const [voiceKey, state] of this.#voiceRenderStates) {
       const side = this.#defaultDynamicsSide(voiceKey, state);
       const placement: StaffHairpinPlacement = {
@@ -1334,7 +1767,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         side,
         baselineClientY: this.#dynamicsLocalToClientY(
           voiceKey,
-          this.#dynamicsBaselineFor(state, side === 'above')
+          this.#dynamicsBaselineForSide(voiceKey, state, side)
         ),
       };
       const pairing = pairHairpinsWithLeftovers(
@@ -1354,8 +1787,99 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         result.unpairedStarts.push({ ...placement, ...start });
       }
       result.orphanEnds.push(...pairing.orphanEnds);
+      const owners = this.#staffSwells(state);
+      const conflicting = this.#conflictingSwells(state, pairing, owners);
+      for (const owner of owners) {
+        const element = state.elements[owner.index] as NoteOrChordElementType;
+        const shape = element.swell;
+        if (shape === null || conflicting.has(element)) {
+          continue;
+        }
+        const end = this.#swellEnd(voiceKey, state, owner);
+        result.swells.push({
+          ...placement,
+          element,
+          shape,
+          endClientX: containerLeft + end.endX,
+          midClientX:
+            containerLeft + this.#swellMidX(state, owner, end.rawEndX),
+          endText:
+            end.dynamicEnd === null
+              ? null
+              : {
+                  ...end.dynamicEnd,
+                  centerX: containerLeft + end.dynamicEnd.centerX,
+                },
+        });
+      }
     }
     return result;
+  }
+
+  /**
+   * For a swell the composition draws over a barline (client px): where an
+   * entry of its chain stands, its length in beats, and where the swell may
+   * start (clear of the entry's dynamic) and end (before the next entry, its
+   * dynamic, and a `dynamic-end` this staff draws there). Null when this
+   * staff doesn't draw the entry.
+   */
+  swellEntryGeometry(
+    element: Element
+  ): { x: number; startX: number; endX: number; beats: number } | null {
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      const index = state.elements.indexOf(
+        element as NoteChordOrRestElementType
+      );
+      if (index < 0 || element.nodeName === MUSIC_REST_NODE) {
+        continue;
+      }
+      const containerLeft =
+        this.transcribeContainer.getBoundingClientRect().left +
+        this.describeEndX;
+      const x = state.noteXPositions.get(index) ?? 0;
+      const end = this.#swellEnd(voiceKey, state, {
+        index,
+        lastIndex: index,
+      });
+      return {
+        x: containerLeft + x,
+        startX:
+          containerLeft +
+          hairpinStartClearOf(
+            x,
+            this.#ownDynamicText(element as NoteOrChordElementType, x)
+          ),
+        endX: containerLeft + end.endX,
+        beats: this.#beatLength(state, index),
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Set by the ancestor <music-composition> for swells over a barline: the
+   * entries whose own swell an earlier bar's covers, and the `dynamic-end`
+   * of a chain that ends on one of this staff's entries. Compared by content.
+   */
+  get swellContinuations(): SwellContinuations {
+    return this.#swellContinuations;
+  }
+
+  set swellContinuations(value: SwellContinuations) {
+    const current = this.#swellContinuations;
+    const sameCovered =
+      current.covered.size === value.covered.size &&
+      [...value.covered].every((element) => current.covered.has(element));
+    const sameEnds =
+      current.dynamicEnds.size === value.dynamicEnds.size &&
+      [...value.dynamicEnds].every(
+        ([element, marking]) => current.dynamicEnds.get(element) === marking
+      );
+    if (sameCovered && sameEnds) {
+      return;
+    }
+    this.#swellContinuations = value;
+    this.#renderNotes();
   }
 
   constructor() {
@@ -1732,6 +2256,10 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     for (const [type, listener] of this.#listeners()) {
       this.removeEventListener(type, listener);
     }
+    this.#sharedDynamicsRows = {};
+    this.#techniqueTextRunOn = null;
+    this.#carriedTechniqueTexts = [];
+    this.#rowRightX = null;
   }
 
   override attributeChangedCallback(
@@ -1813,11 +2341,19 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // Synthetic elements (a combined-voices chord or shared whole-measure rest)
   // are re-derived every pass: removed and recreated, never diffed.
   #syntheticElements: HTMLElement[] = [];
+  // The chord each combined entry is drawn in.
+  #combinedChords = new Map<NoteOrChordElementType, ChordElementType>();
   #clearSyntheticElements(): void {
     for (const element of this.#syntheticElements) {
       element.remove();
     }
     this.#syntheticElements = [];
+    this.#combinedChords.clear();
+  }
+
+  /** What draws `entry`: itself, or the chord two voices were combined into. */
+  protected drawnEntryOf(entry: NoteOrChordElementType): HTMLElement {
+    return this.#combinedChords.get(entry) ?? entry;
   }
 
   // Builds the <music-chord> for an auto-combine group, fully assembled before
@@ -1834,6 +2370,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
     if (reference.dynamicReminder) {
       chord.setAttribute('dynamic-reminder', '');
+    }
+    if ((reference.dynamicText ?? null) !== null) {
+      chord.setAttribute('dynamic-text', reference.dynamicText as string);
     }
     if (reference.crescendo !== null) {
       chord.setAttribute('crescendo', reference.crescendo);
@@ -1852,6 +2391,21 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
     if (reference.articulationRepeat) {
       chord.setAttribute('articulation-repeat', '');
+    }
+    if (reference.breathMark !== null) {
+      chord.setAttribute('breath-mark', reference.breathMark);
+    }
+    if ((reference.swell ?? null) !== null) {
+      chord.setAttribute('swell', reference.swell as string);
+    }
+    if ((reference.dynamicEnd ?? null) !== null) {
+      chord.setAttribute('dynamic-end', reference.dynamicEnd as string);
+    }
+    if (reference.stemMark !== null) {
+      chord.setAttribute('stem-mark', reference.stemMark);
+    }
+    if (reference.size === 'cue') {
+      chord.setAttribute('size', 'cue');
     }
     for (const tone of group.tones) {
       const note = document.createElement(MUSIC_NOTE);
@@ -1891,19 +2445,32 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       const beatOffset = beatOffsets[i];
       if (isNoteNodeName(element.nodeName)) {
         const noteElement = element as NoteElementType;
+        const written = this.#noteToYCoordinateAtBeatOffset(
+          noteElement.note,
+          noteElement.octave ?? undefined,
+          beatOffset
+        );
+        const unpitched = noteElement.unpitched ?? null;
         noteStaffYCoords.set(
           noteElement,
-          this.#noteToYCoordinateAtBeatOffset(
-            noteElement.note,
-            noteElement.octave ?? undefined,
-            beatOffset
-          )
+          unpitched === null
+            ? written
+            : resolveUnpitchedStaffY(unpitched, written)
         );
       } else if (isChordNodeName(element.nodeName)) {
         const chordElement = element as ChordElementType;
+        const unpitched = chordElement.toneUnpitched ?? [];
         chordStaffYCoords.set(
           chordElement,
-          this.#resolveChordStaffYCoordinates(chordElement.notes, beatOffset)
+          this.#resolveChordStaffYCoordinates(
+            chordElement.notes,
+            beatOffset
+          ).map((written, tone) => {
+            const placement = unpitched[tone] ?? null;
+            return placement === null
+              ? written
+              : resolveUnpitchedStaffY(placement, written);
+          })
         );
       }
     }
@@ -1950,13 +2517,14 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
             notehead,
             tiedFromPrevious:
               isNoteNodeName(previous?.nodeName ?? '') &&
-              (previous as NoteElementType).tie === 'start',
+              tiesOn((previous as NoteElementType).tie),
           };
         }
       }
       const headYs = getStaffYs(element, noteStaffYCoords, chordStaffYCoords);
       const stem = resolvedStem?.(i);
       const duration = (element as NoteElementType | ChordElementType).duration;
+      const scale = entryScale(element);
       return {
         kind: 'pitched',
         headYs,
@@ -1967,10 +2535,10 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
               stemless: isStemlessDuration(duration),
               noFlags: stem.noFlags,
               stemExtensionPx: stem.stemExtensionPx,
-              baseStemLengthPx: BASE_STEM_LENGTH_PX,
-              flagExtensionPx: flagStemExtensionPx(
-                durationToFlagCountMap.get(duration) ?? 0
-              ),
+              baseStemLengthPx: scale * BASE_STEM_LENGTH_PX,
+              flagExtensionPx:
+                scale *
+                flagStemExtensionPx(durationToFlagCountMap.get(duration) ?? 0),
             })
           : null,
       };
@@ -2143,7 +2711,12 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       tremoloGroups,
       mergeMarkerBeats(this.ownMarkerBeats, this.measureMarkerBeats)
         .filter((marker) => marker.kind === 'barline')
-        .map((marker) => marker.beat)
+        .map((marker) => marker.beat),
+      new Set(
+        elements
+          .map((element, i) => (this.#flutterTongued.has(element) ? i : -1))
+          .filter((i) => i >= 0)
+      )
     );
     // Beamed lengths come from the beam line and cross-staff ones from the
     // ancestor <music-measure>, so only unbeamed stems take their rule length.
@@ -2161,22 +2734,27 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
       const element = elements[i] as NoteElementType | ChordElementType;
       const headYs = getStaffYs(element, noteStaffYCoords, chordStaffYCoords);
-      return unbeamedTremoloStemExtensionPx({
-        tremolo: element.tremolo,
-        duration: element.duration,
-        headYs,
-        stemUp: stemDirections[i],
-        staff: STAFF_BAND,
-        stemExtensionPx: unbeamedStemExtensionPx(
+      // A cue stem is the rule's length at its scale.
+      return (
+        entryScale(element) *
+        unbeamedTremoloStemExtensionPx({
+          tremolo: element.tremolo,
+          stemMark: element.stemMark,
+          duration: element.duration,
           headYs,
-          stemDirections[i],
-          durationToFlagCountMap.get(element.duration) ?? 0,
-          !(
-            isNoteNodeName(element.nodeName) &&
-            isTriangle((element as NoteElementType).notehead)
-          )
-        ),
-      });
+          stemUp: stemDirections[i],
+          staff: STAFF_BAND,
+          stemExtensionPx: unbeamedStemExtensionPx(
+            headYs,
+            stemDirections[i],
+            durationToFlagCountMap.get(element.duration) ?? 0,
+            !(
+              isNoteNodeName(element.nodeName) &&
+              suppressesLedgerLines((element as NoteElementType).notehead)
+            )
+          ),
+        })
+      );
     };
     this.#placeTriangles(
       elements,
@@ -2194,10 +2772,15 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         return 0;
       }
       const headYs = getStaffYs(element, noteStaffYCoords, chordStaffYCoords);
+      const scale = entryScale(element);
       return (
         unbeamedExtensionsPx[i] +
         (Math.max(...headYs) - Math.min(...headYs)) +
-        flagStemExtensionPx(durationToFlagCountMap.get(element.duration) ?? 0)
+        scale *
+          flagStemExtensionPx(
+            durationToFlagCountMap.get(element.duration) ?? 0
+          ) -
+        (1 - scale) * BASE_STEM_LENGTH_PX
       );
     });
 
@@ -2212,6 +2795,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
       return tremoloInkPastStemPx({
         tremolo: noteOrChord.tremolo ?? null,
+        stemMark: noteOrChord.stemMark,
         tuplet: noteOrChord.tremoloTuplet ?? null,
         duration: element.duration,
         headY: stemDirections[i] ? Math.min(...headYs) : Math.max(...headYs),
@@ -2270,7 +2854,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
                 this.#effectiveKeySig,
                 this.#effectiveMode,
                 noteElement.trillAccidental,
-                noteElement.trillNote
+                noteElement.trillNote,
+                noteElement.trillQuarterTone
               )
             : null;
         });
@@ -2388,6 +2973,33 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         arpeggioGroups: voiceData.arpeggioGroups,
         tremoloGroups,
       });
+    }
+
+    this.#flutterTongued = new Set();
+    for (const [voiceNumber, p] of pass1ByVoice) {
+      const { flutterTongued, missingCancels } = resolveFlutterPassages(
+        p.elements.map(flutterEntryOf),
+        this.#flutterCarryIn.has(voiceNumber)
+      );
+      for (const i of flutterTongued) {
+        this.#flutterTongued.add(p.elements[i]);
+      }
+      if (this.closest(MUSIC_COMPOSITION) !== null) {
+        continue;
+      }
+      for (const i of missingCancels) {
+        const element = p.elements[i];
+        if (!this.#warnedFlutterCancels.has(element)) {
+          this.#warnedFlutterCancels.add(element);
+          console.warn(
+            `[staff] ${missingFlutterCancelWarning(
+              isMultiVoice
+                ? `voice ${voiceNumber}, entry ${i + 1}`
+                : `entry ${i + 1}`
+            )}`
+          );
+        }
+      }
     }
 
     // Clef markers index into voice 1; #voice1BeatOffsets converts those
@@ -2527,9 +3139,20 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
 
       if (combinedGroups.length > 0) {
-        const combinedElements = combinedGroups.map((group) =>
-          this.#synthesizeCombinedChord(group)
-        );
+        const combinedElements = combinedGroups.map((group) => {
+          const chord = this.#synthesizeCombinedChord(group);
+          for (const { element } of group.members) {
+            this.#combinedChords.set(element, chord);
+          }
+          if (
+            group.members.every((member) =>
+              this.#flutterTongued.has(member.element)
+            )
+          ) {
+            this.#flutterTongued.add(chord);
+          }
+          return chord;
+        });
         trackInputs.set('combined', {
           elements: combinedElements,
           beatOffsets: combinedGroups.map((group) => group.beatOffset),
@@ -2560,6 +3183,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       this.#effectiveKeySig,
       this.#effectiveMode
     );
+    this.#bendsByEntry.clear();
+    this.#bendTargetAccidentals = accidentals.bendTargetAccidentals;
+    this.#chordBendTargetAccidentals = accidentals.chordBendTargetAccidentals;
 
     const staffYsByVoice = new Map<VoiceNumber, VoiceDirectionInput[]>();
     for (const [voiceNumber, p] of pass1ByVoice) {
@@ -2628,7 +3254,10 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     this.#prepareVoiceContainers(this.#dynamicsContainers, activeKeys);
     this.#prepareVoiceContainers(this.#trillLinesContainers, activeKeys);
     this.#prepareVoiceContainers(this.#octaveSignsContainers, activeKeys);
-    this.#prepareVoiceContainers(this.#tremoloLabelContainers, activeKeys);
+    this.#prepareVoiceContainers(this.#techniqueLabelContainers, activeKeys);
+    this.#prepareVoiceContainers(this.#breathMarkContainers, activeKeys);
+    this.#prepareVoiceContainers(this.#bendContainers, activeKeys);
+    this.#prepareVoiceContainers(this.#phonemeContainers, activeKeys);
 
     this.#spaceElements();
 
@@ -2652,9 +3281,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
 
     this.drawConnectorsWhenStandalone();
 
-    // Min/natural width per voice key; the staff reports the max. Two voices
-    // wanting room at one beat could need more than either alone, but
-    // #spaceElements() still clamps collisions per voice.
+    // Min/natural width per voice key; the staff reports the max, or what the
+    // voices need together.
+    const { requiredWidth, uncrowdedWidth } = this.#contentWidths();
     let maxMinWidth = 0;
     let maxNaturalWidth = 0;
     let strutInputs: StaffStrutInputs | null = null;
@@ -2677,6 +3306,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       const reservedEndWarningWidth = this.endWarningSpace.reserved;
       for (let i = 0; i < state.elements.length; i++) {
         rightwardWidth += this.#rightwardFootprint(voiceKey, i);
+        if (
+          i === state.elements.length - 1 &&
+          this.#bendsOf(state, i).length > 0
+        ) {
+          // A bend at the end of the bar stops inside it.
+          rightwardWidth += NOTE_SVG_WIDTH - MIN_NOTE_WIDTH;
+        }
         if (i > 0) {
           rightwardWidth += this.#advanceBeyondStrutTerms(voiceKey, state, i);
         }
@@ -2711,21 +3347,33 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           rightwardWidth,
           endWarningWidth: reservedEndWarningWidth,
           totalSlackWeight: totalWeight,
+          requiredWidth,
+          uncrowdedWidth,
         };
       }
       maxMinWidth = Math.max(maxMinWidth, minWidth);
       maxNaturalWidth = Math.max(maxNaturalWidth, naturalWidth);
     }
     this.#currentStrutInputs = strutInputs;
-    if (anyVoiceHasContent) {
-      this.dispatchEvent(
-        new CustomEvent(STAFF_EVENTS.STAFF_MIN_WIDTH, {
-          bubbles: true,
-          composed: false,
-          detail: { minWidth: maxMinWidth, naturalWidth: maxNaturalWidth },
-        })
-      );
-    }
+    this.reportStaffWidths(
+      anyVoiceHasContent
+        ? {
+            minWidth: Math.max(maxMinWidth, requiredWidth),
+            naturalWidth: Math.max(
+              maxNaturalWidth,
+              requiredWidth,
+              uncrowdedWidth
+            ),
+            uncrowdedWidth,
+          }
+        : null
+    );
+    this.onNotesLaidOut();
+  }
+
+  /** Runs after the notes are laid out, on a render or a resize. */
+  protected onNotesLaidOut(): void {
+    // Only a staff with content of its own needs it.
   }
 
   #resolveChordStaffYCoordinates(
@@ -2830,6 +3478,10 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
     }
     return own;
+  }
+
+  override get ownVoiceRooms(): readonly VoiceRooms[] | null {
+    return this.#ownVoiceRooms;
   }
 
   override get ownBarlineSlotLefts(): readonly BarlineSlotLeft[] {
@@ -3141,11 +3793,17 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       if (trillFinish === null || trillFinish.length === 0) {
         continue;
       }
+      const ratio = entryScale(hostElement);
       const width = computeGraceFootprintWidth(
         trillFinish,
-        hostElement.resolvedTrillFinishAccidentals
+        hostElement.resolvedTrillFinishAccidentals,
+        [],
+        ratio
       );
-      footprints.set(i, width + trillFinishTailOverhangPx(trillFinish.length));
+      footprints.set(
+        i,
+        width + trillFinishTailOverhangPx(trillFinish.length, ratio)
+      );
     }
     return footprints;
   }
@@ -3200,47 +3858,134 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     );
   }
 
-  // An entry's x (wrapper px) from its beat alone: its share of the width
-  // left after the leading gap and every marker's reserved room, shifted
-  // past each marker it comes after. Every voice uses the same formula, so
-  // entries on the same beat line up across voices.
-  #proportionalEntryX(
-    state: VoiceRenderState,
-    markers: readonly MarkerBeat[],
-    remainingWidth: number,
-    measureCapacity: number
-  ): (i: number) => number {
-    const measureOffsets = computeMeasureProportionalOffsets(
-      state.beatOffsets,
-      measureCapacity,
-      remainingWidth - LEADING_NOTE_GAP_PX - totalMarkerWidth(markers)
+  // Where the bar's beats go, from this staff's voices and the other staves'.
+  #barSpacing(): StaffBarSpacing {
+    if (this.#cachedBarSpacing?.unisonReserves === this.#unisonReserves) {
+      return this.#cachedBarSpacing;
+    }
+    const { all, slots } = this.#spacingMarkers;
+    const voices = [...this.#voiceRenderStates].filter(
+      ([voiceKey, { elements }]) =>
+        voiceKey !== 'shared-rest' && elements.length > 0
     );
-    return (i) =>
+    const own = voices.map(
+      ([voiceKey, state]): VoiceRooms => ({
+        beatOffsets: state.beatOffsets,
+        rooms: state.elements.map((_, i) =>
+          this.#roomToNext(voiceKey, state, i)
+        ),
+        lead:
+          this.#entryLeftwardExtent(state.elements[0]) +
+          markerWidthReached(slots, state.beatOffsets[0]),
+      })
+    );
+    const [beatsInMeasure, beatType] = this.effectiveTimeSig;
+    const spacing = layOutBar(
+      [...own, ...this.sharedVoiceRooms],
+      all,
+      beatsInMeasure / beatType,
+      this.#notesAreaEndX - LEADING_NOTE_GAP_PX
+    );
+    this.#cachedBarSpacing = {
+      ...spacing,
+      unisonReserves: this.#unisonReserves,
+      own,
+      roomAfterByVoice: new Map(
+        voices.map(([voiceKey], i) => [voiceKey, spacing.roomAfter[i]])
+      ),
+    };
+    return this.#cachedBarSpacing;
+  }
+
+  // The least widths (px) the bar's entries fit in at all, and fit in with
+  // none moved for what follows it.
+  #contentWidths(): { requiredWidth: number; uncrowdedWidth: number } {
+    const { own, requiredWidth, uncrowdedWidth } = this.#barSpacing();
+    if (own.length === 0) {
+      return { requiredWidth: 0, uncrowdedWidth: 0 };
+    }
+    const fixedWidth =
       this.describeEndX +
       LEADING_NOTE_GAP_PX +
-      markerWidthReached(markers, state.beatOffsets[i]) +
-      measureOffsets[i];
+      this.endBarlineReserve +
+      this.endWarningSpace.reserved;
+    return {
+      requiredWidth: fixedWidth + requiredWidth,
+      uncrowdedWidth: fixedWidth + uncrowdedWidth,
+    };
+  }
+
+  // Least distance (px) from an entry's x to the next one's, or the last's to
+  // the end of the notes area. Mirrors the clamps in #layoutVoiceEntries().
+  #roomToNext(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    index: number
+  ): number {
+    const footprint = this.#rightwardFootprint(voiceKey, index);
+    const nextBeat = state.beatOffsets[index + 1] ?? Number.POSITIVE_INFINITY;
+    const markerWidth = totalMarkerWidth(
+      this.#spacingMarkers.slots.filter(
+        ({ beat }) =>
+          beat > state.beatOffsets[index] + MARKER_BEAT_EPSILON &&
+          beat <= nextBeat + MARKER_BEAT_EPSILON
+      )
+    );
+    const next: NoteChordOrRestElementType | undefined =
+      state.elements[index + 1];
+    if (next === undefined) {
+      return Math.max(
+        this.#entryInkRight(state, index) + LAST_ENTRY_GAP_PX,
+        footprint > 0 || markerWidth > 0
+          ? NOTE_SVG_WIDTH + footprint + markerWidth
+          : 0
+      );
+    }
+    const leftward = this.#entryLeftwardExtent(next);
+    return markerWidth > 0
+      ? NOTE_SVG_WIDTH + footprint + markerWidth + leftward
+      : computeMinimumEntryAdvance(
+          this.#tailFollowerRoom(state, index + 1),
+          leftward,
+          footprint
+        );
+  }
+
+  // The right edge of an entry's heads, dots and tails, in px from its left
+  // edge.
+  #entryInkRight(state: VoiceRenderState, index: number): number {
+    const element = state.elements[index];
+    const staffYs = getStaffYs(
+      element,
+      state.noteStaffYCoords,
+      state.chordStaffYCoords
+    );
+    if (element.nodeName === MUSIC_REST_NODE || staffYs.length === 0) {
+      return MIN_NOTE_WIDTH;
+    }
+    const { headRightX, dotsRightEdgeX, tailRightX } = this.#voicePartGeometry(
+      element as NoteElementType | ChordElementType,
+      staffYs
+    );
+    return Math.max(
+      headRightX,
+      dotsRightEdgeX ?? -Infinity,
+      tailRightX ?? -Infinity
+    );
   }
 
   // Where the slot of `markers[index]` starts from its beat alone: just
   // before the entries on its beat, by the same formula as
-  // #proportionalEntryX.
+  // computeColumnOffsets.
   #proportionalMarkerLeft(
     markers: readonly MarkerBeat[],
-    index: number,
-    remainingWidth: number,
-    measureCapacity: number
+    index: number
   ): number {
-    const [offset] = computeMeasureProportionalOffsets(
-      [Math.max(0, markers[index].beat)],
-      measureCapacity,
-      remainingWidth - LEADING_NOTE_GAP_PX - totalMarkerWidth(markers)
-    );
     return (
       this.describeEndX +
       LEADING_NOTE_GAP_PX +
       totalMarkerWidth(markers.slice(0, index)) +
-      offset
+      this.#barSpacing().placeOf(Math.max(0, markers[index].beat))
     );
   }
 
@@ -3254,7 +3999,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     state: VoiceRenderState,
     slots: readonly MarkerBeat[],
     slotLefts: readonly number[],
-    proportionalX: (i: number) => number,
+    columnX: (i: number) => number,
     endBeat = Number.POSITIVE_INFINITY
   ): { x: number; leftwardWidth: number; rightEdge: number }[] {
     const placements: {
@@ -3280,10 +4025,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         markersPassed++;
       }
 
-      let x = proportionalX(i);
+      let x = columnX(i);
       // Collision floor: the proportional position has no built-in minimum
-      // gap, so enforce one against the *previous* entry alone — never
-      // looking ahead, so appending a new entry never moves a placed one.
+      // gap, so enforce one against the *previous* entry alone.
       if (previousNoteX !== null) {
         x = Math.max(
           x,
@@ -3326,7 +4070,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // it runs through every staff at once.
   #resolveMarkerSlots(
     slots: readonly MarkerBeat[],
-    proportionalXByVoice: ReadonlyMap<VoiceKey, (i: number) => number>,
+    columnXByVoice: ReadonlyMap<VoiceKey, (i: number) => number>,
     barlineFloor: (slotIndex: number) => number
   ): number[] {
     const slotLefts: number[] = [];
@@ -3334,7 +4078,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     for (const [slotIndex, slot] of slots.entries()) {
       const changeBeat = slot.beat;
       let left = this.describeEndX + LEADING_NOTE_GAP_PX;
-      for (const [voiceKey, proportionalX] of proportionalXByVoice) {
+      for (const [voiceKey, columnX] of columnXByVoice) {
         const state = this.#voiceRenderStates.get(voiceKey);
         if (!state) {
           continue;
@@ -3344,7 +4088,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           state,
           slots,
           slotLefts,
-          proportionalX,
+          columnX,
           changeBeat
         );
         if (before.length > 0) {
@@ -3352,7 +4096,10 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         }
       }
       if (slot.kind === 'barline') {
-        left = Math.max(left, barlineFloor(slotIndex));
+        left = Math.max(
+          left,
+          Math.min(barlineFloor(slotIndex), this.#latestSlotLeft(slot))
+        );
         ownBarlineSlotLefts.push({ beat: changeBeat, left });
         const shared = this.measureBarlineSlotLefts.find(
           (candidate) =>
@@ -3366,6 +4113,26 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
     this.#ownBarlineSlotLefts = ownBarlineSlotLefts;
     return slotLefts;
+  }
+
+  // The latest x (wrapper px) a marker's slot may start at for the entries
+  // after it to fit.
+  #latestSlotLeft(slot: MarkerBeat): number {
+    let room = 0;
+    for (const [voiceKey, roomAfter] of this.#barSpacing().roomAfterByVoice) {
+      const state = this.#voiceRenderStates.get(voiceKey);
+      const index =
+        state?.beatOffsets.findIndex(
+          (beat) => beat >= slot.beat - MARKER_BEAT_EPSILON
+        ) ?? -1;
+      if (state && index >= 0) {
+        room = Math.max(
+          room,
+          roomAfter[index] + this.#entryLeftwardExtent(state.elements[index])
+        );
+      }
+    }
+    return this.describeEndX + this.#notesAreaEndX - room - slot.width;
   }
 
   // The box a mid-stream clef glyph covers, in beams-container px: measured
@@ -3401,37 +4168,42 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   ): UnisonPartDescriptor {
     if (isNoteNodeName(element.nodeName)) {
       const note = element as NoteElementType;
-      const pitchAccidental = suffixToType(parseAccidentalSuffix(note.note));
+      const ownAccidental = pitchAccidental(note.note, note.quarterTone);
       return {
         duration: durationToBase[duration],
-        pitchAccidental,
+        pitchAccidental: ownAccidental,
         shownAccidental:
           note.showAccidental === undefined
-            ? pitchAccidental
+            ? ownAccidental
             : note.showAccidental,
         notehead: resolveNoteheadGlyph(note.notehead, duration),
+        unpitched: note.unpitched !== null,
         isChord: false,
+        scale: entryScale(note),
       };
     }
     const chord = element as ChordElementType;
+    const scale = entryScale(chord);
     const headInput = {
       duration,
       staffYCoordinates: staffYs,
       stemUp: chord.stemUp,
       noFlags: chord.noFlags,
       noteheads: chord.toneNoteheads,
+      scale,
     };
+    const quarterTones = chord.toneQuarterTones;
     return {
       duration: durationToBase[duration],
       pitchAccidental: null,
       shownAccidental: null,
+      unpitched: chord.toneUnpitched.some((placement) => placement !== null),
       isChord: true,
       tones: chord.notes.map((tone, index) => {
-        const pitchAccidental = suffixToType(parseAccidentalSuffix(tone.value));
         const { left, right } = chordToneHeadExtentPx(headInput, index);
         return {
           staffY: staffYs[index],
-          pitchAccidental,
+          pitchAccidental: pitchAccidental(tone.value, quarterTones[index]),
           shownAccidental: chord.noteAccidentals[index] ?? null,
           headCenterX: (left + right) / 2,
           headLeftX: left,
@@ -3443,8 +4215,14 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         };
       }),
       accidentalReachPx: chord.noteAccidentals.some((a) => a != null)
-        ? totalChordAccidentalWidth(chord.noteAccidentals, [...staffYs])
+        ? totalChordAccidentalWidth(
+            chord.noteAccidentals,
+            [...staffYs],
+            [],
+            scale
+          )
         : 0,
+      scale,
     };
   }
 
@@ -3455,6 +4233,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     staffYs: readonly number[]
   ): VoicePartGeometry {
     const { stemUp, noFlags, duration } = element;
+    const scale = entryScale(element);
     let headLeftX: number;
     let headRightX: number;
     if (isNoteNodeName(element.nodeName)) {
@@ -3462,7 +4241,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         stemUp,
         duration,
         noFlags,
-        (element as NoteElementType).notehead
+        (element as NoteElementType).notehead,
+        scale
       );
       headLeftX = (head.cx - head.halfWidth) * NOTE_SCALE;
       headRightX = (head.cx + head.halfWidth) * NOTE_SCALE;
@@ -3473,13 +4253,14 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         stemUp,
         noFlags,
         noteheads: (element as ChordElementType).toneNoteheads,
+        scale,
       });
       headLeftX = extent.left;
       headRightX = extent.right;
     }
     const stemX = isStemlessDuration(duration)
       ? null
-      : stemTipPosition(stemUp, duration, noFlags, 0).x * NOTE_SCALE;
+      : stemTipPosition(stemUp, duration, noFlags, 0, scale).x * NOTE_SCALE;
     const drawsTails =
       stemUp &&
       !noFlags &&
@@ -3491,7 +4272,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       stemX,
       dotsRightEdgeX: element.augmentationDotsRightEdgePx,
       tailRightX:
-        drawsTails && stemX !== null ? stemX + TAIL_UP_WIDTH_PX : null,
+        drawsTails && stemX !== null ? stemX + scale * TAIL_UP_WIDTH_PX : null,
     };
   }
 
@@ -3502,12 +4283,399 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     if (!state) {
       return 0;
     }
+    const element = state.elements[index];
+    const breathMark = breathMarkOf(element);
+    // A breath mark above the stave, a swell below it and a glissando or bend
+    // beside the note share the gap.
+    const gapReserve = Math.max(
+      breathMark === null ? 0 : breathMarkReservedWidthPx(breathMark),
+      this.#dynamicsReserve(state, index),
+      this.#phonemeReserve(state, index),
+      this.#glissandoReserve(state, index),
+      this.#bendReserve(voiceKey, state, index)
+    );
     return (
-      this.#augmentationDotFootprint(state, index) +
+      this.#rightwardInkFootprint(voiceKey, state, index) +
+      Math.max(0, gapReserve)
+    );
+  }
+
+  // Room (px) past an entry's SVG box for its phonemes: each one's width, the
+  // gaps or shortest arrows between them and after the last, and half the
+  // next entry's first phoneme, which stands on its head.
+  #phonemeReserve(state: VoiceRenderState, index: number): number {
+    const phonemesOf = (element: NoteChordOrRestElementType | undefined) =>
+      element === undefined || element.nodeName === MUSIC_REST_NODE
+        ? null
+        : parsePhonemes((element as NoteOrChordElementType).phonemes ?? null);
+    const element = state.elements[index];
+    const phonemes = phonemesOf(element);
+    if (phonemes === null) {
+      return 0;
+    }
+    const bracket = phonemeBracketWidthPx();
+    const widths = phonemes.map(({ text }) => phonemeWidthPx(text));
+    let reach =
+      NOTE_SVG_WIDTH / 2 + entryCenterShiftPx(element) + widths[0] / 2;
+    phonemes.slice(1).forEach((_, k) => {
+      const linked = phonemes[k].arrowAfter;
+      reach +=
+        phonemeSpacingPx(linked) + (linked ? 0 : 2 * bracket) + widths[k + 1];
+    });
+    const last = phonemes[phonemes.length - 1];
+    const nextFirst = phonemesOf(state.elements[index + 1])?.[0];
+    reach += last.arrowAfter
+      ? phonemeSpacingPx(true)
+      : bracket + PHONEME_SPAN_END_GAP_PX;
+    if (nextFirst !== undefined) {
+      reach +=
+        phonemeWidthPx(nextFirst.text) / 2 + (last.arrowAfter ? 0 : bracket);
+    }
+    return reach - NOTE_SVG_WIDTH;
+  }
+
+  // Room (px) past an entry's SVG box for a swell over just this entry and a
+  // `dynamic-end` at its end: the start dynamic, the shortest swell and the
+  // end marking, each a gap apart.
+  #dynamicsReserve(state: VoiceRenderState, index: number): number {
+    const element = state.elements[index];
+    if (element.nodeName === MUSIC_REST_NODE) {
+      return 0;
+    }
+    const noteOrChord = element as NoteOrChordElementType;
+    const oneEntrySwell = this.#staffSwells(state).some(
+      (owner) => owner.index === index && owner.lastIndex === index
+    );
+    const dynamicEnd = this.#dynamicEndsOf(state).find(
+      (end) => end.at === index
+    );
+    if (!oneEntrySwell && dynamicEnd === undefined) {
+      return 0;
+    }
+    const headCenter = NOTE_SVG_WIDTH / 2 + entryCenterShiftPx(element);
+    const startClear =
+      noteOrChord.dynamic === null
+        ? 0
+        : headCenter +
+          dynamicTextHalfWidth(
+            noteOrChord.dynamic,
+            noteOrChord.dynamicReminder
+          ) +
+          dynamicTextTrailingPx(noteOrChord.dynamicText) +
+          HAIRPIN_DYNAMIC_GAP_PX;
+    const endGap =
+      index === state.elements.length - 1
+        ? DYNAMIC_END_BARLINE_GAP_PX
+        : DYNAMIC_END_NEXT_GAP_PX;
+    const endReach =
+      dynamicEnd === undefined
+        ? 0
+        : dynamicEndReachPx(dynamicEnd.marking) -
+          DYNAMIC_END_NEXT_GAP_PX +
+          endGap;
+    const reach = oneEntrySwell
+      ? startClear + SWELL_MIN_SPAN_PX + HAIRPIN_DYNAMIC_GAP_PX + endReach
+      : Math.max(
+          startClear,
+          headCenter -
+            (dynamicEnd === undefined
+              ? 0
+              : dynamicTextHalfWidth(dynamicEnd.marking))
+        ) + endReach;
+    return reach - NOTE_SVG_WIDTH;
+  }
+
+  // Room (px) past an entry's SVG box for the glissando line it starts: the
+  // rest of what the line needs beyond the blank beside the two heads. A line
+  // that runs past another entry has room already.
+  #glissandoReserve(state: VoiceRenderState, index: number): number {
+    const next: NoteChordOrRestElementType | undefined =
+      state.elements[index + 1];
+    if (
+      !hasGlissandoRole(state.elements[index], 'start') ||
+      (next !== undefined && !hasGlissandoRole(next, 'end'))
+    ) {
+      return 0;
+    }
+    const headLeftX = NOTE_HEAD_CX_STEM_UP_PX - NOTE_HEAD_RADIUS_PX;
+    const blankAfter =
+      NOTE_SVG_WIDTH - NOTE_HEAD_CX_STEM_UP_PX - NOTE_HEAD_RADIUS_PX;
+    // An accidental or ornament fills the blank before the next head.
+    const blankBefore =
+      next !== undefined && this.#entryLeftwardExtent(next) === 0
+        ? headLeftX
+        : 0;
+    return Math.max(0, glissandoReserveWidthPx() - blankAfter - blankBefore);
+  }
+
+  // The bends entry `index` draws, with the head each starts at and the
+  // accidental the bar calls for on its target. A glissando's line takes a
+  // bend's place.
+  #bendsOf(state: VoiceRenderState, index: number): BendHead[] {
+    const element = state.elements[index];
+    if (
+      element.nodeName === MUSIC_REST_NODE ||
+      state.tremoloScaleByIndex.has(index) ||
+      (element as NoteElementType | ChordElementType).glissando === 'start'
+    ) {
+      return [];
+    }
+    const bends = this.#entryBends(
+      element as NoteElementType | ChordElementType
+    );
+    if (bends.every((bend) => bend === null)) {
+      return [];
+    }
+    const staffYs = getStaffYs(
+      element,
+      state.noteStaffYCoords,
+      state.chordStaffYCoords
+    );
+    const headYs = staffYs.map(containerYOfStaffY);
+    const dotYs = bendDotYs(
+      headYs,
+      this.#augmentationDotRowYs(state, index).map(containerYOfStaffY)
+    );
+    // A contour is measured from the written pitch, in the clef in force at
+    // the note, wherever its head is drawn.
+    const writtenY = (head: number): number => {
+      const { value, octave } = isChordNodeName(element.nodeName)
+        ? (element as ChordElementType).notes[head]
+        : {
+            value: (element as NoteElementType).note,
+            octave: (element as NoteElementType).octave,
+          };
+      return containerYOfStaffY(
+        this.#noteToYCoordinateAtBeatOffset(
+          value,
+          octave ?? undefined,
+          state.beatOffsets[index]
+        )
+      );
+    };
+    return staffYs.flatMap((staffY, head) => {
+      const bend = bends[head] ?? null;
+      return bend === null
+        ? []
+        : [
+            {
+              y: headYs[head],
+              dotY: dotYs[head],
+              staffY,
+              bend,
+              ...((bend.contour ?? null) === null
+                ? {}
+                : { contourFromY: writtenY(head) }),
+            },
+          ];
+    });
+  }
+
+  // The heights (container Y) a contour on entry `index` passes through.
+  #contourYsOf(state: VoiceRenderState, index: number): number[] {
+    return this.#bendsOf(state, index).flatMap(
+      (head) => contourYs({ ...head, y: head.contourFromY ?? head.y }) ?? []
+    );
+  }
+
+  // Per head, kept for the render pass: layout asks for it often.
+  #entryBends(
+    element: NoteElementType | ChordElementType
+  ): (ResolvedBend | null)[] {
+    let bends = this.#bendsByEntry.get(element);
+    if (bends === undefined) {
+      bends = this.#resolveEntryBends(element);
+      this.#bendsByEntry.set(element, bends);
+    }
+    return bends;
+  }
+
+  #resolveEntryBends(
+    element: NoteElementType | ChordElementType
+  ): (ResolvedBend | null)[] {
+    const withAccidental = (
+      bend: ResolvedBend | null,
+      accidental: AccidentalType | null | undefined
+    ): ResolvedBend | null =>
+      bend === null || bend.target === null
+        ? bend
+        : {
+            ...bend,
+            target: {
+              ...bend.target,
+              accidental: accidental ?? bend.target.accidental,
+            },
+          };
+    if (isChordNodeName(element.nodeName)) {
+      const chord = element as ChordElementType;
+      const accidentals = this.#chordBendTargetAccidentals.get(chord);
+      return chord.toneBends.map((bend, tone) =>
+        withAccidental(bend, accidentals?.[tone])
+      );
+    }
+    const note = element as NoteElementType;
+    return [
+      isTriangle(note.notehead)
+        ? null
+        : withAccidental(
+            resolveBend(
+              note.bend,
+              note.bendTo,
+              note.bendToQuarterTone,
+              note.note,
+              note.octave ?? 4,
+              note.quarterTone,
+              parseBendContour(note.bendContour ?? null)
+            ),
+            this.#bendTargetAccidentals.get(note)
+          ),
+    ];
+  }
+
+  // Where a bend on entry `index` starts, in px from the entry's left edge:
+  // after its heads, dots and trill notes, and after its tail where the line
+  // would cross it.
+  #bendStart(
+    state: VoiceRenderState,
+    index: number
+  ): {
+    inkRight: number;
+    tail: { right: number; bottomY: number } | null;
+  } {
+    const element = state.elements[index] as NoteElementType | ChordElementType;
+    const staffYs = getStaffYs(
+      element,
+      state.noteStaffYCoords,
+      state.chordStaffYCoords
+    );
+    const { headRightX, dotsRightEdgeX } = this.#voicePartGeometry(
+      element,
+      staffYs
+    );
+    const ornaments =
+      (state.writtenTrillFootprints.get(index) ?? 0) +
+      (state.trillFinishFootprints.get(index) ?? 0);
+    return {
+      inkRight: Math.max(
+        headRightX,
+        dotsRightEdgeX ?? -Infinity,
+        ornaments > 0
+          ? NOTE_SVG_WIDTH +
+              this.#augmentationDotFootprint(state, index) +
+              ornaments
+          : -Infinity
+      ),
+      tail: chordUpTailInk({
+        duration: element.duration,
+        staffYCoordinates: staffYs,
+        stemUp: element.stemUp,
+        noFlags: element.noFlags,
+        noStem: element.noStem,
+        stemExtension: element.stemExtension,
+      }),
+    };
+  }
+
+  // Room (px) past an entry's SVG box and ink for the bend it draws, less the
+  // blank beside the next head.
+  #bendReserve(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    index: number
+  ): number {
+    const heads = this.#bendsOf(state, index);
+    if (heads.length === 0) {
+      return 0;
+    }
+    const { inkRight, tail } = this.#bendStart(state, index);
+    const next: NoteChordOrRestElementType | undefined =
+      state.elements[index + 1];
+    const blankBefore =
+      next === undefined ||
+      this.#markerInBeats(
+        state.beatOffsets[index],
+        state.beatOffsets[index + 1]
+      )
+        ? 0
+        : Math.max(0, this.#entryInkLeft(state, index + 1));
+    return Math.max(
+      0,
+      Math.max(inkRight, tail?.right ?? -Infinity) +
+        bendReserveWidthPx(
+          bendTargetsWidthPx(heads, bendTargetWidthPx),
+          bendLineLengthPx(heads)
+        ) -
+        blankBefore -
+        NOTE_SVG_WIDTH -
+        this.#rightwardInkFootprint(voiceKey, state, index)
+    );
+  }
+
+  // Whether a clef change or barline falls after one beat, up to another.
+  #markerInBeats(after: number, upTo: number): boolean {
+    return mergeMarkerBeats(this.ownMarkerBeats, this.measureMarkerBeats).some(
+      ({ beat }) =>
+        beat > after + MARKER_BEAT_EPSILON && beat <= upTo + MARKER_BEAT_EPSILON
+    );
+  }
+
+  // The left edge of entry `index`'s ink, in px from its own left edge.
+  #entryInkLeft(state: VoiceRenderState, index: number): number {
+    const element = state.elements[index];
+    const extent = this.#entryLeftwardExtent(element);
+    if (extent > 0 || element.nodeName === MUSIC_REST_NODE) {
+      return -extent;
+    }
+    const noteOrChord = element as NoteElementType | ChordElementType;
+    const staffYs = getStaffYs(
+      element,
+      state.noteStaffYCoords,
+      state.chordStaffYCoords
+    );
+    return (
+      this.#voicePartGeometry(noteOrChord, staffYs).headLeftX -
+      ledgerLineOverhangPx(staffYs, noteOrChord.stemUp, entryScale(noteOrChord))
+    );
+  }
+
+  // The part of #rightwardFootprint that is ink: what a breath mark after
+  // the entry starts beyond.
+  #rightwardInkFootprint(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    index: number
+  ): number {
+    return (
+      Math.max(
+        this.#augmentationDotFootprint(state, index),
+        this.#headFootprint(state, index)
+      ) +
       (state.writtenTrillFootprints.get(index) ?? 0) +
       (state.trillFinishFootprints.get(index) ?? 0) +
       (this.#unisonReserves.get(voiceKey)?.get(index) ?? 0)
     );
+  }
+
+  // How far (px) a chord's displaced heads reach past its own SVG box.
+  #headFootprint(state: VoiceRenderState, index: number): number {
+    const element = state.elements[index];
+    if (!isChordNodeName(element?.nodeName ?? '')) {
+      return 0;
+    }
+    const chord = element as ChordElementType;
+    const staffYCoordinates = state.chordStaffYCoords.get(chord) ?? [];
+    return staffYCoordinates.length < 2
+      ? 0
+      : Math.max(
+          0,
+          chordHeadExtentPx({
+            duration: chord.duration,
+            staffYCoordinates,
+            stemUp: state.stemDirections[index],
+            noFlags: chord.noFlags,
+            noteheads: chord.toneNoteheads,
+          }).right - NOTE_SVG_WIDTH
+        );
   }
 
   // How far (px) an entry's duration dots reach past its own SVG box. The
@@ -3544,36 +4712,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       return 0;
     }
     const el = element as NoteElementType | ChordElementType;
-    let extent = 0;
-
-    if (includeAccidental) {
-      if (isNoteNodeName(el.nodeName)) {
-        const note = el as NoteElementType;
-        const accidental = note.showAccidental;
-        if (accidental) {
-          extent +=
-            accidentalSymbolWidth(accidental, note.accidentalParenthesized) +
-            ACCIDENTAL_NOTE_GAP;
-        }
-      } else {
-        const chord = el as ChordElementType;
-        if (
-          chord.staffYCoordinates &&
-          chord.noteAccidentals.some((a) => a != null)
-        ) {
-          extent += totalChordAccidentalWidth(
-            chord.noteAccidentals,
-            chord.staffYCoordinates,
-            chord.noteAccidentalsParenthesized
-          );
-        }
-      }
-    }
+    let extent = includeAccidental ? this.#accidentalExtent(el) : 0;
 
     extent += computeGraceFootprintWidth(
       el.grace,
       el.resolvedGraceAccidentals,
-      el.graceHeadLeftOverhangsPx
+      el.graceHeadLeftOverhangsPx,
+      entryScale(el)
     );
 
     const partner = crossStaffArpeggioPartner(el);
@@ -3595,21 +4740,49 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       hairpin?.to ?? null
     );
 
-    // A glyph head wider than the ellipse pushes everything drawn left of it
-    // further left (see noteHeadLeftOverhangPx).
-    if (extent > 0) {
-      extent += el.headLeftOverhangPx;
-    }
+    // A head wider than the ellipse, or a displaced one, pushes everything
+    // drawn left of it further left; alone, it may reach past its own box.
+    return extent > 0
+      ? extent + el.headLeftOverhangPx
+      : chordHeadsLeftReachPx(element);
+  }
 
-    if (isChordNodeName(el.nodeName) && footprintArpeggio(el) !== null) {
-      // A cluster chord's leftward-displaced second head only clears the entry's
-      // SVG left edge once the arpeggio sign — positioned off that displaced
-      // head — is present; without a sign the displaced head stays inside the
-      // SVG's own left padding.
-      extent += chordLeftHeadDisplacementPx(el as ChordElementType);
+  // How far (px) an entry's own accidentals reach left of its box. A cue
+  // entry's column is smaller and starts nearer its smaller head.
+  #accidentalExtent(element: NoteChordOrRestElementType): number {
+    if (isNoteNodeName(element.nodeName)) {
+      const note = element as NoteElementType;
+      const scale = entryScale(note);
+      return note.showAccidental
+        ? Math.max(
+            0,
+            scale *
+              (accidentalReach(
+                note.showAccidental,
+                note.accidentalParenthesized
+              ) +
+                ACCIDENTAL_NOTE_GAP) -
+              cueLeftShiftPx(note.stemUp, scale)
+          )
+        : 0;
     }
-
-    return extent;
+    if (!isChordNodeName(element.nodeName)) {
+      return 0;
+    }
+    const chord = element as ChordElementType;
+    const scale = entryScale(chord);
+    return chord.staffYCoordinates &&
+      chord.noteAccidentals.some((accidental) => accidental != null)
+      ? Math.max(
+          0,
+          totalChordAccidentalWidth(
+            chord.noteAccidentals,
+            chord.staffYCoordinates,
+            chord.noteAccidentalsParenthesized,
+            scale
+          ) - cueLeftShiftPx(chord.stemUp, scale)
+        )
+      : 0;
   }
 
   // Sets the standard x/width/viewBox/height attributes shared by every
@@ -3623,6 +4796,31 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       `0 0 ${remainingWidth} ${STAFF_TRANSCRIPTION_HEIGHT}`
     );
     container.setAttribute('height', `${STAFF_TRANSCRIPTION_HEIGHT}`);
+  }
+
+  // A `beam-over` rest the beam runs through moves away from it by whole
+  // spaces until REST_BEAM_CLEARANCE_PX clear.
+  #moveRestsClearOfBeams(): void {
+    for (const state of this.#voiceRenderStates.values()) {
+      state.elements.forEach((element, i) => {
+        if (element.nodeName !== MUSIC_REST_NODE) {
+          return;
+        }
+        const over = state.beamRenderer?.beamOverRest(i) ?? null;
+        if (over === null) {
+          return;
+        }
+        const top = parseFloat(element.style.top || '0');
+        const shift = restShiftClearOfBeam({
+          inkTop: top + restInkTopPx(element.duration),
+          inkBottom: top + restInkBottomPx(element.duration),
+          beamTop: over.top,
+          beamBottom: over.bottom,
+          beamAbove: over.above,
+        });
+        element.style.top = `${top + shift}px`;
+      });
+    }
   }
 
   // Every real voice's notes and chords, clustered by beat, for the
@@ -3679,8 +4877,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     return columns;
   }
 
-  // A unison moves a part right of its beat x, so the next beat must leave
-  // room for it before it is placed: a trial layout finds each move and
+  // A unison, or a second between wide heads, moves a part right of its beat x,
+  // so the next beat must leave room for it before it is placed: a trial layout finds each move and
   // #rightwardFootprint reserves it on every voice's entry at that beat. Reserving room can move a
   // later unison's parts apart, changing what that one needs, so this repeats
   // until nothing changes; each pass settles at least one more column, in beat
@@ -3688,13 +4886,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   #reserveUnisonRoom(
     isMultiVoice: boolean,
     slots: readonly MarkerBeat[],
-    proportionalXByVoice: ReadonlyMap<VoiceKey, (i: number) => number>,
+    columnXByVoice: ReadonlyMap<VoiceKey, (i: number) => number>,
     barlineFloor: (slotIndex: number) => number
   ): number[] {
     this.#unisonReserves = new Map();
     let slotLefts = this.#resolveMarkerSlots(
       slots,
-      proportionalXByVoice,
+      columnXByVoice,
       barlineFloor
     );
     if (!isMultiVoice) {
@@ -3703,7 +4901,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     let passesLeft = Infinity;
     while (passesLeft-- > 0) {
       const xByVoice = new Map<VoiceKey, number[]>();
-      for (const [voiceKey, proportionalX] of proportionalXByVoice) {
+      for (const [voiceKey, columnX] of columnXByVoice) {
         const state = this.#voiceRenderStates.get(voiceKey);
         if (state) {
           xByVoice.set(
@@ -3713,7 +4911,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
               state,
               slots,
               slotLefts,
-              proportionalX
+              columnX
             ).map((placement) => placement.x)
           );
         }
@@ -3728,9 +4926,18 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       for (const column of columns) {
         const reserve = Math.max(
           0,
-          ...computeCrossVoiceDisplacements(column.placements)
-            .filter((displacement) => displacement.isUnison)
-            .map((displacement) => displacement.xOffset)
+          ...computeCrossVoiceDisplacements(column.placements).map(
+            ({ isUnison, voiceNumber, localIndex, xOffset }) => {
+              const geometry = column.placements.find(
+                (placement) =>
+                  placement.voiceNumber === voiceNumber &&
+                  placement.localIndex === localIndex
+              )?.geometry;
+              return isUnison || geometry === undefined
+                ? xOffset
+                : geometry.headRightX + xOffset - NOTE_SVG_WIDTH;
+            }
+          )
         );
         if (reserve === 0) {
           continue;
@@ -3767,11 +4974,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         break;
       }
       this.#unisonReserves = reserves;
-      slotLefts = this.#resolveMarkerSlots(
-        slots,
-        proportionalXByVoice,
-        barlineFloor
-      );
+      slotLefts = this.#resolveMarkerSlots(slots, columnXByVoice, barlineFloor);
     }
     return slotLefts;
   }
@@ -3811,7 +5014,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           note.stemUp,
           note.duration,
           note.noFlags,
-          note.notehead
+          note.notehead,
+          entryScale(note)
         );
         return {
           left: x + (head.cx - head.halfWidth) * NOTE_SCALE,
@@ -3834,6 +5038,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
             stemUp: chord.stemUp,
             noFlags: chord.noFlags,
             noteheads: chord.toneNoteheads,
+            scale: entryScale(chord),
           },
           toneIndex
         );
@@ -3841,7 +5046,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           chord.stemUp,
           chord.duration,
           chord.noFlags,
-          chord.toneNoteheads[toneIndex] ?? 'normal'
+          chord.toneNoteheads[toneIndex] ?? 'normal',
+          entryScale(chord)
         );
         return {
           left: x + extent.left,
@@ -3891,7 +5097,16 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       const describeRect = this.#describeContainer.getBoundingClientRect();
       describeEndX = describeRect.right - transcribeRect.left;
     }
-    this.#ownDescribeEndX = Math.round(this.#drawStartRepeat(describeEndX));
+    const startAreaEndX = this.#drawStartRepeat(describeEndX);
+    this.#ownDescribeEndX = Math.round(startAreaEndX);
+    // Ends where the measure's widest start area does, so a group's start
+    // repeats line up.
+    this.#startRepeatContainer.setAttribute(
+      'transform',
+      `translate(${
+        this.startRepeat === 'full' ? this.describeEndX - startAreaEndX : 0
+      } 0)`
+    );
     // A drawn end barline is wider than the plain one, and end-of-measure
     // warnings sit before it, so the notes stop short of both.
     const remainingWidth =
@@ -3899,35 +5114,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       this.describeEndX -
       this.endBarlineReserve -
       this.endWarningSpace.width;
+    this.#notesAreaEndX = remainingWidth;
     this.#drawEndWarnings(transcribeRect.width - this.endBarlineReserve);
-
-    // Conservative budgets, before notes are positioned.
-    const aboveStaffBudget = this.#estimateAboveStaffBudget();
-    const belowStaffBudget = this.#estimateBelowStaffBudget();
-    const containerWidth = Math.round(transcribeRect.width);
-    const totalHeight =
-      STAFF_TRANSCRIPTION_HEIGHT + aboveStaffBudget + belowStaffBudget;
-    this.transcribeContainer.style.top =
-      aboveStaffBudget > 0 ? `-${aboveStaffBudget}px` : '0px';
-    this.transcribeContainer.style.height = `${totalHeight}px`;
-    this.transcribeContainer.setAttribute(
-      'viewBox',
-      `0 -${aboveStaffBudget} ${containerWidth} ${totalHeight}`
-    );
-
-    // The containers are absolutely positioned in a fixed-height wrapper, so
-    // the budgets only take page space through the host's margin.
-    this.reserveVerticalSpace('transcription', {
-      top: aboveStaffBudget,
-      bottom: belowStaffBudget,
-    });
 
     // An entry's x is its beat-offset over the measure's fixed beat capacity,
     // scaled by the available width. Neither depends on entry count, so
-    // appending never moves a placed entry, and same-beat entries line up
-    // across voices.
-    const [beatsInMeasure, beatType] = this.effectiveTimeSig;
-    const measureCapacity = beatsInMeasure / beatType;
+    // appending moves a placed entry only to make room in a crowded bar, and
+    // same-beat entries line up across voices.
     const isMultiVoice = this.#voices.size > 1;
 
     // Markers are staff-wide: every voice makes room for each one, and every
@@ -3937,34 +5130,33 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       this.ownMarkerBeats,
       this.measureMarkerBeats
     );
-    const proportionalXByVoice = new Map<VoiceKey, (i: number) => number>();
-    for (const [voiceKey, state] of this.#voiceRenderStates) {
-      if (voiceKey !== 'shared-rest') {
-        proportionalXByVoice.set(
-          voiceKey,
-          this.#proportionalEntryX(
-            state,
-            layoutMarkers,
-            remainingWidth,
-            measureCapacity
-          )
-        );
-      }
-    }
+    this.#cachedBarSpacing = null;
+    const columnXByVoice = new Map<VoiceKey, (i: number) => number>();
     // The slots this staff fills: its own clef changes (other staves' only
     // shift its entries) and every barline in the measure, which runs
     // through all of its staves.
     const slots = this.#markerSlots(layoutMarkers);
+    const slotMarkers = slots.map((slot) => slot.marker);
+    this.#spacingMarkers = { all: layoutMarkers, slots: slotMarkers };
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      if (voiceKey !== 'shared-rest') {
+        columnXByVoice.set(
+          voiceKey,
+          (i) =>
+            this.describeEndX +
+            LEADING_NOTE_GAP_PX +
+            columnOffsetAt(this.#barSpacing().columns, state.beatOffsets[i])
+        );
+      }
+    }
     const slotLefts = this.#reserveUnisonRoom(
       isMultiVoice,
-      slots.map((slot) => slot.marker),
-      proportionalXByVoice,
+      slotMarkers,
+      columnXByVoice,
       (slotIndex) =>
         this.#proportionalMarkerLeft(
           layoutMarkers,
-          slots[slotIndex].layoutIndex,
-          remainingWidth,
-          measureCapacity
+          slots[slotIndex].layoutIndex
         )
     );
     const clefObstacles: BeamObstacle[] = [];
@@ -3993,7 +5185,12 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
     });
     this.#drawMidBarBarlines(barlineSlots);
-    const slotMarkers = slots.map((slot) => slot.marker);
+    this.#ownVoiceRooms = this.#barSpacing().own;
+    this.#markerInk = slotMarkers.map(({ beat, kind }, k) => ({
+      beat,
+      kind,
+      left: slotLefts[k] - this.describeEndX,
+    }));
 
     for (const [voiceKey, state] of this.#voiceRenderStates) {
       state.noteXPositions.clear();
@@ -4031,7 +5228,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         state,
         slotMarkers,
         slotLefts,
-        proportionalXByVoice.get(voiceKey) ?? (() => this.describeEndX)
+        columnXByVoice.get(voiceKey) ?? (() => this.describeEndX)
       );
 
       for (let i = 0; i < state.elements.length; i++) {
@@ -4045,24 +5242,19 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         state.beamRenderer?.setX(i, xInBeamsContainer);
         state.noteXPositions.set(i, xInBeamsContainer);
 
-        // Only needed when the element actually has a grace-dynamic to place —
-        // computeFirstGraceHeadX still needs `grace` itself (a grace-dynamic
-        // with no grace notes has nothing to anchor to and is simply skipped
-        // by #renderDynamics via the same null check).
-        const noteOrChordForGrace = element as INoteElement | IChordElement;
-        if (
-          element.nodeName !== MUSIC_REST_NODE &&
-          noteOrChordForGrace.graceDynamic !== null &&
-          noteOrChordForGrace.grace !== null
-        ) {
+        // What a grace-dynamic or a label over the grace notes is placed from.
+        const { grace, resolvedGraceAccidentals, graceHeadLeftOverhangsPx } =
+          element as NoteElementType | ChordElementType;
+        if (element.nodeName !== MUSIC_REST_NODE && grace !== null) {
           state.firstGraceHeadXPositions.set(
             i,
             computeFirstGraceHeadX(
-              xInBeamsContainer,
+              xInBeamsContainer + this.#graceShiftX(state, i),
               leftwardWidth,
-              noteOrChordForGrace.grace,
-              noteOrChordForGrace.resolvedGraceAccidentals,
-              noteOrChordForGrace.graceHeadLeftOverhangsPx
+              grace,
+              resolvedGraceAccidentals,
+              graceHeadLeftOverhangsPx,
+              entryScale(element)
             )
           );
         }
@@ -4109,7 +5301,10 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     );
 
     for (const state of this.#voiceRenderStates.values()) {
-      state.beamRenderer?.setObstacles(clefObstacles);
+      state.beamRenderer?.setObstacles([
+        ...clefObstacles,
+        ...this.#arrowBeamObstacles(state),
+      ]);
       state.beamRenderer?.spaceAll();
     }
 
@@ -4216,6 +5411,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
     this.#crossVoiceElements = crossVoiceElements;
 
+    this.#moveRestsClearOfBeams();
+
     // Reconcile each beamed stem to the beam as drawn, now X is known. The
     // only stem-length pass a bare resize runs.
     for (const state of this.#voiceRenderStates.values()) {
@@ -4238,6 +5435,37 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         }
       }
     }
+
+    // Signs go over the beams as drawn, before anything placed above them.
+    this.#layoutSigns();
+
+    // Bends and labels are placed once x is known, so the budgets count where
+    // they really are.
+    this.#renderBends(remainingWidth);
+    this.#layoutTechniqueLabels();
+    this.#layoutBelowTexts();
+    this.#layoutPhonemes();
+
+    // Conservative budgets, before anything above or below the notes is drawn.
+    const aboveStaffBudget = this.#estimateAboveStaffBudget();
+    const belowStaffBudget = this.#estimateBelowStaffBudget();
+    const containerWidth = Math.round(transcribeRect.width);
+    const totalHeight =
+      STAFF_TRANSCRIPTION_HEIGHT + aboveStaffBudget + belowStaffBudget;
+    this.transcribeContainer.style.top =
+      aboveStaffBudget > 0 ? `-${aboveStaffBudget}px` : '0px';
+    this.transcribeContainer.style.height = `${totalHeight}px`;
+    this.transcribeContainer.setAttribute(
+      'viewBox',
+      `0 -${aboveStaffBudget} ${containerWidth} ${totalHeight}`
+    );
+
+    // The containers are absolutely positioned in a fixed-height wrapper, so
+    // the budgets only take page space through the host's margin.
+    this.reserveVerticalSpace('transcription', {
+      top: aboveStaffBudget,
+      bottom: belowStaffBudget,
+    });
 
     // Tuplet bracket rendering, per voice key. Note positions are now set
     // so x/y lookups work.
@@ -4305,7 +5533,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           null,
           hasInnerGroups,
           tupletBeamYForIndex,
-          this.#tupletSideOverride(group),
+          this.#tupletSideOverride(state, group),
           (i) =>
             state.unbeamedStemTipExtensionsPx[i] + state.tremoloInkPastStemPx[i]
         );
@@ -4327,7 +5555,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           .filter(([innerGroup]) =>
             innerGroup.indices.every((i) => outerIndexSet.has(i))
           )
-          .map(([, geom]) => geom.numeralY);
+          .map(([innerGroup, geom]) => {
+            // A label taller than the numeral reaches further out.
+            const farExtra =
+              tupletLabelExtents(tupletDisplayOf(innerGroup), geom.stemUp).far -
+              TUPLET_NUMERAL_FONT_SIZE / 2;
+            return geom.numeralY + (geom.stemUp ? -farExtra : farExtra);
+          });
 
         const stemUp = this.#tupletBracketAbove(state, group);
         const outerBaseY =
@@ -4347,7 +5581,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           outerBaseY,
           hasInnerGroups,
           tupletBeamYForIndex,
-          this.#tupletSideOverride(group),
+          this.#tupletSideOverride(state, group),
           (i) =>
             state.unbeamedStemTipExtensionsPx[i] + state.tremoloInkPastStemPx[i]
         );
@@ -4383,7 +5617,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       this.#redrawTrillLines(voiceKey, remainingWidth);
     }
 
-    this.#renderTremoloLabels(remainingWidth);
+    const placedAboveStaff = this.#renderTechniqueLabels(remainingWidth);
+    this.#renderPhonemes(remainingWidth);
+    this.#renderBreathMarks(remainingWidth, placedAboveStaff);
 
     this.#renderUnisonOverlay(placementColumns, remainingWidth);
 
@@ -4399,29 +5635,1538 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
   }
 
-  // `trem.` / `non trem.` labels sit above everything drawn over their note,
-  // in any voice, and above the stave; one that would overlap an earlier
-  // label moves up past it.
-  #renderTremoloLabels(remainingWidth: number): void {
-    const placed: { left: number; right: number; top: number }[] = [];
+  // Technique labels sit above everything drawn over their note, in any voice,
+  // and above the stave; one that would overlap an earlier label moves up past
+  // it. Tremolo labels go first, so they stay nearest their notes.
+  #layoutTechniqueLabels(): void {
+    const placed: PlacedTechniqueLabel[] = [];
+    const carried = this.#carriedTechniqueTexts.filter(({ above }) => above);
+    for (const kind of ['tremolo', 'glissando', 'text'] as const) {
+      for (const [voiceKey, state] of this.#voiceRenderStates) {
+        state.elements.forEach((element, i) => {
+          const unwrapped = techniqueLabelsOf(element).find(
+            (candidate) => candidate.kind === kind
+          );
+          if (unwrapped === undefined) {
+            return;
+          }
+          const { label, margin, left, right } = this.#techniqueLabelSpan(
+            state,
+            i,
+            unwrapped
+          );
+          const span = { left, right };
+          const height = techniqueLabelHeightPx(label);
+          const bottom = this.#clearOfPlaced(
+            this.#techniqueLabelClearBaselineY(voiceKey, state, i, label, span),
+            height,
+            span,
+            [...carried, ...placed]
+          );
+          placed.push({
+            voiceKey,
+            element,
+            label,
+            margin,
+            ...span,
+            top: bottom - height,
+            bottom,
+          });
+        });
+      }
+    }
+    this.#placedTechniqueLabels = placed;
+  }
+
+  #renderTechniqueLabels(remainingWidth: number): PlacedAboveStaffRect[] {
+    for (const voiceKey of this.#voiceRenderStates.keys()) {
+      const container = this.#containerFor(
+        this.#techniqueLabelContainers,
+        voiceKey,
+        'technique-labels-container'
+      );
+      this.#sizeVoiceContainer(container, remainingWidth);
+      container.innerHTML = '';
+    }
+    // Again, now the trills under them are lifted.
+    this.#layoutTechniqueLabels();
+    this.#layoutBelowTexts();
+    for (const { voiceKey, label, margin, bottom } of [
+      ...this.#placedTechniqueLabels,
+      ...this.#placedBelowTexts,
+    ]) {
+      this.#techniqueLabelContainers
+        .get(voiceKey)
+        ?.appendChild(createTechniqueLabel(margin, bottom, label));
+    }
+    return [
+      ...this.#placedTechniqueLabels,
+      ...this.#carriedTechniqueTexts.filter(({ above }) => above),
+    ];
+  }
+
+  // Where a label starts and ends (container px), wrapped to fit. A glissando
+  // label shifts left rather than run past the notes area, but not past its
+  // start.
+  #techniqueLabelSpan(
+    state: VoiceRenderState,
+    i: number,
+    unwrapped: TechniqueLabel
+  ): { label: TechniqueLabel; margin: number; left: number; right: number } {
+    if (unwrapped.kind === 'text') {
+      return this.#techniqueTextSpan(state, i, unwrapped, true);
+    }
+    const label = wrapTechniqueLabel(unwrapped, this.#notesAreaEndX);
+    const x = state.noteXPositions.get(i) ?? 0;
+    const width = techniqueLabelWidthPx(label);
+    let left = x + trillSignLeftX(state.stemDirections[i]);
+    if (label.anchor === 'ink') {
+      const element = state.elements[i] as NoteElementType | ChordElementType;
+      const graceWidth = computeGraceFootprintWidth(
+        element.grace,
+        element.resolvedGraceAccidentals,
+        element.graceHeadLeftOverhangsPx,
+        entryScale(element)
+      );
+      const extent = this.#entryLeftwardExtent(element) - graceWidth;
+      left = extent > 0 ? x - extent : left;
+    } else if (label.anchor === 'grace') {
+      const graceHeadX = state.firstGraceHeadXPositions.get(i);
+      left =
+        graceHeadX === undefined
+          ? left
+          : graceHeadX -
+            entryScale(state.elements[i]) * GRACE_SCALE * NOTE_HEAD_RADIUS_PX;
+    }
+    if (label.kind === 'glissando' && this.#notesAreaEndX > 0) {
+      left = Math.max(0, Math.min(left, this.#notesAreaEndX - width));
+    }
+    return { label, margin: left, left, right: left + width };
+  }
+
+  // Technique text below the stave sits nearest it of the rows there, clear
+  // of the ink under it; one that would overlap an earlier one moves down
+  // past it. Dynamics, phonemes and lyrics go beneath.
+  // Each voice's phonemes: below the stave and every voice's ink there, a
+  // later voice's row below an earlier one's, at least as low as the row the
+  // bars of its runs share. Before the budgets and the dynamics row, which
+  // goes below it.
+  #layoutPhonemes(): void {
+    this.#placedPhonemes.clear();
+    const inkYs = [...this.#voiceRenderStates.values()].flatMap((state) =>
+      this.#belowInkYs(state)
+    );
+    let floorY: number | null = this.phonemeFloorY();
+    const keys = [...this.#voiceRenderStates.keys()].sort((a, b) =>
+      String(a).localeCompare(String(b))
+    );
+    for (const voiceKey of keys) {
+      const state = this.#voiceRenderStates.get(voiceKey);
+      if (state === undefined) {
+        continue;
+      }
+      const own = this.#ownPhonemeRowY(state, inkYs, floorY);
+      if (own === null) {
+        continue;
+      }
+      const shared = this.#phonemeContinuations.rows.get(voiceKey);
+      const baselineY = Math.max(own, shared ?? own);
+      this.#placedPhonemes.set(voiceKey, {
+        baselineY,
+        ...this.#placePhonemes(voiceKey, state),
+      });
+      floorY =
+        baselineY +
+        PHONEME_FONT_SIZE_PX * PHONEME_DESCENT_RATIO +
+        PHONEME_ROW_GAP_PX -
+        PHONEME_INK_GAP_PX;
+    }
+  }
+
+  /**
+   * Where a vocal staff's lyrics end (container Y), which phonemes go
+   * below; null without lyrics.
+   */
+  protected phonemeFloorY(): number | null {
+    return null;
+  }
+
+  /** Lays the staff out again when it has phonemes, as after lyrics move. */
+  protected relayPhonemes(): void {
+    const has = [...this.#voiceRenderStates.values()].some((state) =>
+      state.elements.some(
+        (element) =>
+          element.nodeName !== MUSIC_REST_NODE &&
+          parsePhonemes(
+            (element as NoteOrChordElementType).phonemes ?? null
+          ) !== null
+      )
+    );
+    if (has) {
+      this.#renderNotes();
+    }
+  }
+
+  /** A client Y in the staff's drawing (container) coordinates. */
+  protected clientToContainerY(clientY: number): number {
+    const matrix = this.transcribeContainer.getScreenCTM?.();
+    return matrix
+      ? (clientY - matrix.f) / matrix.d
+      : clientY - this.transcribeContainer.getBoundingClientRect().top;
+  }
+
+  // A voice's own phoneme baseline before sharing, or null without phonemes.
+  #ownPhonemeRowY(
+    state: VoiceRenderState,
+    inkYs: readonly number[],
+    floorY: number | null
+  ): number | null {
+    const has = state.elements.some(
+      (element) =>
+        element.nodeName !== MUSIC_REST_NODE &&
+        parsePhonemes((element as NoteOrChordElementType).phonemes ?? null) !==
+          null
+    );
+    return has
+      ? phonemeRowY({
+          staffBottomY: containerYOfStaffY(STAFF_BOTTOM_LINE_Y),
+          inkYs: floorY === null ? inkYs : [...inkYs, floorY],
+        })
+      : null;
+  }
+
+  /**
+   * The row each voice's phonemes need in this staff (local px), before
+   * any shared with other bars.
+   */
+  ownPhonemeRows(): ReadonlyMap<VoiceKey, number> {
+    const inkYs = [...this.#voiceRenderStates.values()].flatMap((state) =>
+      this.#belowInkYs(state)
+    );
+    const rows = new Map<VoiceKey, number>();
+    let floorY: number | null = this.phonemeFloorY();
+    const keys = [...this.#voiceRenderStates.keys()].sort((a, b) =>
+      String(a).localeCompare(String(b))
+    );
+    for (const voiceKey of keys) {
+      const state = this.#voiceRenderStates.get(voiceKey);
+      const own =
+        state === undefined ? null : this.#ownPhonemeRowY(state, inkYs, floorY);
+      if (own !== null) {
+        rows.set(voiceKey, own);
+        floorY =
+          own +
+          PHONEME_FONT_SIZE_PX * PHONEME_DESCENT_RATIO +
+          PHONEME_ROW_GAP_PX -
+          PHONEME_INK_GAP_PX;
+      }
+    }
+    return rows;
+  }
+
+  // Every ink of a voice below the stave the phonemes clear: heads, stems,
+  // marks, rests, slurs, ties, tuplets, bends and text below.
+  #belowInkYs(state: VoiceRenderState): number[] {
+    return [
+      ...state.elements.flatMap((_, i) =>
+        [
+          this.#entryInkY(state, i, false),
+          this.#restInkY(state, i, false),
+          ...this.#entryLeftInkYs(state, i, false),
+          this.#tieReachY(state, i, false),
+        ].filter((y): y is number => y !== null)
+      ),
+      ...[
+        this.#slurReachY(state, false),
+        this.#tupletExtremeY(state, false, true),
+        this.#arrowAndBendReachY(state, false),
+      ].filter((y): y is number => y !== null),
+      ...[
+        ...this.#placedBelowTexts,
+        ...this.#carriedTechniqueTexts.filter((text) => !text.above),
+      ].map(({ bottom }) => bottom),
+    ];
+  }
+
+  // One voice's phonemes and the arrows between them inside this bar.
+  #placePhonemes(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState
+  ): Omit<VoicePhonemes, 'baselineY'> {
+    const entries: PhonemeEntry[] = state.elements.map((element) => ({
+      phonemes:
+        element.nodeName === MUSIC_REST_NODE
+          ? null
+          : parsePhonemes((element as NoteOrChordElementType).phonemes ?? null),
+      rest: element.nodeName === MUSIC_REST_NODE,
+    }));
+    const runs = resolvePhonemeRuns(entries);
+    const inComposition = this.closest(MUSIC_COMPOSITION) !== null;
+    const containerLeft =
+      this.transcribeContainer.getBoundingClientRect().left + this.describeEndX;
+    const runOf = new Map<string, PhonemeRun>();
+    for (const run of runs) {
+      for (const { entry, index } of run.items) {
+        runOf.set(`${entry}/${index}`, run);
+      }
+      const last = run.items[run.items.length - 1];
+      const element = state.elements[last.entry];
+      const dangling =
+        run.end === 'dangling' || (run.end === 'open' && !inComposition);
+      if (dangling && !this.#warnedPhonemes.has(element)) {
+        this.#warnedPhonemes.add(element);
+        console.warn(
+          '[music-staff] a phoneme arrow leads to no phoneme on the next note; the bracket closes after it',
+          element
+        );
+      } else if (!dangling) {
+        this.#warnedPhonemes.delete(element);
+      }
+    }
+    const placed: PlacedPhoneme[] = [];
+    entries.forEach(({ phonemes }, i) => {
+      if (phonemes === null) {
+        return;
+      }
+      const element = state.elements[i];
+      const lastIndex = phonemes.length - 1;
+      const run = runOf.get(`${i}/${lastIndex}`);
+      const next =
+        run?.items[
+          run.items.findIndex(
+            (item) => item.entry === i && item.index === lastIndex
+          ) + 1
+        ];
+      const handed = this.#phonemeContinuations.nextAnchors.get(element);
+      const nextAnchor =
+        next !== undefined
+          ? this.#headCenterX(state, next.entry)
+          : run?.end === 'open' && handed !== undefined
+          ? handed - containerLeft
+          : null;
+      const headX = this.#headCenterX(state, i);
+      const widths = phonemes.map(({ text }) => phonemeWidthPx(text));
+      const xs = phonemeXs({
+        headX,
+        nextX: nextAnchor ?? this.#phonemeSpanEndX(voiceKey, state, i),
+        arrowOut: nextAnchor !== null,
+        widths,
+      });
+      phonemes.forEach(({ text }, index) => {
+        const itemRun = runOf.get(`${i}/${index}`);
+        const first = itemRun?.items[0];
+        const last = itemRun?.items[itemRun.items.length - 1];
+        placed.push({
+          element,
+          index,
+          text,
+          centerX: xs[index],
+          width: widths[index],
+          open:
+            first?.entry === i &&
+            first.index === index &&
+            !(
+              i === entries.findIndex((entry) => entry.phonemes !== null) &&
+              index === 0 &&
+              this.#phonemeContinuations.continued.has(element)
+            ),
+          close:
+            last?.entry === i &&
+            last.index === index &&
+            !(itemRun?.end === 'open' && handed !== undefined),
+        });
+      });
+    });
+    const arrows: VoicePhonemes['arrows'] = [];
+    for (const run of runs) {
+      run.items.slice(1).forEach((item, k) => {
+        const before = run.items[k];
+        const from = placed.find(
+          (phoneme) =>
+            phoneme.element === state.elements[before.entry] &&
+            phoneme.index === before.index
+        );
+        const to = placed.find(
+          (phoneme) =>
+            phoneme.element === state.elements[item.entry] &&
+            phoneme.index === item.index
+        );
+        if (from === undefined || to === undefined) {
+          return;
+        }
+        const arrow = phonemeArrow(
+          from.centerX + from.width / 2,
+          to.centerX - to.width / 2
+        );
+        if (arrow === null) {
+          if (!this.#warnedPhonemes.has(from.element)) {
+            this.#warnedPhonemes.add(from.element);
+            console.warn(
+              '[music-staff] no room for a phoneme arrow; it is not drawn',
+              from.element
+            );
+          }
+          return;
+        }
+        arrows.push(arrow);
+      });
+    }
+    return { phonemes: placed, arrows };
+  }
+
+  // Where an entry's last phoneme ends with no arrow out: half a space
+  // before the next entry's ink, or 1.5 spaces before the barline.
+  #phonemeSpanEndX(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    i: number
+  ): number {
+    const next = this.#nextEntryAfter(voiceKey, state, i);
+    if (next === null) {
+      return this.#notesAreaEndX - PHONEME_BARLINE_GAP_PX;
+    }
+    return (
+      (next.state.noteXPositions.get(next.index) ?? 0) -
+      this.#entryLeftwardExtent(next.state.elements[next.index]) -
+      PHONEME_SPAN_END_GAP_PX
+    );
+  }
+
+  #renderPhonemes(remainingWidth: number): void {
+    for (const voiceKey of this.#voiceRenderStates.keys()) {
+      const container = this.#containerFor(
+        this.#phonemeContainers,
+        voiceKey,
+        'phonemes-container'
+      );
+      this.#sizeVoiceContainer(container, remainingWidth);
+      container.innerHTML = '';
+      const placed = this.#placedPhonemes.get(voiceKey);
+      if (placed === undefined) {
+        continue;
+      }
+      const { baselineY, phonemes, arrows } = placed;
+      for (const { text, centerX, width, open, close } of phonemes) {
+        if (open) {
+          container.appendChild(
+            createPhonemeBracketSvg('open', centerX - width / 2, baselineY)
+          );
+        }
+        container.appendChild(createPhonemeSvg(text, centerX, baselineY));
+        if (close) {
+          container.appendChild(
+            createPhonemeBracketSvg('close', centerX + width / 2, baselineY)
+          );
+        }
+      }
+      for (const { fromX, toX, head } of arrows) {
+        container.appendChild(
+          createPhonemeArrowSvg(fromX, toX, phonemeArrowY(baselineY), head)
+        );
+      }
+    }
+  }
+
+  // The bottom (container Y) of every voice's phoneme row, or null.
+  #phonemesBottomY(): number | null {
+    const ys = [...this.#placedPhonemes.values()].map(
+      ({ baselineY }) =>
+        baselineY + PHONEME_FONT_SIZE_PX * PHONEME_DESCENT_RATIO
+    );
+    return ys.length === 0 ? null : Math.max(...ys);
+  }
+
+  /**
+   * An entry's drawn phonemes (client px): each one's edges, and the height
+   * its arrows run at. Empty when it has none here.
+   */
+  phonemeBoxes(
+    element: Element
+  ): { left: number; right: number; arrowY: number }[] {
+    for (const [voiceKey, { baselineY, phonemes }] of this.#placedPhonemes) {
+      const own = phonemes.filter((phoneme) => phoneme.element === element);
+      if (own.length === 0) {
+        continue;
+      }
+      const matrix = this.#phonemeContainers
+        .get(voiceKey)
+        ?.getScreenCTM?.() ?? { a: 1, d: 1, e: 0, f: 0 };
+      return own.map(({ centerX, width }) => ({
+        left: matrix.a * (centerX - width / 2) + matrix.e,
+        right: matrix.a * (centerX + width / 2) + matrix.e,
+        arrowY: matrix.d * phonemeArrowY(baselineY) + matrix.f,
+      }));
+    }
+    return [];
+  }
+
+  /**
+   * Set by the ancestor <music-composition> for phoneme runs over a
+   * barline. Compared by content.
+   */
+  get phonemeContinuations(): PhonemeContinuations {
+    return this.#phonemeContinuations;
+  }
+
+  set phonemeContinuations(value: PhonemeContinuations) {
+    const current = this.#phonemeContinuations;
+    const near = (a: number | undefined, b: number | undefined) =>
+      a !== undefined && b !== undefined && Math.abs(a - b) < 0.5;
+    const sameAnchors =
+      current.nextAnchors.size === value.nextAnchors.size &&
+      [...value.nextAnchors].every(([element, x]) =>
+        near(current.nextAnchors.get(element), x)
+      );
+    const sameContinued =
+      current.continued.size === value.continued.size &&
+      [...value.continued].every((element) => current.continued.has(element));
+    const sameRows =
+      current.rows.size === value.rows.size &&
+      [...value.rows].every(([key, y]) => near(current.rows.get(key), y));
+    if (sameAnchors && sameContinued && sameRows) {
+      return;
+    }
+    this.#phonemeContinuations = value;
+    this.#renderNotes();
+  }
+
+  #layoutBelowTexts(): void {
+    const entries: {
+      voiceKey: VoiceKey;
+      state: VoiceRenderState;
+      i: number;
+      text: TechniqueLabel;
+    }[] = [];
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      state.elements.forEach((element, i) => {
+        const text = techniqueTextOf(element);
+        if (text !== null && hasTechniqueTextBelow(element)) {
+          entries.push({ voiceKey, state, i, text });
+        }
+      });
+    }
+    entries.sort(
+      (a, b) =>
+        this.#techniqueTextAnchorX(a.state, a.i) -
+        this.#techniqueTextAnchorX(b.state, b.i)
+    );
+    const placed: PlacedTechniqueLabel[] = [];
+    const carried = this.#carriedTechniqueTexts.filter(({ above }) => !above);
+    for (const { voiceKey, state, i, text } of entries) {
+      const fitted = this.#techniqueTextSpan(state, i, text, false);
+      const { label } = fitted;
+      const height = techniqueLabelHeightPx(label);
+      const rowTop = this.#belowTextRowTop(state, i, fitted);
+      const own = this.#ownBelowInk(state, i);
+      const placement =
+        own === null
+          ? { left: fitted.margin, top: rowTop }
+          : belowTextPlacement({
+              anchorX: fitted.margin,
+              width: fitted.right - fitted.margin,
+              inkLeft: own.left,
+              inkBottom: own.bottom,
+              previousRight: this.#previousBelowInkRight(state, i, rowTop),
+              rowTop,
+            });
+      const shift = placement.left - fitted.margin;
+      const span = { left: fitted.left + shift, right: fitted.right + shift };
+      const top =
+        shift === 0
+          ? placement.top
+          : Math.max(placement.top, this.#belowTextRowTop(state, i, span));
+      const clearTop = this.#clearOfPlacedBelow(top, height, span, [
+        ...carried,
+        ...placed,
+      ]);
+      placed.push({
+        voiceKey,
+        element: state.elements[i],
+        label,
+        margin: fitted.margin + shift,
+        ...span,
+        top: clearTop,
+        bottom: clearTop + height,
+      });
+    }
+    this.#placedBelowTexts = placed;
+  }
+
+  // The top (container Y) of the row below the stave a text over `span`
+  // takes: clear of the stave, of every other entry's ink and of the curves
+  // under it, and of the ink in later bars it runs on over. Its own entry's
+  // ink is #ownBelowInk.
+  #belowTextRowTop(
+    state: VoiceRenderState,
+    i: number,
+    span: { left: number; right: number }
+  ): number {
+    let bottom =
+      STAFF_Y_PADDING + STAFF_BOTTOM_LINE_Y - NOTE_HEAD_Y_OFFSET_CORRECTION;
+    const consider = (y: number | null): void => {
+      if (y !== null) {
+        bottom = Math.max(bottom, y);
+      }
+    };
+    for (const [otherKey, otherState] of this.#voiceRenderStates) {
+      for (const j of otherState.noteXPositions.keys()) {
+        if (otherState === state && j === i) {
+          continue;
+        }
+        consider(this.#inkTopUnderLabel(otherKey, otherState, j, span, false));
+      }
+    }
+    consider(this.#connectorTopUnderLabel(span, false));
+    consider(this.#techniqueTextRunOn?.get(state.elements[i])?.inkY ?? null);
+    return bottom + TECHNIQUE_TEXT_BELOW_GAP_PX;
+  }
+
+  // Entry i's own ink below the stave that a text at its head may end
+  // before: its heads and ledger lines there, a down-stem with its beam or
+  // tail, and the ties it starts. Null for a rest or with nothing below.
+  #ownBelowInk(
+    state: VoiceRenderState,
+    i: number
+  ): { left: number; bottom: number } | null {
+    const element = state.elements[i];
+    if (element.nodeName === MUSIC_REST_NODE) {
+      return null;
+    }
+    const staffYs = getStaffYs(
+      element,
+      state.noteStaffYCoords,
+      state.chordStaffYCoords
+    );
+    const x = state.noteXPositions.get(i) ?? 0;
+    const { headLeftX } = this.#voicePartGeometry(
+      element as NoteElementType | ChordElementType,
+      staffYs
+    );
+    const bottom = Math.max(
+      ...[
+        this.#entryInkY(state, i, false),
+        this.#tieReachY(state, i, false),
+      ].filter((y): y is number => y !== null)
+    );
+    const staffBottom =
+      STAFF_Y_PADDING + STAFF_BOTTOM_LINE_Y - NOTE_HEAD_Y_OFFSET_CORRECTION;
+    return bottom <= staffBottom
+      ? null
+      : {
+          left:
+            x +
+            headLeftX -
+            ledgerLineOverhangPx(
+              [...staffYs],
+              state.stemDirections[i],
+              entryScale(state.elements[i])
+            ),
+          bottom,
+        };
+  }
+
+  // The right edge (container px) of the nearest earlier entry, in any voice,
+  // whose ink reaches below `rowTop`; 0, the notes area's start, with none.
+  #previousBelowInkRight(
+    state: VoiceRenderState,
+    i: number,
+    rowTop: number
+  ): number {
+    const x = state.noteXPositions.get(i) ?? 0;
+    let right = 0;
+    for (const other of this.#voiceRenderStates.values()) {
+      for (const [j, otherX] of other.noteXPositions) {
+        if (otherX >= x || (other === state && j === i)) {
+          continue;
+        }
+        const element = other.elements[j];
+        const inkBottom =
+          element.nodeName === MUSIC_REST_NODE
+            ? this.#restInkY(other, j, false)
+            : this.#entryInkY(other, j, false);
+        if (inkBottom === null || inkBottom <= rowTop) {
+          continue;
+        }
+        right = Math.max(
+          right,
+          otherX +
+            (element.nodeName === MUSIC_REST_NODE
+              ? NOTE_SVG_WIDTH / 2 + REST_HALF_WIDTH_PX
+              : this.#voicePartGeometry(
+                  element as NoteElementType | ChordElementType,
+                  getStaffYs(
+                    element,
+                    other.noteStaffYCoords,
+                    other.chordStaffYCoords
+                  )
+                ).headRightX)
+        );
+      }
+    }
+    return right + TECHNIQUE_LABEL_GAP_PX;
+  }
+
+  // A text's top moved down past the placed texts it would overlap.
+  #clearOfPlacedBelow(
+    from: number,
+    height: number,
+    { left, right }: { left: number; right: number },
+    placed: readonly PlacedAboveStaffRect[]
+  ): number {
+    let top = from;
+    let moved = true;
+    while (moved) {
+      moved = false;
+      for (const other of placed) {
+        const overlapsAcross = other.left < right && left < other.right;
+        const overlapsDown =
+          top < other.bottom + TECHNIQUE_LABEL_GAP_PX &&
+          top + height + TECHNIQUE_LABEL_GAP_PX > other.top;
+        if (overlapsAcross && overlapsDown) {
+          top = other.bottom + TECHNIQUE_LABEL_GAP_PX;
+          moved = true;
+        }
+      }
+    }
+    return top;
+  }
+
+  // Where a technique text's margin stands: the head's left edge, the first
+  // grace head's with grace notes, or a rest's left edge.
+  #techniqueTextAnchorX(state: VoiceRenderState, i: number): number {
+    const x = state.noteXPositions.get(i) ?? 0;
+    if (state.elements[i].nodeName === MUSIC_REST_NODE) {
+      return x + NOTE_SVG_WIDTH / 2 - REST_HALF_WIDTH_PX;
+    }
+    const graceHeadX = state.firstGraceHeadXPositions.get(i);
+    return graceHeadX === undefined
+      ? x + trillSignLeftX(state.stemDirections[i])
+      : graceHeadX - GRACE_SCALE * NOTE_HEAD_RADIUS_PX;
+  }
+
+  // The margin of the next technique text on one side of this staff, in any
+  // voice, or null.
+  #nextTechniqueTextX(
+    state: VoiceRenderState,
+    i: number,
+    above: boolean
+  ): number | null {
+    const anchorX = this.#techniqueTextAnchorX(state, i);
+    let next: number | null = null;
+    for (const other of this.#voiceRenderStates.values()) {
+      other.elements.forEach((element, j) => {
+        if (
+          (other === state && j === i) ||
+          techniqueTextOf(element) === null ||
+          hasTechniqueTextBelow(element) === above
+        ) {
+          return;
+        }
+        const x = this.#techniqueTextAnchorX(other, j);
+        if (x > anchorX && (next === null || x < next)) {
+          next = x;
+        }
+      });
+    }
+    return next;
+  }
+
+  // A technique text's margin and extent: from its anchor, shifted left and
+  // then wrapped to stay inside the row (see TechniqueTextRunOn), or the notes
+  // area without a composition.
+  #techniqueTextSpan(
+    state: VoiceRenderState,
+    i: number,
+    unwrapped: TechniqueLabel,
+    above: boolean
+  ): { label: TechniqueLabel; margin: number; left: number; right: number } {
+    const anchorX = this.#techniqueTextAnchorX(state, i);
+    const runOn = this.#techniqueTextRunOn?.get(state.elements[i]);
+    const fit = (label: TechniqueLabel) => {
+      const width = techniqueLabelWidthPx(label);
+      return {
+        width,
+        ...techniqueTextSpan({
+          anchorX,
+          width,
+          minX: 0,
+          rowRight: Math.max(
+            this.#notesAreaEndX,
+            runOn?.maxRight ?? this.#notesAreaEndX
+          ),
+          nextTextX: this.#nextTechniqueTextX(state, i, above),
+          ownBarRight: this.#notesAreaEndX,
+        }),
+      };
+    };
+    let label = unwrapped;
+    let span = fit(label);
+    if (span.left + span.width > span.maxRight + 0.5) {
+      label = wrapTechniqueLabel(label, span.maxRight - span.left);
+      span = fit(label);
+    }
+    return {
+      label,
+      margin: span.left,
+      left: span.left - techniqueLabelHangPx(label),
+      right: span.left + span.width,
+    };
+  }
+
+  // A label's baseline clear of its own entry and of the ink under it: other
+  // voices' for a tremolo label, everything's for a longer glissando label.
+  #techniqueLabelClearBaselineY(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    i: number,
+    label: TechniqueLabel,
+    span: { left: number; right: number }
+  ): number {
+    let baseline = this.#techniqueLabelBaselineY(voiceKey, state, i);
+    const runOnInkY =
+      label.kind === 'text'
+        ? this.#techniqueTextRunOn?.get(state.elements[i])?.inkY ?? null
+        : null;
+    if (runOnInkY !== null) {
+      baseline = Math.min(baseline, runOnInkY - TECHNIQUE_LABEL_GAP_PX);
+    }
+    const connectorTop = this.#connectorTopUnderLabel(span);
+    if (connectorTop !== null) {
+      baseline = Math.min(baseline, connectorTop - TECHNIQUE_LABEL_GAP_PX);
+    }
+    for (const [otherKey, otherState] of this.#voiceRenderStates) {
+      if (label.kind === 'tremolo' && otherKey === voiceKey) {
+        continue;
+      }
+      for (const j of otherState.noteXPositions.keys()) {
+        const inkTop =
+          label.kind === 'tremolo'
+            ? this.#entryOverlaps(otherState, j, span)
+              ? this.#entryInkY(otherState, j, true) ??
+                this.#restInkY(otherState, j, true)
+              : null
+            : this.#inkTopUnderLabel(otherKey, otherState, j, span);
+        if (inkTop !== null) {
+          baseline = Math.min(baseline, inkTop - TECHNIQUE_LABEL_GAP_PX);
+        }
+      }
+    }
+    return baseline;
+  }
+
+  // The top (container Y) of the slurs, ties and glissando lines under a
+  // label's span (the bottom, for text below), or null with none. They are
+  // drawn after the labels, so these
+  // are where they are expected; a line to another staff isn't.
+  #connectorTopUnderLabel(span: LabelSpan, above = true): number | null {
+    const tops: number[] = [];
+    const consider = (top: number | null): void => {
+      if (top !== null) {
+        tops.push(top);
+      }
+    };
+    for (const state of this.#voiceRenderStates.values()) {
+      for (const { startIndex, endIndex, y } of this.#slurReaches(
+        state,
+        above
+      )) {
+        const slurOf = (index: number): ConnectorRole | null =>
+          (state.elements[index] as NoteOrChordElementType).slur ?? null;
+        const openStart = slurOf(startIndex) !== 'start';
+        const openEnd = slurOf(endIndex) !== 'end';
+        consider(
+          arcTopUnder(
+            {
+              from: {
+                x: openStart ? 0 : this.#headCenterX(state, startIndex),
+                y: this.#entryInkY(state, startIndex, above) ?? y,
+              },
+              to: {
+                x: openEnd
+                  ? this.#notesAreaEndX
+                  : this.#headCenterX(state, endIndex),
+                y: this.#entryInkY(state, endIndex, above) ?? y,
+              },
+              reachY: y,
+              openStart,
+              openEnd,
+            },
+            span,
+            above
+          )
+        );
+      }
+      state.elements.forEach((element, i) => {
+        const y = this.#tieReachY(state, i, above);
+        if (y === null || !tiesOn((element as NoteOrChordElementType).tie)) {
+          return;
+        }
+        const next = i + 1 < state.elements.length;
+        consider(
+          lineTopUnder(
+            { x: this.#headCenterX(state, i), y },
+            {
+              x: next ? this.#headCenterX(state, i + 1) : this.#notesAreaEndX,
+              y,
+            },
+            span
+          )
+        );
+      });
+    }
+    for (const { from, to, shape, hint } of this.#glissandoLines()) {
+      const amplitude = shape === 'wave' ? GLISSANDO_WAVE_AMPLITUDE_PX : 0;
+      const lineTop = lineTopUnder(from, to, span, above);
+      consider(
+        lineTop === null ? null : lineTop + (above ? -amplitude : amplitude)
+      );
+      if (hint !== null && above) {
+        const box = lineLabelBox(
+          from,
+          to,
+          GLISSANDO_HINT_LABELS[hint],
+          amplitude
+        );
+        consider(
+          box.left <= span.right && box.right >= span.left ? box.top : null
+        );
+      }
+    }
+    return outermostOrNull(tops, above);
+  }
+
+  // How far (container Y) entry i's ties are expected to reach toward one side:
+  // a voice's own ties keep to its side, others curve away from the stem, and a
+  // chord's outward both ways. Null with none there.
+  #tieReachY(
+    state: VoiceRenderState,
+    i: number,
+    above: boolean
+  ): number | null {
+    const element = state.elements[i];
+    if (
+      element.nodeName === MUSIC_REST_NODE ||
+      ((element as NoteOrChordElementType).tie ?? null) === null
+    ) {
+      return null;
+    }
+    const voiceSide = voiceSideOf(state);
+    const stemTowardSide = state.stemDirections[i] === above;
+    const reachesSide =
+      voiceSide === null
+        ? !stemTowardSide || isChordNodeName(element.nodeName)
+        : (voiceSide === 'above') === above;
+    const edge = stemTowardSide
+      ? this.#outerHeadEdgeY(state, i, above)
+      : this.#entryInkY(state, i, above);
+    return !reachesSide || edge === null
+      ? null
+      : edge +
+          (above ? -1 : 1) *
+            (SLUR_NOTEHEAD_OFFSET_PX + TIE_REACH_PX - STAFF_Y_STEP);
+  }
+
+  // The outer edge (container Y) of entry i's outermost head toward one side.
+  // Null for a rest.
+  #outerHeadEdgeY(
+    state: VoiceRenderState,
+    i: number,
+    above: boolean
+  ): number | null {
+    const headYs = getStaffYs(
+      state.elements[i],
+      state.noteStaffYCoords,
+      state.chordStaffYCoords
+    );
+    if (headYs.length === 0) {
+      return null;
+    }
+    const headY = above ? Math.min(...headYs) : Math.max(...headYs);
+    return containerYOfStaffY(headY) + (above ? -1 : 1) * STAFF_Y_STEP;
+  }
+
+  #headCenterX(state: VoiceRenderState, index: number): number {
+    const x = state.noteXPositions.get(index) ?? 0;
+    const element = state.elements[index];
+    const shift = entryCenterShiftPx(element);
+    if (
+      element.nodeName !== MUSIC_REST_NODE &&
+      resolveNoteheadGlyph(entryNotehead(element), element.duration) === 'whole'
+    ) {
+      return x + NOTE_SVG_WIDTH / 2 + shift;
+    }
+    return (
+      x +
+      (state.stemDirections[index]
+        ? NOTE_HEAD_CX_STEM_UP_PX
+        : NOTE_HEAD_CX_STEM_DOWN_PX) +
+      shift
+    );
+  }
+
+  // Where the glissando lines starting on this staff are expected, as far as
+  // the end of the bar. One whose end is on another staff of the measure is
+  // left out.
+  #glissandoLines(): {
+    from: LinePoint;
+    to: LinePoint;
+    shape: GlissandoShape;
+    hint: GlissandoHint | null;
+  }[] {
+    const lines: {
+      from: LinePoint;
+      to: LinePoint;
+      shape: GlissandoShape;
+      hint: GlissandoHint | null;
+    }[] = [];
+    for (const state of this.#voiceRenderStates.values()) {
+      state.elements.forEach((element, i) => {
+        for (const start of this.#glissandoEnds(state, i, 'start')) {
+          const endIndex = state.elements.findIndex(
+            (_, j) =>
+              j > i &&
+              this.#glissandoEnds(state, j, 'end').some(({ source }) =>
+                endsGlissando(source, start.source)
+              )
+          );
+          const endHeads =
+            endIndex < 0
+              ? this.#glissandoEndStaffYs(element, start.source)
+              : this.#glissandoEnds(state, endIndex, 'end')
+                  .filter(({ source }) => endsGlissando(source, start.source))
+                  .flatMap(({ headYs }) => headYs);
+          if (endHeads.length === 0) {
+            continue;
+          }
+          const rises = Math.min(...endHeads) < Math.min(...start.headYs);
+          lines.push({
+            from: {
+              x: this.#headCenterX(state, i) + entryHeadHalfWidthPx(element),
+              y: rises ? Math.min(...start.headYs) : Math.max(...start.headYs),
+            },
+            to: {
+              x:
+                endIndex < 0
+                  ? this.#notesAreaEndX
+                  : this.#headCenterX(state, endIndex) -
+                    entryHeadHalfWidthPx(state.elements[endIndex]),
+              y: rises ? Math.max(...endHeads) : Math.min(...endHeads),
+            },
+            shape: start.source.glissandoShape,
+            hint: start.source.glissandoHint,
+          });
+        }
+      });
+    }
+    return lines;
+  }
+
+  // An entry's glissando starts or ends and the heads (container Y) each may
+  // use: the chord's, or one tone's.
+  #glissandoEnds(
+    state: VoiceRenderState,
+    index: number,
+    role: ConnectorRole
+  ): { source: NoteOrChordElementType; headYs: number[] }[] {
+    const element = state.elements[index];
+    if (
+      element.nodeName === MUSIC_REST_NODE ||
+      !hasGlissandoRole(element, role)
+    ) {
+      return [];
+    }
+    const headYs = getStaffYs(
+      element,
+      state.noteStaffYCoords,
+      state.chordStaffYCoords
+    ).map(containerYOfStaffY);
+    const noteOrChord = element as NoteOrChordElementType;
+    if (noteOrChord.glissando === role) {
+      return [{ source: noteOrChord, headYs }];
+    }
+    return Array.from(element.children).flatMap((tone, i) =>
+      (tone as NoteElementType).glissando === role && headYs[i] !== undefined
+        ? [{ source: tone as NoteElementType, headYs: [headYs[i]] }]
+        : []
+    );
+  }
+
+  // The heads (container Y) a glissando carrying on past the bar ends at: the
+  // next matching end on the same staff of a later measure.
+  #glissandoEndStaffYs(
+    element: Element,
+    start: NoteOrChordElementType
+  ): number[] {
+    const measure = element.closest(MUSIC_MEASURE);
+    const stavesOf = (parent: Element): Element[] =>
+      Array.from(parent.querySelectorAll(STAFF_TAGS));
+    const ordinal =
+      measure === null
+        ? -1
+        : stavesOf(measure).indexOf(this as unknown as Element);
+    if (measure === null || ordinal < 0) {
+      return [];
+    }
+    for (
+      let later = measure.nextElementSibling;
+      later !== null;
+      later = later.nextElementSibling
+    ) {
+      const ends = Array.from(
+        stavesOf(later)[ordinal]?.querySelectorAll('[glissando="end"]') ?? []
+      ) as NoteOrChordElementType[];
+      const end = ends.find((candidate) => endsGlissando(candidate, start));
+      if (end !== undefined) {
+        const staffYs = isChordNodeName(end.nodeName)
+          ? (end as ChordElementType).staffYCoordinates ?? []
+          : [(end as NoteElementType).staffY];
+        return staffYs
+          .filter((staffY): staffY is number => typeof staffY === 'number')
+          .map(containerYOfStaffY);
+      }
+    }
+    return [];
+  }
+
+  // The top (container Y) of entry j's rest; null for a note, or where the
+  // rest is hidden.
+  #restInkY(state: VoiceRenderState, j: number, above: boolean): number | null {
+    const element = state.elements[j];
+    return element.nodeName !== MUSIC_REST_NODE ||
+      element.hasAttribute('hidden') ||
+      element.style.visibility === 'hidden' ||
+      element.style.display === 'none'
+      ? null
+      : parseFloat(element.style.top || '0') +
+          (above ? restInkTopPx : restInkBottomPx)(element.duration);
+  }
+
+  #entryOverlaps(
+    state: VoiceRenderState,
+    index: number,
+    { left, right }: { left: number; right: number }
+  ): boolean {
+    const x = state.noteXPositions.get(index) ?? 0;
+    return x <= right && x + NOTE_SVG_WIDTH >= left;
+  }
+
+  // The top (container Y) of what entry j draws under a label's span, or the
+  // bottom for text below: its note, decorations, accidentals, grace notes
+  // and bend. Null with nothing there.
+  #inkTopUnderLabel(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    j: number,
+    span: { left: number; right: number },
+    above = true
+  ): number | null {
+    const tops: number[] = [];
+    const consider = (
+      ink: { left: number; right: number } | null,
+      top: number | null
+    ): void => {
+      if (
+        ink !== null &&
+        top !== null &&
+        ink.left <= span.right &&
+        ink.right >= span.left
+      ) {
+        tops.push(top);
+      }
+    };
+    const x = state.noteXPositions.get(j) ?? 0;
+    const element = state.elements[j];
+    if (element.nodeName === MUSIC_REST_NODE) {
+      consider(
+        {
+          left: x + NOTE_SVG_WIDTH / 2 - REST_HALF_WIDTH_PX,
+          right: x + NOTE_SVG_WIDTH / 2 + REST_HALF_WIDTH_PX,
+        },
+        this.#restInkY(state, j, above)
+      );
+      return outermostOrNull(tops, above);
+    }
+    const { headLeftX, headRightX } = this.#voicePartGeometry(
+      element as NoteElementType | ChordElementType,
+      getStaffYs(element, state.noteStaffYCoords, state.chordStaffYCoords)
+    );
+    const heads = { left: x + headLeftX, right: x + headRightX };
+    consider(heads, this.#entryInkY(state, j, above));
+    consider(
+      heads,
+      above
+        ? this.#aboveStaffDecorationTopY(voiceKey, state, j)
+        : this.#belowTupletBottomY(state, j)
+    );
+    const column = this.#accidentalColumn(state, j);
+    for (const { accidental, headCenterY } of this.#shownAccidentals(
+      state,
+      j
+    )) {
+      const extent = accidentalVerticalExtent(accidental);
+      consider(
+        column,
+        above ? headCenterY - extent.above : headCenterY + extent.below
+      );
+    }
+    const graceRight = x + this.#graceShiftX(state, j);
+    consider(
+      {
+        left: graceRight - this.#entryLeftwardExtent(element),
+        right: graceRight,
+      },
+      this.#graceInkY(state, j, above)
+    );
+    const bendInk = this.#bendInk.get(element) ?? null;
+    if (bendInk !== null && bendInk.contours.length > 0) {
+      for (const segments of bendInk.contours) {
+        consider(bendInk, contourTopUnder(segments, span, above));
+      }
+    } else if (above) {
+      consider(bendInk, bendInk?.top ?? null);
+    }
+    return outermostOrNull(tops, above);
+  }
+
+  // The bottom (container Y) of a tuplet bracket below the stave over entry
+  // i, or null.
+  #belowTupletBottomY(state: VoiceRenderState, i: number): number | null {
+    let bottom: number | null = null;
+    for (const group of state.tupletGroups) {
+      if (
+        group.indices.includes(i) &&
+        !this.#isTupletSuppressed(group) &&
+        !this.#tupletBracketAbove(state, group)
+      ) {
+        const y = this.#tupletGroupExtremeY(state, group, false);
+        bottom = bottom === null ? y : Math.max(bottom, y);
+      }
+    }
+    return bottom;
+  }
+
+  // How far (px) right of the room reserved for them an entry's grace notes
+  // stand: a chord with no accidental draws its own against its heads.
+  #graceShiftX(state: VoiceRenderState, index: number): number {
+    const element = state.elements[index];
+    if (
+      !isChordNodeName(element.nodeName) ||
+      elementHasShownAccidental(element as ChordElementType)
+    ) {
+      return 0;
+    }
+    return this.#voicePartGeometry(
+      element as ChordElementType,
+      getStaffYs(element, state.noteStaffYCoords, state.chordStaffYCoords)
+    ).headLeftX;
+  }
+
+  // The top (container Y) of entry `index`'s leading grace notes, or null with
+  // none.
+  #graceInkY(
+    state: VoiceRenderState,
+    index: number,
+    above: boolean
+  ): number | null {
+    const element = state.elements[index] as NoteElementType | ChordElementType;
+    const { grace } = element;
+    const [headStaffY] = getStaffYs(
+      element,
+      state.noteStaffYCoords,
+      state.chordStaffYCoords
+    );
+    const reference = isNoteNodeName(element.nodeName)
+      ? {
+          value: (element as NoteElementType).note,
+          octave: (element as NoteElementType).octave,
+        }
+      : (element as ChordElementType).notes[0];
+    if (grace === null || headStaffY === undefined || reference === undefined) {
+      return null;
+    }
+    const descriptors = buildGraceNoteDescriptors(
+      grace,
+      element.graceOctave ?? [],
+      reference.value[0] as NoteLetter,
+      reference.octave ?? 4
+    );
+    applyResolvedGraceAccidentals(
+      descriptors,
+      element.resolvedGraceAccidentals
+    );
+    if (isUnpitchedNote(element)) {
+      flattenUnpitchedGraces(descriptors);
+    }
+    const ratio = entryScale(element);
+    return above
+      ? graceInkTopY(
+          descriptors,
+          element.graceDuration,
+          containerYOfStaffY(headStaffY),
+          ratio
+        )
+      : graceHeadsBottomY(descriptors, containerYOfStaffY(headStaffY), ratio);
+  }
+
+  // A label's baseline moved up past the placed labels it would overlap.
+  #clearOfPlaced(
+    from: number,
+    height: number,
+    { left, right }: { left: number; right: number },
+    placed: readonly PlacedAboveStaffRect[]
+  ): number {
+    let baseline = from;
+    let moved = true;
+    while (moved) {
+      moved = false;
+      for (const other of placed) {
+        const overlapsAcross = other.left < right && left < other.right;
+        const overlapsDown =
+          baseline - height < other.bottom + TECHNIQUE_LABEL_GAP_PX &&
+          baseline + TECHNIQUE_LABEL_GAP_PX > other.top;
+        if (overlapsAcross && overlapsDown) {
+          baseline = other.top - TECHNIQUE_LABEL_GAP_PX;
+          moved = true;
+        }
+      }
+    }
+    return baseline;
+  }
+
+  // Each bend runs from its note to just before the next entry, or before the
+  // barline or clef change that comes first.
+  #renderBends(remainingWidth: number): void {
+    this.#bendInk.clear();
     for (const [voiceKey, state] of this.#voiceRenderStates) {
       const container = this.#containerFor(
-        this.#tremoloLabelContainers,
+        this.#bendContainers,
         voiceKey,
-        'tremolo-labels-container'
+        'bends-container'
       );
       this.#sizeVoiceContainer(container, remainingWidth);
       container.innerHTML = '';
       for (let i = 0; i < state.elements.length; i++) {
-        const label = tremoloLabelOf(state.elements[i]);
-        if (label === null) {
+        const heads = this.#bendsOf(state, i);
+        if (heads.length === 0) {
           continue;
         }
-        const left =
-          (state.noteXPositions.get(i) ?? 0) +
-          trillSignLeftX(state.stemDirections[i]);
-        const right = left + tremoloLabelWidthPx(label);
-        let baseline = this.#tremoloLabelBaselineY(voiceKey, state, i);
+        const x = state.noteXPositions.get(i) ?? 0;
+        const { inkRight, tail } = this.#bendStart(state, i);
+        const headYs = heads.map(({ y }) => y);
+        const layout = layoutBends({
+          heads,
+          inkRight: Math.max(
+            x + inkRight,
+            this.#otherVoicesInkRight(voiceKey, state, i, headYs)
+          ),
+          tail: tail && { right: x + tail.right, bottomY: tail.bottomY },
+          limit: this.#bendLimit(voiceKey, state, i, [
+            ...headYs,
+            ...heads.flatMap(({ y, bend: { target } }) =>
+              target === null ? [] : [y - target.steps * STAFF_Y_STEP]
+            ),
+            ...spanOfYs(this.#contourYsOf(state, i)),
+          ]),
+          targetWidthPx: bendTargetWidthPx,
+        });
+        const element = state.elements[i] as NoteOrChordElementType;
+        if (layout === null) {
+          // An unlaid-out staff has no width yet.
+          if (remainingWidth > 0 && !this.#warnedBends.has(element)) {
+            this.#warnedBends.add(element);
+            console.warn(
+              '[staff] no room for a bend beside its note; it is not drawn'
+            );
+          }
+          continue;
+        }
+        container.appendChild(createBendSvg(layout));
+        const amplitude = ({ shape }: BendLine) =>
+          shape === 'wave' ? GLISSANDO_WAVE_AMPLITUDE_PX : 0;
+        this.#bendInk.set(element, {
+          left: layout.lines[0].from.x,
+          right: layout.rightX,
+          top: Math.min(
+            ...layout.lines.map(
+              (line) =>
+                Math.min(
+                  line.from.y,
+                  line.to.y,
+                  ...(line.contour ?? []).map(({ y }) => y)
+                ) - amplitude(line)
+            ),
+            this.#bendTargetReachY(state, i, true) ?? Infinity
+          ),
+          bottom: Math.max(
+            ...layout.lines.map(
+              (line) =>
+                Math.max(
+                  line.from.y,
+                  line.to.y,
+                  ...(line.contour ?? []).map(({ y }) => y)
+                ) + amplitude(line)
+            ),
+            this.#bendTargetReachY(state, i, false) ?? -Infinity
+          ),
+          contours: layout.lines.flatMap(({ contour }) =>
+            contour === null ? [] : [contourSegments(contour)]
+          ),
+        });
+      }
+    }
+  }
+
+  // An entry's dot rows (staff Y), empty with no dots.
+  #augmentationDotRowYs(
+    state: VoiceRenderState,
+    index: number
+  ): readonly number[] {
+    const element = state.elements[index] as NoteElementType | ChordElementType;
+    if (durationToDotCount[element.duration] === 0) {
+      return [];
+    }
+    if (element.augmentationDotRows !== null) {
+      return element.augmentationDotRows;
+    }
+    const staffYs = getStaffYs(
+      element,
+      state.noteStaffYCoords,
+      state.chordStaffYCoords
+    );
+    return isNoteNodeName(element.nodeName)
+      ? staffYs.map(resolveNoteDotStaffY)
+      : resolveChordDotStaffYs(staffYs);
+  }
+
+  // Where a bend on entry i stops (container px), by what its own voice plays
+  // next and any other voice's heads there level with it.
+  #bendLimit(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    i: number,
+    bendYs: readonly number[]
+  ): BendLimit {
+    const next = this.#nextEntryAfter(voiceKey, state, i);
+    const nextBeat =
+      next === null
+        ? Number.POSITIVE_INFINITY
+        : next.state.beatOffsets[next.index];
+    const marker = this.#markerInk.find(
+      ({ beat }) =>
+        beat > state.beatOffsets[i] + MARKER_BEAT_EPSILON &&
+        beat <= nextBeat + MARKER_BEAT_EPSILON
+    );
+    if (marker !== undefined) {
+      return {
+        kind: marker.kind === 'barline' ? 'barline' : 'ink',
+        left: marker.left,
+      };
+    }
+    if (next === null) {
+      return { kind: 'barline', left: this.#notesAreaEndX };
+    }
+    const lefts = [this.#entryInkLeftX(next.state, next.index)];
+    for (const { otherState, j } of this.#otherVoiceEntriesBeside(
+      voiceKey,
+      nextBeat,
+      bendYs
+    )) {
+      lefts.push(this.#entryInkLeftX(otherState, j));
+    }
+    return { kind: 'ink', left: Math.min(...lefts) };
+  }
+
+  #entryInkLeftX(state: VoiceRenderState, index: number): number {
+    return (
+      (state.noteXPositions.get(index) ?? 0) + this.#entryInkLeft(state, index)
+    );
+  }
+
+  // Other voices' notes and chords on a beat with a head within a space of
+  // one of `ys` (container Y).
+  #otherVoiceEntriesBeside(
+    voiceKey: VoiceKey,
+    beat: number,
+    ys: readonly number[]
+  ): { otherState: VoiceRenderState; j: number; staffYs: number[] }[] {
+    return [...this.#voiceRenderStates].flatMap(([otherKey, otherState]) =>
+      otherKey === voiceKey
+        ? []
+        : otherState.elements.flatMap((element, j) => {
+            const staffYs = getStaffYs(
+              element,
+              otherState.noteStaffYCoords,
+              otherState.chordStaffYCoords
+            );
+            const beside =
+              Math.abs(otherState.beatOffsets[j] - beat) <=
+                MARKER_BEAT_EPSILON &&
+              staffYs.some((staffY) =>
+                ys.some(
+                  (y) =>
+                    Math.abs(y - containerYOfStaffY(staffY)) <=
+                    STAFF_LINE_SPACING
+                )
+              );
+            return beside ? [{ otherState, j, staffYs }] : [];
+          })
+    );
+  }
+
+  // The right edge (container px) of other voices' heads and dots beside
+  // entry i's own heads, which its bend starts after too.
+  #otherVoicesInkRight(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    i: number,
+    headYs: readonly number[]
+  ): number {
+    return Math.max(
+      ...this.#otherVoiceEntriesBeside(
+        voiceKey,
+        state.beatOffsets[i],
+        headYs
+      ).map(({ otherState, j, staffYs }) => {
+        const { headRightX, dotsRightEdgeX } = this.#voicePartGeometry(
+          otherState.elements[j] as NoteElementType | ChordElementType,
+          staffYs
+        );
+        return (
+          (otherState.noteXPositions.get(j) ?? 0) +
+          Math.max(headRightX, dotsRightEdgeX ?? -Infinity)
+        );
+      })
+    );
+  }
+
+  // A breath mark sits above the stave in the gap after its entry, above
+  // whatever is under it there in any voice, and above a label or mark placed
+  // before it that it would overlap.
+  #renderBreathMarks(
+    remainingWidth: number,
+    placed: PlacedAboveStaffRect[]
+  ): void {
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      const container = this.#containerFor(
+        this.#breathMarkContainers,
+        voiceKey,
+        'breath-marks-container'
+      );
+      this.#sizeVoiceContainer(container, remainingWidth);
+      container.innerHTML = '';
+      for (let i = 0; i < state.elements.length; i++) {
+        const kind = breathMarkOf(state.elements[i]);
+        if (kind === null) {
+          continue;
+        }
+        const centerX = this.#breathMarkCenterX(voiceKey, state, i);
+        const halfWidth = breathMarkWidthPx(kind) / 2;
+        const left = centerX - halfWidth;
+        const right = centerX + halfWidth;
+        let bottom = this.#breathMarkBottomY(voiceKey, state, i, {
+          left,
+          right,
+        });
         for (const [otherKey, otherState] of this.#voiceRenderStates) {
           if (otherKey === voiceKey) {
             continue;
@@ -4430,54 +7175,460 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
             if (x > right || x + NOTE_SVG_WIDTH < left) {
               continue;
             }
-            const inkTop = this.#tremoloLabelInkTopY(otherState, j);
+            const inkTop = this.#entryInkY(otherState, j, true);
             if (inkTop !== null) {
-              baseline = Math.min(baseline, inkTop - TREMOLO_LABEL_GAP_PX);
+              bottom = Math.min(bottom, inkTop - BREATH_MARK_INK_GAP_PX);
             }
           }
         }
+        const height = breathMarkHeightPx(kind);
         let moved = true;
         while (moved) {
           moved = false;
           for (const other of placed) {
             const overlapsAcross = other.left < right && left < other.right;
             const overlapsDown =
-              baseline - TREMOLO_LABEL_FONT_SIZE_PX <
-                other.top + TREMOLO_LABEL_FONT_SIZE_PX + TREMOLO_LABEL_GAP_PX &&
-              baseline + TREMOLO_LABEL_GAP_PX > other.top;
+              bottom - height < other.bottom + BREATH_MARK_INK_GAP_PX &&
+              bottom + BREATH_MARK_INK_GAP_PX > other.top;
             if (overlapsAcross && overlapsDown) {
-              baseline = other.top - TREMOLO_LABEL_GAP_PX;
+              bottom = other.top - BREATH_MARK_INK_GAP_PX;
               moved = true;
             }
           }
         }
-        placed.push({
-          left,
-          right,
-          top: baseline - TREMOLO_LABEL_FONT_SIZE_PX,
-        });
-        container.appendChild(createTremoloLabel(left, baseline, label));
+        placed.push({ left, right, top: bottom - height, bottom });
+        container.appendChild(createBreathMarkSvg(kind, centerX, bottom));
       }
     }
   }
 
-  // Baseline (container Y) of entry i's tremolo label, before it moves past
-  // other labels or other voices: a gap above the stave, the entry's own ink,
+  // Centre x (container) of entry i's breath mark: midway between its right
+  // ink edge and the next entry's left edge in its voice, or the end of the
+  // notes area.
+  #breathMarkCenterX(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    i: number
+  ): number {
+    const x = state.noteXPositions.get(i) ?? 0;
+    const next = this.#nextEntryAfter(voiceKey, state, i);
+    return breathMarkCenterX({
+      noteRightX:
+        x + NOTE_SVG_WIDTH + this.#rightwardInkFootprint(voiceKey, state, i),
+      nextLeftX:
+        next === null
+          ? this.#notesAreaEndX
+          : (next.state.noteXPositions.get(next.index) ?? 0) -
+            this.#entryLeftwardExtent(next.state.elements[next.index]),
+    });
+  }
+
+  // A marking's centre moved left so its `dynamic-text` ends by the row's
+  // end (the notes area's without a composition), but not past the notes
+  // area's start.
+  #dynamicCenterClearOfRowEnd(
+    centerX: number,
+    marking: DynamicMarking,
+    bracketed: boolean,
+    text: string | null
+  ): number {
+    if (text === null) {
+      return centerX;
+    }
+    const halfWidth = dynamicTextHalfWidth(marking, bracketed);
+    const limit = Math.max(
+      this.#notesAreaEndX,
+      this.#rowRightX ?? this.#notesAreaEndX
+    );
+    const overflow = centerX + halfWidth + dynamicTextTrailingPx(text) - limit;
+    return overflow > 0
+      ? Math.max(Math.min(centerX, halfWidth), centerX - overflow)
+      : centerX;
+  }
+
+  // Swells this staff draws, each with the last entry of its chain. One
+  // whose chain runs on past the bar inside a composition is the
+  // composition's, as is one an earlier bar's swell covers.
+  #staffSwells(state: VoiceRenderState): SwellOwner[] {
+    return resolveSwellOwners(state.elements).owners.filter(
+      (owner) =>
+        !this.#swellCarriesOn(state, owner.lastIndex) &&
+        !this.#swellContinuations.covered.has(state.elements[owner.index])
+    );
+  }
+
+  #swellCarriesOn(state: VoiceRenderState, lastIndex: number): boolean {
+    return (
+      this.closest(MUSIC_COMPOSITION) !== null &&
+      lastIndex === state.elements.length - 1 &&
+      tiesOn((state.elements[lastIndex] as NoteOrChordElementType).tie ?? null)
+    );
+  }
+
+  // Each `dynamic-end` this staff draws, at the entry whose span it ends: its
+  // own, its swell's chain's last, or one the composition hands over.
+  #dynamicEndsOf(state: VoiceRenderState): {
+    at: number;
+    marking: DynamicMarking;
+    owner: NoteOrChordElementType;
+  }[] {
+    const ends: {
+      at: number;
+      marking: DynamicMarking;
+      owner: NoteOrChordElementType;
+    }[] = [];
+    const { owners } = resolveSwellOwners(state.elements);
+    state.elements.forEach((element, index) => {
+      if (element.nodeName === MUSIC_REST_NODE) {
+        return;
+      }
+      const noteOrChord = element as NoteOrChordElementType;
+      const inherited = this.#swellContinuations.dynamicEnds.get(element);
+      if (inherited !== undefined) {
+        ends.push({ at: index, marking: inherited, owner: noteOrChord });
+      }
+      const marking = noteOrChord.dynamicEnd ?? null;
+      if (marking === null) {
+        return;
+      }
+      const owner = owners.find((candidate) => candidate.index === index);
+      const at = owner?.lastIndex ?? index;
+      if (owner !== undefined && this.#swellCarriesOn(state, at)) {
+        return;
+      }
+      ends.push({ at, marking, owner: noteOrChord });
+    });
+    return ends;
+  }
+
+  #beatLength(state: VoiceRenderState, i: number): number {
+    return i + 1 < state.beatOffsets.length
+      ? state.beatOffsets[i + 1] - state.beatOffsets[i]
+      : durationContribution(
+          state.elements[i],
+          i,
+          state.tupletsByIndex,
+          new Set(),
+          state.tremoloScaleByIndex
+        );
+  }
+
+  // An entry's own dynamic as a hairpin endpoint, centred under its head.
+  #ownDynamicText(
+    element: NoteOrChordElementType,
+    x: number
+  ): HairpinEndpointText | null {
+    return element.dynamic === null
+      ? null
+      : {
+          marking: element.dynamic,
+          bracketed: element.dynamicReminder,
+          text: element.dynamicText ?? null,
+          centerX: x + NOTE_SVG_WIDTH / 2 + entryCenterShiftPx(element),
+        };
+  }
+
+  // Where a swell over a chain ending at `lastIndex` stops: `rawEndX` before
+  // the next entry's ink (or the end of the notes area), `endX` also short of
+  // the chain's `dynamic-end`, else the next entry's dynamic.
+  #swellEnd(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    owner: SwellOwner
+  ): {
+    rawEndX: number;
+    endX: number;
+    dynamicEnd: HairpinEndpointText | null;
+  } {
+    const { lastIndex } = owner;
+    const next = this.#nextEntryAfter(voiceKey, state, lastIndex);
+    const nextElement = next === null ? null : next.state.elements[next.index];
+    const nextX =
+      next === null ? null : next.state.noteXPositions.get(next.index) ?? 0;
+    const rawEndX =
+      nextElement === null || nextX === null
+        ? this.#notesAreaEndX - HAIRPIN_DYNAMIC_GAP_PX
+        : nextX -
+          this.#entryLeftwardExtent(nextElement) -
+          HAIRPIN_DYNAMIC_GAP_PX;
+    const marking =
+      this.#dynamicEndsOf(state).find((end) => end.at === lastIndex)?.marking ??
+      null;
+    const dynamicEnd =
+      marking === null
+        ? null
+        : {
+            marking,
+            centerX: this.#dynamicEndCenterX(
+              voiceKey,
+              state,
+              lastIndex,
+              marking
+            ),
+          };
+    const nextDynamic =
+      nextElement === null ||
+      nextX === null ||
+      nextElement.nodeName === MUSIC_REST_NODE
+        ? null
+        : this.#ownDynamicText(nextElement as NoteOrChordElementType, nextX);
+    return {
+      rawEndX,
+      endX: hairpinEndClearOf(rawEndX, dynamicEnd ?? nextDynamic),
+      dynamicEnd,
+    };
+  }
+
+  // Where the middle beat of a swell's chain is drawn.
+  #swellMidX(
+    state: VoiceRenderState,
+    owner: SwellOwner,
+    rawEndX: number
+  ): number {
+    const xOf = (k: number) => state.noteXPositions.get(k) ?? 0;
+    const pieces = [];
+    for (let k = owner.index; k <= owner.lastIndex; k++) {
+      pieces.push({
+        row: 0,
+        startBeat: state.beatOffsets[k],
+        endBeat: state.beatOffsets[k] + this.#beatLength(state, k),
+        startX: xOf(k),
+        endX: k < owner.lastIndex ? xOf(k + 1) : rawEndX,
+      });
+    }
+    return swellMidpoint(pieces).x;
+  }
+
+  #swellSegments(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    owner: SwellOwner,
+    centerY: number
+  ): HairpinSegment[] | null {
+    const element = state.elements[owner.index] as NoteOrChordElementType;
+    if (element.swell === null) {
+      return null;
+    }
+    const x = state.noteXPositions.get(owner.index) ?? 0;
+    const end = this.#swellEnd(voiceKey, state, owner);
+    const midX = this.#swellMidX(state, owner, end.rawEndX);
+    return resolveSwellRow({
+      shape: element.swell,
+      rawStartX: x,
+      endX: end.endX,
+      midX,
+      centerY,
+      startText: this.#ownDynamicText(element, x),
+      minGap: swellGapForPhonemes(
+        midX,
+        (this.#placedPhonemes.get(voiceKey)?.phonemes ?? []).map(
+          ({ centerX, width }) => ({
+            left: centerX - width / 2,
+            right: centerX + width / 2,
+          })
+        )
+      ),
+    });
+  }
+
+  // A `dynamic-end` at the end of entry `at`'s span, clear of the next
+  // entry's ink and own dynamic, or of the barline.
+  #dynamicEndCenterX(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    at: number,
+    marking: DynamicMarking
+  ): number {
+    const element = state.elements[at];
+    const next = this.#nextEntryAfter(voiceKey, state, at);
+    const nextElement = next === null ? null : next.state.elements[next.index];
+    const nextX =
+      next === null ? null : next.state.noteXPositions.get(next.index) ?? 0;
+    const nextDynamic =
+      nextElement === null ||
+      nextX === null ||
+      nextElement.nodeName === MUSIC_REST_NODE
+        ? null
+        : this.#ownDynamicText(nextElement as NoteOrChordElementType, nextX);
+    return dynamicEndCenterX({
+      marking,
+      nextInkLeftX:
+        nextElement === null || nextX === null
+          ? null
+          : nextX - this.#entryLeftwardExtent(nextElement),
+      nextDynamicLeftX:
+        nextDynamic === null
+          ? null
+          : nextDynamic.centerX -
+            dynamicTextHalfWidth(nextDynamic.marking, nextDynamic.bracketed),
+      barlineX: this.#notesAreaEndX,
+      minCenterX:
+        (state.noteXPositions.get(at) ?? 0) +
+        NOTE_SVG_WIDTH / 2 +
+        entryCenterShiftPx(element),
+    });
+  }
+
+  // The entry after entry i, where a breath mark or swell on i stops: the
+  // earliest later beat in
+  // its own voice or the combined-voices track (where its own next note may
+  // have moved), or in any track for a combined chord. Null at the end of
+  // the bar.
+  #nextEntryAfter(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    i: number
+  ): { state: VoiceRenderState; index: number } | null {
+    const beat = state.beatOffsets[i];
+    let next: { state: VoiceRenderState; index: number; beat: number } | null =
+      null;
+    for (const [otherKey, otherState] of this.#voiceRenderStates) {
+      const candidateTrack =
+        otherKey === voiceKey ||
+        otherKey === 'combined' ||
+        (voiceKey === 'combined' && otherKey !== 'shared-rest');
+      if (!candidateTrack) {
+        continue;
+      }
+      otherState.beatOffsets.forEach((otherBeat, index) => {
+        if (otherBeat > beat && (next === null || otherBeat < next.beat)) {
+          next = { state: otherState, index, beat: otherBeat };
+        }
+      });
+    }
+    return next;
+  }
+
+  // Bottom (container Y) of entry i's breath mark before it clears other
+  // voices and placed labels: above the stave, a beam across the gap, what is
+  // drawn over the entry, and either neighbour's ink inside `xRange` (both,
+  // with no x yet, as the budget estimates it). With no x, the entry's own
+  // label counts too.
+  #breathMarkBottomY(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    i: number,
+    xRange: { left: number; right: number } | null
+  ): number {
+    const next = this.#nextEntryAfter(voiceKey, state, i);
+    const inkTopYs: (number | null)[] = [];
+    const neighbours = [{ state, index: i }, ...(next === null ? [] : [next])];
+    for (const neighbour of neighbours) {
+      const x = neighbour.state.noteXPositions.get(neighbour.index) ?? 0;
+      if (
+        xRange === null ||
+        (x <= xRange.right && x + NOTE_SVG_WIDTH >= xRange.left)
+      ) {
+        inkTopYs.push(this.#entryInkY(neighbour.state, neighbour.index, true));
+      }
+    }
+    // A beam across the gap joins two entries of one track.
+    if (
+      next !== null &&
+      next.state === state &&
+      state.stemDirections[i] &&
+      state.stemDirections[next.index]
+    ) {
+      const startEdge = state.beamRenderer?.beamStackEdgeYForIndex(i, true);
+      const endEdge = state.beamRenderer?.beamStackEdgeYForIndex(
+        next.index,
+        true
+      );
+      if (
+        startEdge !== null &&
+        startEdge !== undefined &&
+        endEdge !== null &&
+        endEdge !== undefined
+      ) {
+        inkTopYs.push(Math.min(startEdge, endEdge));
+      }
+    }
+    inkTopYs.push(this.#aboveStaffDecorationTopY(voiceKey, state, i));
+    if (xRange === null && techniqueLabelsOf(state.elements[i]).length > 0) {
+      inkTopYs.push(this.#techniqueLabelTopY(voiceKey));
+    }
+    return breathMarkBottomY({
+      staffTopLineY:
+        STAFF_Y_PADDING + STAFF_TOP_LINE_Y - NOTE_HEAD_Y_OFFSET_CORRECTION,
+      inkTopYs,
+    });
+  }
+
+  // Topmost Y (container) any of this voice's breath marks reaches before
+  // stacking, allowing one more row for each other voice with marks or
+  // labels. Null without marks.
+  #breathMarkTopY(voiceKey: VoiceKey, state: VoiceRenderState): number | null {
+    let top: number | null = null;
+    for (let i = 0; i < state.elements.length; i++) {
+      const kind = breathMarkOf(state.elements[i]);
+      if (kind === null) {
+        continue;
+      }
+      const markTop =
+        this.#breathMarkBottomY(voiceKey, state, i, null) -
+        breathMarkHeightPx(kind);
+      top = top === null ? markTop : Math.min(top, markTop);
+    }
+    if (top === null) {
+      return null;
+    }
+    // A label of any entry or voice may reach over the mark.
+    for (const { top: labelTop } of this.#placedTechniqueLabels) {
+      top = Math.min(
+        top,
+        labelTop - BREATH_MARK_INK_GAP_PX - breathMarkHeightPx('tick')
+      );
+    }
+    const otherRows = [...this.#voiceRenderStates].filter(
+      ([otherKey, otherState]) =>
+        otherKey !== voiceKey &&
+        otherState.elements.some((element) => breathMarkOf(element) !== null)
+    ).length;
+    return (
+      top -
+      otherRows *
+        (breathMarkHeightPx('tick') +
+          BREATH_MARK_INK_GAP_PX +
+          TECHNIQUE_LABEL_FONT_SIZE_PX)
+    );
+  }
+
+  // Baseline (container Y) of entry i's first label, before it moves past
+  // other labels or other ink: a gap above the stave, the entry's own ink,
   // a tuplet bracket over it, a trill sign or line over it, and this voice's
   // above-staff dynamics row.
-  #tremoloLabelBaselineY(
+  #techniqueLabelBaselineY(
     voiceKey: VoiceKey,
     state: VoiceRenderState,
     i: number
   ): number {
     let top =
       STAFF_Y_PADDING + STAFF_TOP_LINE_Y - NOTE_HEAD_Y_OFFSET_CORRECTION;
-    const consider = (y: number | null): void => {
+    for (const y of [
+      this.#entryInkY(state, i, true),
+      this.#aboveStaffDecorationTopY(voiceKey, state, i),
+    ]) {
       if (y !== null) {
         top = Math.min(top, y);
       }
+    }
+    return top - TECHNIQUE_LABEL_GAP_PX;
+  }
+
+  // Topmost Y (container) of what is drawn above the stave over entry i: a
+  // tuplet bracket over it, a trill sign or line over it, and this voice's
+  // above-staff dynamics row. Null with none.
+  #aboveStaffDecorationTopY(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    i: number
+  ): number | null {
+    let top: number | null = null;
+    const consider = (y: number | null): void => {
+      if (y !== null) {
+        top = top === null ? y : Math.min(top, y);
+      }
     };
-    consider(this.#tremoloLabelInkTopY(state, i));
     for (const group of state.tupletGroups) {
       if (
         group.indices.includes(i) &&
@@ -4510,95 +7661,179 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           DYNAMICS_FONT_SIZE
       );
     }
-    return top - TREMOLO_LABEL_GAP_PX;
-  }
-
-  // Topmost ink (container Y) of entry i: its top head, then its up-stem, beam
-  // and tremolo numeral, a stemless head's strokes, or the marks above a
-  // down-stem head. Null for a rest.
-  #tremoloLabelInkTopY(state: VoiceRenderState, i: number): number | null {
-    const element = state.elements[i];
-    if (element.nodeName === MUSIC_REST_NODE) {
-      return null;
-    }
-    const noteOrChord = element as NoteElementType | ChordElementType;
-    const headYs = getStaffYs(
-      element,
-      state.noteStaffYCoords,
-      state.chordStaffYCoords
-    );
-    if (headYs.length === 0) {
-      return null;
-    }
-    const topHeadY = Math.min(...headYs);
-    const topHeadCenterY =
-      STAFF_Y_PADDING + topHeadY - NOTE_HEAD_Y_OFFSET_CORRECTION;
-    let top = topHeadCenterY - STAFF_Y_STEP;
-    const stemUp = state.stemDirections[i];
-    if (isStemlessDuration(element.duration)) {
-      if (stemUp) {
-        top = Math.min(
-          top,
-          topHeadCenterY -
-            stemlessTremoloReachPx({
-              tremolo: noteOrChord.tremolo ?? null,
-              tuplet: noteOrChord.tremoloTuplet ?? null,
-              duration: element.duration,
-              headY: topHeadY,
-              stemUp,
-            })
-        );
-      }
-    } else if (stemUp) {
-      const beamEdge = state.beamRenderer?.beamStackEdgeYForIndex(i, true);
-      const tip =
-        beamEdge !== null && beamEdge !== undefined
-          ? beamEdge - state.tremoloInkPastStemPx[i]
-          : this.#extremeStemTipY(state, [i], true);
-      if (tip !== null) {
-        top = Math.min(top, tip);
-      }
-    } else {
-      top = Math.min(
-        top,
-        topHeadCenterY -
-          articulationStackDepth(noteOrChord.articulation, noteOrChord.stress) *
-            NOTE_SCALE
-      );
-    }
     return top;
   }
 
-  // Topmost Y (container) any of this voice's tremolo labels reaches before
-  // stacking, allowing one more label row for each other voice with labels.
-  // Null without labels.
-  #tremoloLabelTopY(
-    voiceKey: VoiceKey,
-    state: VoiceRenderState
-  ): number | null {
-    let top: number | null = null;
-    for (let i = 0; i < state.elements.length; i++) {
-      if (tremoloLabelOf(state.elements[i]) === null) {
-        continue;
-      }
-      const labelTop =
-        this.#tremoloLabelBaselineY(voiceKey, state, i) -
-        TREMOLO_LABEL_FONT_SIZE_PX;
-      top = top === null ? labelTop : Math.min(top, labelTop);
+  // Places every signed note's or chord's sign stack above its own ink and
+  // the stave, and lines up the stacks of neighbouring entries in a voice.
+  #layoutSigns(): void {
+    this.#signTopYs.clear();
+    const placed = new Set<NoteElementType | ChordElementType>();
+    const staffTopLineY = containerYOfStaffY(STAFF_TOP_LINE_Y);
+    for (const state of this.#voiceRenderStates.values()) {
+      const lifts: number[] = [];
+      const bottoms = state.elements.map((element, i): number | null => {
+        if (
+          !isNoteNodeName(element.nodeName) &&
+          !isChordNodeName(element.nodeName)
+        ) {
+          return null;
+        }
+        const noteOrChord = element as NoteElementType | ChordElementType;
+        const inkTopY = this.#entryInkY(state, i, true, false);
+        if (noteOrChord.sign === null || inkTopY === null) {
+          return null;
+        }
+        const headEdgeY = this.#outerHeadEdgeY(state, i, true) ?? inkTopY;
+        const headCenterY = headEdgeY + STAFF_Y_STEP;
+        const scale = entryScale(element);
+        const articulationAbove =
+          !state.stemDirections[i] &&
+          noteOrChord.articulationStemAnchorBeamLevels === null &&
+          (noteOrChord.articulation !== null || noteOrChord.stress !== null);
+        const placement = signStackPlacement({
+          inkTopY,
+          articulation: articulationAbove
+            ? {
+                topY:
+                  headCenterY -
+                  articulationStackDepth(
+                    noteOrChord.articulation,
+                    noteOrChord.stress,
+                    scale
+                  ) *
+                    NOTE_SCALE,
+                bottomY:
+                  headCenterY -
+                  articulationStackNearDepth(
+                    noteOrChord.articulation,
+                    noteOrChord.stress,
+                    scale
+                  ) *
+                    NOTE_SCALE,
+              }
+            : null,
+          staffTopLineY,
+        });
+        lifts[i] = placement.articulationLiftPx;
+        return placement.bottomY;
+      });
+      levelSignRows(bottoms).forEach((bottomY, i) => {
+        if (bottomY === null) {
+          return;
+        }
+        const noteOrChord = state.elements[i] as
+          | NoteElementType
+          | ChordElementType;
+        noteOrChord.signPlacement = {
+          bottomY: staffYOfContainerY(bottomY),
+          articulationLiftPx: lifts[i] ?? 0,
+        };
+        this.#signTopYs.set(
+          noteOrChord,
+          bottomY - signStackHeightPx(noteOrChord.sign ?? [])
+        );
+        placed.add(noteOrChord);
+      });
     }
-    if (top === null) {
+    for (const element of this.#signedElements) {
+      if (!placed.has(element)) {
+        element.signPlacement = null;
+      }
+    }
+    this.#signedElements = placed;
+  }
+
+  // Topmost Y (container) of a voice's signs; null with none.
+  #signTopY(state: VoiceRenderState): number | null {
+    return outermostOrNull(
+      state.elements.flatMap((element) => {
+        const top = this.#signTopYs.get(element);
+        return top === undefined ? [] : [top];
+      }),
+      true
+    );
+  }
+
+  // Outermost ink (container Y) of entry i toward one side: its head there,
+  // then a stem pointing that way with its beam and tremolo numeral, a stemless
+  // head's strokes, or the marks past a head whose stem points away. Null for
+  // a rest.
+  #entryInkY(
+    state: VoiceRenderState,
+    i: number,
+    above: boolean,
+    withSigns = true
+  ): number | null {
+    const headEdgeY = this.#outerHeadEdgeY(state, i, above);
+    if (headEdgeY === null) {
       return null;
     }
-    const otherVoicesWithLabels = [...this.#voiceRenderStates].filter(
-      ([otherKey, otherState]) =>
-        otherKey !== voiceKey &&
-        otherState.elements.some((element) => tremoloLabelOf(element) !== null)
-    ).length;
-    return (
-      top -
-      otherVoicesWithLabels *
-        (TREMOLO_LABEL_FONT_SIZE_PX + TREMOLO_LABEL_GAP_PX)
+    const signTopY =
+      above && withSigns ? this.#signTopYs.get(state.elements[i]) : undefined;
+    if (signTopY !== undefined) {
+      return Math.min(
+        signTopY,
+        this.#entryInkY(state, i, above, false) ?? signTopY
+      );
+    }
+    const sign = above ? -1 : 1;
+    const headCenterY = headEdgeY - sign * STAFF_Y_STEP;
+    const noteOrChord = state.elements[i] as NoteElementType | ChordElementType;
+    const stemTowardSide = state.stemDirections[i] === above;
+    let reach = STAFF_Y_STEP;
+    if (isStemlessDuration(noteOrChord.duration)) {
+      if (stemTowardSide) {
+        reach = Math.max(
+          reach,
+          stemlessTremoloReachPx({
+            tremolo: noteOrChord.tremolo ?? null,
+            stemMark: noteOrChord.stemMark,
+            tuplet: noteOrChord.tremoloTuplet ?? null,
+            duration: noteOrChord.duration,
+            headY:
+              headCenterY + NOTE_HEAD_Y_OFFSET_CORRECTION - STAFF_Y_PADDING,
+            stemUp: above,
+          })
+        );
+      }
+    } else if (stemTowardSide) {
+      const beamEdge = state.beamRenderer?.beamStackEdgeYForIndex(i, above);
+      const tip =
+        beamEdge !== null && beamEdge !== undefined
+          ? beamEdge + sign * state.tremoloInkPastStemPx[i]
+          : this.#extremeStemTipY(state, [i], above);
+      if (tip !== null) {
+        reach = Math.max(reach, sign * (tip - headCenterY));
+      }
+    } else {
+      reach = Math.max(
+        reach,
+        articulationStackDepth(noteOrChord.articulation, noteOrChord.stress) *
+          NOTE_SCALE
+      );
+    }
+    return headCenterY + sign * reach;
+  }
+
+  // Topmost Y (container) a technique text of an earlier bar reaches over
+  // this staff. Null with none.
+  #carriedTextTopY(): number | null {
+    return outermostOrNull(
+      this.#carriedTechniqueTexts
+        .filter(({ above }) => above)
+        .map(({ top }) => top),
+      true
     );
+  }
+
+  // Topmost Y (container) any of this voice's technique labels reaches. Null
+  // without labels.
+  #techniqueLabelTopY(voiceKey: VoiceKey): number | null {
+    const tops = this.#placedTechniqueLabels
+      .filter((placed) => placed.voiceKey === voiceKey)
+      .map(({ top }) => top);
+    return tops.length === 0 ? null : Math.min(...tops);
   }
 
   #renderDynamics(voiceKey: VoiceKey): void {
@@ -4636,15 +7871,33 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         markingSide !== 'measure'
       ) {
         const noteX = state.noteXPositions.get(i) ?? 0;
-        const centerX = noteX + NOTE_SVG_WIDTH / 2;
+        const bracketed = noteOrChord.dynamicReminder;
+        const text = noteOrChord.dynamicText ?? null;
+        const centerX = this.#dynamicCenterClearOfRowEnd(
+          noteX + NOTE_SVG_WIDTH / 2 + entryCenterShiftPx(element),
+          noteOrChord.dynamic,
+          bracketed,
+          text
+        );
         container.appendChild(
           createDynamicMarkingSvg(
             noteOrChord.dynamic,
             centerX,
             baselineFor(markingSide),
-            { bracketed: noteOrChord.dynamicReminder }
+            { bracketed }
           )
         );
+        if (text !== null) {
+          container.appendChild(
+            createDynamicTextSvg(
+              text,
+              noteOrChord.dynamic,
+              centerX,
+              baselineFor(markingSide),
+              { bracketed }
+            )
+          );
+        }
       }
 
       // A grace-dynamic is independent of the host's `dynamic` (both can
@@ -4663,7 +7916,61 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
     }
 
-    for (const pair of this.#pairVoiceHairpins(state).pairs) {
+    const pairing = this.#pairVoiceHairpins(state);
+    const voicePairs = pairing.pairs;
+    const owners = this.#staffSwells(state);
+    const conflicting = this.#conflictingSwells(state, pairing, owners);
+    const { overridden } = resolveSwellOwners(state.elements);
+    for (const index of overridden) {
+      this.#warnSwellOnce(
+        state.elements[index] as NoteOrChordElementType,
+        '[music-staff] swell is not drawn: an earlier swell on its tie chain covers it'
+      );
+    }
+    for (const owner of owners) {
+      const noteOrChord = state.elements[owner.index] as NoteOrChordElementType;
+      const side =
+        this.#crossStaffDynamicsOverrides?.get(noteOrChord)?.hairpin ??
+        defaultSide;
+      const segments = conflicting.has(noteOrChord)
+        ? null
+        : this.#swellSegments(
+            voiceKey,
+            state,
+            owner,
+            side === 'measure' ? 0 : baselineFor(side) - HAIRPIN_AXIS_RISE_PX
+          );
+      if (segments === null) {
+        this.#warnSwellOnce(
+          noteOrChord,
+          conflicting.has(noteOrChord)
+            ? '[music-staff] swell is not drawn: a hairpin starts, ends or runs over its tie chain'
+            : '[music-staff] swell is not drawn: its dynamics leave no room for it'
+        );
+        continue;
+      }
+      this.#warnedSwells.delete(noteOrChord);
+      if (side !== 'measure') {
+        container.appendChild(createSwellSvg(segments, HAIRPIN_OPEN_HEIGHT));
+      }
+    }
+
+    for (const { at, marking, owner } of this.#dynamicEndsOf(state)) {
+      const side =
+        this.#crossStaffDynamicsOverrides?.get(owner)?.hairpin ?? defaultSide;
+      if (side === 'measure') {
+        continue;
+      }
+      const markingSvg = createDynamicMarkingSvg(
+        marking,
+        this.#dynamicEndCenterX(voiceKey, state, at, marking),
+        baselineFor(side)
+      );
+      markingSvg.classList.add('dynamic-end');
+      container.appendChild(markingSvg);
+    }
+
+    for (const pair of voicePairs) {
       if (pair.errors.length > 0) {
         console.warn(pair.errors);
       }
@@ -4676,7 +7983,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           pair.kind,
           pair.startX,
           pair.endX,
-          baselineFor(side),
+          baselineFor(side) - HAIRPIN_AXIS_RISE_PX,
           HAIRPIN_OPEN_HEIGHT
         )
       );
@@ -4798,6 +8105,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       if (closingTrillSpan?.hasLine) {
         const trillEndX = this.#trillLineEndX(state, closingTrillSpan, width);
         endX = Math.max(endX, trillEndX);
+      }
+      // A bend the closing note draws is covered too.
+      const bendInk = this.#bendInk.get(state.elements[span.stopIndex]);
+      if (bendInk !== undefined) {
+        endX = Math.max(endX, bendInk.right + OCTAVE_SIGN_CORNER_PX);
       }
       const raisesPitch = isOctaveRaise(span.amount);
 
@@ -4985,8 +8297,26 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       this.#effectiveKeySig,
       this.#effectiveMode,
       chordElement.trillAccidental,
-      chordElement.trillNote
+      chordElement.trillNote,
+      chordElement.trillQuarterTone
     );
+  }
+
+  #hasDynamicsMarkedElement(): boolean {
+    return this.#allElements.some((element) => {
+      if (
+        !isNoteNodeName(element.nodeName) &&
+        !isChordNodeName(element.nodeName)
+      ) {
+        return false;
+      }
+      const noteOrChord = element as NoteOrChordElementType;
+      return (
+        noteOrChord.dynamic !== null ||
+        noteOrChord.crescendo !== null ||
+        noteOrChord.decrescendo !== null
+      );
+    });
   }
 
   #hasTrillMarkedElement(): boolean {
@@ -5002,13 +8332,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   }
 
   // Px to raise a trill's line (drawn here) and sign (drawn by the note, via
-  // trillSignExtraLift) together past any other voice's up-stem content in
-  // [startX, endX]. Never lowers them.
-  #trillLineLiftClearingOtherVoices(
-    ownVoiceKey: VoiceKey,
-    startX: number,
-    endX: number
-  ): number {
+  // trillSignExtraLift) together past any other voice's up-stem content and
+  // any voice's signs in [startX, endX]. Never lowers them.
+  #trillLineLift(ownVoiceKey: VoiceKey, startX: number, endX: number): number {
     let lift = 0;
     for (const [otherKey, otherState] of this.#voiceRenderStates) {
       if (otherKey === ownVoiceKey) {
@@ -5031,6 +8357,22 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       if (extreme !== null) {
         const requiredY = extreme - TRILL_ABOVE_STAFF_GAP_PX;
         lift = Math.max(lift, TRILL_ABOVE_STAFF_BOTTOM_Y - requiredY);
+      }
+    }
+    // Signs under the line, in any voice.
+    for (const state of this.#voiceRenderStates.values()) {
+      for (const [i, x] of state.noteXPositions) {
+        const signTopY = this.#signTopYs.get(state.elements[i]);
+        if (
+          signTopY !== undefined &&
+          x + NOTE_SVG_WIDTH >= startX &&
+          x <= endX
+        ) {
+          lift = Math.max(
+            lift,
+            TRILL_ABOVE_STAFF_BOTTOM_Y - (signTopY - TRILL_ABOVE_STAFF_GAP_PX)
+          );
+        }
       }
     }
     return lift;
@@ -5069,11 +8411,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       const endX = span.hasLine
         ? this.#trillLineEndX(state, span, width)
         : signStartX + TRILL_SIGN_WIDTH_PX;
-      const lift = this.#trillLineLiftClearingOtherVoices(
-        voiceKey,
-        signStartX,
-        endX
-      );
+      const lift = this.#trillLineLift(voiceKey, signStartX, endX);
       startElement.trillSignExtraLift = lift;
 
       if (resolvedTrillPitch?.written === true) {
@@ -5093,12 +8431,17 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       const startX = signStartX + TRILL_SIGN_WIDTH_PX + TRILL_SIGN_LINE_GAP_PX;
       const y = TRILL_ABOVE_STAFF_BOTTOM_Y - lift;
 
-      const line = createTrillLineSvg({ startX, endX, bottomY: y });
+      const line = createTrillLineSvg({
+        startX,
+        endX,
+        bottomY: y,
+        double: span.double,
+      });
       if (line) {
         container.appendChild(line);
       }
       if (span.stopped) {
-        container.appendChild(createTrillNotchSvg(endX, y));
+        container.appendChild(createTrillNotchSvg(endX, y, span.double));
       }
     }
 
@@ -5139,14 +8482,16 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       return null;
     }
     const noteX = state.noteXPositions.get(index) ?? 0;
-    const xCenter = noteX + NOTE_SVG_WIDTH / 2;
+    const xCenter = noteX + NOTE_SVG_WIDTH / 2 + entryCenterShiftPx(element);
     if (isNoteNodeName(element.nodeName)) {
       const noteElement = element as NoteElementType;
-      const rawY = this.noteToYCoordinate(
-        noteElement.note,
-        noteElement.octave ?? 4,
-        index
-      );
+      const rawY =
+        state.noteStaffYCoords.get(noteElement) ??
+        this.noteToYCoordinate(
+          noteElement.note,
+          noteElement.octave ?? 4,
+          index
+        );
       return {
         xCenter,
         y: STAFF_Y_PADDING + rawY - NOTE_HEAD_Y_OFFSET_CORRECTION,
@@ -5226,12 +8571,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       const layout = computeGraceLayout(descriptors);
       const lastLocalIndex = descriptors.length - 1;
       const hostX = state.noteXPositions.get(i) ?? 0;
+      const ratio = entryScale(hostElement);
       const lastHeadX =
         hostX +
         NOTE_SVG_WIDTH +
         this.#augmentationDotFootprint(state, i) +
         GRACE_MAIN_GAP_PX +
-        layout.headXCenters[lastLocalIndex];
+        ratio * layout.headXCenters[lastLocalIndex];
 
       const lastPitch = trillFinish[lastLocalIndex];
       const lastOctave =
@@ -5244,10 +8590,22 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       const slur = createOrnamentConnectorSlur(
         lastHeadX,
         lastHeadY,
-        TRILL_FINISH_HEAD_RY,
+        ratio * TRILL_FINISH_HEAD_RY,
         targetPosition.xCenter,
         targetPosition.y,
-        NOTE_HEAD_RADIUS_PX * 0.75
+        NOTE_HEAD_RADIUS_PX * 0.75,
+        (state.elements[nextIndex] as NoteElementType | ChordElementType)
+          .stemUp,
+        this.#shownAccidentals(state, nextIndex).map(
+          ({ accidental, headCenterY }) => {
+            const { above, below } = accidentalVerticalExtent(accidental);
+            return {
+              ...this.#accidentalColumn(state, nextIndex),
+              top: headCenterY - above,
+              bottom: headCenterY + below,
+            };
+          }
+        )
       );
       container.appendChild(slur);
     }
@@ -5291,6 +8649,164 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       accidental: resolvedTrillPitch.accidental,
     });
     container.appendChild(element);
+  }
+
+  // Topmost Y of the accidentals above this voice's trill signs, or null with
+  // none. A written trilling note draws its accidental beside its head.
+  #trillAccidentalTopY(state: VoiceRenderState): number | null {
+    const heights = state.elements.flatMap((element) => {
+      const pitch =
+        element.nodeName === MUSIC_REST_NODE
+          ? null
+          : (element as NoteElementType | ChordElementType).resolvedTrillPitch;
+      if (!pitch || pitch.written || pitch.accidental === null) {
+        return [];
+      }
+      const { above, below } = accidentalArrowOverhangs(pitch.accidental);
+      return [
+        Math.max(...Object.values(ACCIDENTAL_SYMBOL_HEIGHT)) + above + below,
+      ];
+    });
+    return heights.length === 0
+      ? null
+      : TRILL_ABOVE_STAFF_BOTTOM_Y -
+          TRILL_SIGN_HEIGHT_PX -
+          TRILL_ACCIDENTAL_GAP_PX -
+          Math.max(...heights) * TRILL_ACCIDENTAL_SCALE;
+  }
+
+  // An entry's shown accidentals and the container Y of their heads.
+  #shownAccidentals(
+    state: VoiceRenderState,
+    index: number
+  ): { accidental: AccidentalType; headCenterY: number }[] {
+    const element = state.elements[index];
+    const shown: [AccidentalType | null | undefined, number | undefined][] = [];
+    if (isNoteNodeName(element.nodeName)) {
+      const note = element as NoteElementType;
+      shown.push([note.showAccidental, state.noteStaffYCoords.get(note)]);
+    } else if (isChordNodeName(element.nodeName)) {
+      const chord = element as ChordElementType;
+      const staffYs = state.chordStaffYCoords.get(chord) ?? [];
+      chord.noteAccidentals.forEach((accidental, tone) =>
+        shown.push([accidental, staffYs[tone]])
+      );
+    }
+    return shown.flatMap(([accidental, staffY]) =>
+      accidental && staffY !== undefined
+        ? [
+            {
+              accidental,
+              headCenterY:
+                STAFF_Y_PADDING + staffY - NOTE_HEAD_Y_OFFSET_CORRECTION,
+            },
+          ]
+        : []
+    );
+  }
+
+  // The x-span of an entry's accidentals, every column of a chord's included.
+  #accidentalColumn(
+    state: VoiceRenderState,
+    index: number
+  ): { left: number; right: number } {
+    const x = state.noteXPositions.get(index) ?? 0;
+    return {
+      left: x - this.#accidentalExtent(state.elements[index]),
+      right: x - ACCIDENTAL_NOTE_GAP,
+    };
+  }
+
+  // The quarter-tone arrows this voice's own accidentals draw: which entry,
+  // which way each points, and the container Y of its head and tip.
+  #quarterToneArrows(state: VoiceRenderState): {
+    index: number;
+    up: boolean;
+    headCenterY: number;
+    tipY: number;
+  }[] {
+    return state.elements.flatMap((_, index) =>
+      this.#shownAccidentals(state, index).flatMap(
+        ({ accidental, headCenterY }) => {
+          const quarterTone = quarterToneOf(accidental);
+          if (quarterTone === null) {
+            return [];
+          }
+          const up = quarterTone === 'up';
+          const { above, below } = accidentalVerticalExtent(accidental);
+          const tipY = up ? headCenterY - above : headCenterY + below;
+          return [{ index, up, headCenterY, tipY }];
+        }
+      )
+    );
+  }
+
+  // How far up or down (container Y) this voice's quarter-tone arrows and bend
+  // targets reach on one side, or null with none there.
+  #arrowAndBendReachY(state: VoiceRenderState, above: boolean): number | null {
+    const tipYs = [
+      ...this.#quarterToneArrows(state)
+        .filter((arrow) => arrow.up === above)
+        .map((arrow) => arrow.tipY),
+      ...state.elements.flatMap(
+        (_, index) => this.#bendTargetReachY(state, index, above) ?? []
+      ),
+      ...state.elements.flatMap((_, index) => {
+        const ys = this.#contourYsOf(state, index);
+        return ys.length === 0
+          ? []
+          : [above ? Math.min(...ys) : Math.max(...ys)];
+      }),
+    ];
+    if (tipYs.length === 0) {
+      return null;
+    }
+    return above ? Math.min(...tipYs) : Math.max(...tipYs);
+  }
+
+  // The upper or lower edge (container Y) of entry `index`'s bend targets, or
+  // null with none.
+  #bendTargetReachY(
+    state: VoiceRenderState,
+    index: number,
+    above: boolean
+  ): number | null {
+    const edges = this.#bendsOf(state, index).flatMap(
+      ({ y, bend: { target } }) => {
+        if (target === null) {
+          return [];
+        }
+        const accidental =
+          target.accidental === null
+            ? { above: 0, below: 0 }
+            : accidentalVerticalExtent(target.accidental);
+        const reach = Math.max(
+          BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX,
+          CUE_SCALE * (above ? accidental.above : accidental.below)
+        );
+        return [y - target.steps * STAFF_Y_STEP + (above ? -reach : reach)];
+      }
+    );
+    if (edges.length === 0) {
+      return null;
+    }
+    return above ? Math.min(...edges) : Math.max(...edges);
+  }
+
+  // The boxes a beam of this voice keeps off so it doesn't touch an arrow.
+  // Each spans the entry's whole accidental column, from the head to past the
+  // arrow's tip.
+  #arrowBeamObstacles(state: VoiceRenderState): BeamObstacle[] {
+    return this.#quarterToneArrows(state).map(
+      ({ index, up, headCenterY, tipY }) => {
+        const clearTipY = tipY + (up ? -1 : 1) * ACCIDENTAL_ARROW_BEAM_GAP_PX;
+        return {
+          ...this.#accidentalColumn(state, index),
+          top: Math.min(headCenterY, clearTipY),
+          bottom: Math.max(headCenterY, clearTipY),
+        };
+      }
+    );
   }
 
   // Conservative above-staff budget, before x-positions exist: the max over
@@ -5367,40 +8883,30 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
     }
 
-    // A trill-accidental sits above the sign (written mode draws it beside
-    // the notehead instead).
-    const hasTrillAccidental = state.elements.some((element) => {
-      if (
-        !isNoteNodeName(element.nodeName) &&
-        !isChordNodeName(element.nodeName)
-      ) {
-        return false;
-      }
-      const pitch = (element as NoteElementType | ChordElementType)
-        .resolvedTrillPitch;
-      return (
-        pitch !== null && pitch.written === false && pitch.accidental !== null
-      );
-    });
-    if (hasTrillAccidental) {
-      const tallestAccidentalHeight =
-        Math.max(...Object.values(ACCIDENTAL_SYMBOL_HEIGHT)) *
-        TRILL_ACCIDENTAL_SCALE;
-      const topY =
-        TRILL_ABOVE_STAFF_BOTTOM_Y -
-        TRILL_SIGN_HEIGHT_PX -
-        TRILL_ACCIDENTAL_GAP_PX -
-        tallestAccidentalHeight;
-      if (topY < 0) {
+    for (const topY of [
+      this.#trillAccidentalTopY(state),
+      this.#arrowAndBendReachY(state, true),
+    ]) {
+      if (topY !== null && topY < 0) {
         budget = Math.max(budget, Math.ceil(-topY) + 2);
       }
     }
 
     // A trill can be lifted past another voice's up-stem content
-    // (#trillLineLiftClearingOtherVoices). With no x-positions yet, reserve
+    // (#trillLineLift). With no x-positions yet, reserve
     // for every other voice's whole up-stem reach.
     const hasTrillSpan = resolveTrillSpans(state.elements).length > 0;
     if (hasTrillSpan) {
+      for (const otherState of this.#voiceRenderStates.values()) {
+        const signTop = this.#signTopY(otherState);
+        if (signTop === null) {
+          continue;
+        }
+        const topY = signTop - TRILL_ABOVE_STAFF_GAP_PX - TRILL_SIGN_HEIGHT_PX;
+        if (topY < 0) {
+          budget = Math.max(budget, Math.ceil(-topY) + 2);
+        }
+      }
       for (const [otherKey, otherState] of this.#voiceRenderStates) {
         if (otherKey === voiceKey) {
           continue;
@@ -5419,9 +8925,23 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
     }
 
-    const tremoloLabelTop = this.#tremoloLabelTopY(voiceKey, state);
-    if (tremoloLabelTop !== null && tremoloLabelTop < 0) {
-      budget = Math.max(budget, Math.ceil(-tremoloLabelTop) + 2);
+    for (const labelTop of [
+      this.#techniqueLabelTopY(voiceKey),
+      this.#carriedTextTopY(),
+    ]) {
+      if (labelTop !== null && labelTop < 0) {
+        budget = Math.max(budget, Math.ceil(-labelTop) + 2);
+      }
+    }
+
+    const signTop = this.#signTopY(state);
+    if (signTop !== null && signTop < 0) {
+      budget = Math.max(budget, Math.ceil(-signTop) + 2);
+    }
+
+    const breathMarkTop = this.#breathMarkTopY(voiceKey, state);
+    if (breathMarkTop !== null && breathMarkTop < 0) {
+      budget = Math.max(budget, Math.ceil(-breathMarkTop) + 2);
     }
 
     budget = Math.max(budget, this.#tupletVerticalOverflow(state, true));
@@ -5477,7 +8997,12 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         noteOrChord.decrescendo === 'start';
       const endsHairpin =
         noteOrChord.crescendo === 'end' || noteOrChord.decrescendo === 'end';
-      if (startsHairpin) {
+      if (
+        startsHairpin ||
+        noteOrChord.swell !== null ||
+        (noteOrChord.dynamicEnd ?? null) !== null ||
+        this.#swellContinuations.dynamicEnds.has(element)
+      ) {
         add(override?.hairpin ?? defaultSide);
       } else if (endsHairpin && override === undefined) {
         sides.add(defaultSide);
@@ -5490,6 +9015,24 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // lower letter isn't counted.
   #estimateBelowStaffBudget(): number {
     let budget = 0;
+    const phonemesBottom = this.#phonemesBottomY();
+    if (
+      phonemesBottom !== null &&
+      phonemesBottom > STAFF_TRANSCRIPTION_HEIGHT
+    ) {
+      budget = Math.ceil(phonemesBottom - STAFF_TRANSCRIPTION_HEIGHT) + 2;
+    }
+    for (const { bottom } of [
+      ...this.#placedBelowTexts,
+      ...this.#carriedTechniqueTexts.filter(({ above }) => !above),
+    ]) {
+      if (bottom > STAFF_TRANSCRIPTION_HEIGHT) {
+        budget = Math.max(
+          budget,
+          Math.ceil(bottom - STAFF_TRANSCRIPTION_HEIGHT) + 2
+        );
+      }
+    }
     for (const [voiceKey, state] of this.#voiceRenderStates) {
       budget = Math.max(budget, this.#tupletVerticalOverflow(state, false));
       budget = Math.max(
@@ -5497,9 +9040,18 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         this.#octaveSignVerticalOverflow(voiceKey, state, false)
       );
 
+      const arrowBottomY = this.#arrowAndBendReachY(state, false);
+      if (arrowBottomY !== null && arrowBottomY > STAFF_TRANSCRIPTION_HEIGHT) {
+        budget = Math.max(
+          budget,
+          Math.ceil(arrowBottomY - STAFF_TRANSCRIPTION_HEIGHT) + 2
+        );
+      }
+
       if (this.#dynamicsSidesInUse(voiceKey, state).has('below')) {
         const overflow =
-          this.#dynamicsBaselineForSide(voiceKey, state, 'below') -
+          this.#dynamicsBaselineForSide(voiceKey, state, 'below') +
+          HAIRPIN_OPEN_HEIGHT / 2 -
           STAFF_TRANSCRIPTION_HEIGHT;
         if (overflow > 0) {
           budget = Math.max(budget, Math.ceil(overflow) + 2);
@@ -5574,20 +9126,25 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     group: TupletGroup,
     stemUp: boolean
   ): number {
+    const label = tupletLabelExtents(tupletDisplayOf(group), stemUp);
+    // How much further than the numeral alone the label reaches outward.
+    const farExtra = label.far - TUPLET_NUMERAL_FONT_SIZE / 2;
     const nominalY = stemUp
       ? STAFF_TOP_LINE_Y -
         STAFF_Y_PADDING -
         TUPLET_STAFF_CLEARANCE_PX -
         TUPLET_HOOK_LENGTH_PX -
-        TUPLET_NUMERAL_FONT_SIZE
+        TUPLET_NUMERAL_FONT_SIZE -
+        farExtra
       : STAFF_BOTTOM_LINE_Y +
         STAFF_Y_PADDING +
         TUPLET_STAFF_CLEARANCE_PX +
         TUPLET_HOOK_LENGTH_PX +
-        TUPLET_NUMERAL_FONT_SIZE;
+        TUPLET_NUMERAL_FONT_SIZE +
+        farExtra;
 
     const extremeStemTipY =
-      this.#tupletSideOverride(group) === null
+      this.#tupletSideOverride(state, group) === null
         ? this.#extremeStemTipY(state, group.indices, stemUp)
         : this.#forcedSideTupletExtremeY(state, group, stemUp);
 
@@ -5595,19 +9152,19 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     // group hangs its numeral off the beam; any other draws a bracket past
     // the stem tips with the numeral centred on it.
     const bracketOmitted =
-      this.#tupletSideOverride(group) === null &&
+      this.#tupletSideOverride(state, group) === null &&
+      group.element.bracket !== 'always' &&
       group.indices.every(
         (i) =>
           state.beamedIndices.has(i) &&
           state.elements[i].nodeName !== MUSIC_REST_NODE
       );
     const numeralOffset = bracketOmitted
-      ? TUPLET_NUMERAL_FONT_SIZE / 2 +
-        TUPLET_NUMERAL_BEAM_GAP_PX +
-        BEAM_THICKNESS_PX
-      : TUPLET_STAFF_CLEARANCE_PX +
-        TUPLET_HOOK_LENGTH_PX +
-        TUPLET_NUMERAL_FONT_SIZE / 2;
+      ? label.near + TUPLET_NUMERAL_BEAM_GAP_PX + BEAM_THICKNESS_PX + farExtra
+      : Math.max(
+          TUPLET_STAFF_CLEARANCE_PX + TUPLET_HOOK_LENGTH_PX,
+          label.near + TUPLET_NUMERAL_BEAM_GAP_PX
+        ) + label.far;
     const beamDerivedY =
       extremeStemTipY !== null
         ? stemUp
@@ -5717,29 +9274,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       );
     }
 
-    const hasTrillAccidental = state.elements.some((element) => {
-      if (
-        !isNoteNodeName(element.nodeName) &&
-        !isChordNodeName(element.nodeName)
-      ) {
-        return false;
+    for (const topY of [
+      this.#trillAccidentalTopY(state),
+      this.#arrowAndBendReachY(state, true),
+    ]) {
+      if (topY !== null) {
+        consider(topY);
       }
-      const pitch = (element as NoteElementType | ChordElementType)
-        .resolvedTrillPitch;
-      return (
-        pitch !== null && pitch.written === false && pitch.accidental !== null
-      );
-    });
-    if (hasTrillAccidental) {
-      const tallestAccidentalHeight =
-        Math.max(...Object.values(ACCIDENTAL_SYMBOL_HEIGHT)) *
-        TRILL_ACCIDENTAL_SCALE;
-      consider(
-        TRILL_ABOVE_STAFF_BOTTOM_Y -
-          TRILL_SIGN_HEIGHT_PX -
-          TRILL_ACCIDENTAL_GAP_PX -
-          tallestAccidentalHeight
-      );
     }
 
     const hasTrillSpan = resolveTrillSpans(state.elements).length > 0;
@@ -5765,10 +9306,18 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
 
     for (const [labelKey, labelState] of this.#voiceRenderStates) {
-      const labelTop = this.#tremoloLabelTopY(labelKey, labelState);
-      if (labelTop !== null) {
-        consider(labelTop);
+      for (const markTop of [
+        this.#techniqueLabelTopY(labelKey),
+        this.#breathMarkTopY(labelKey, labelState),
+      ]) {
+        if (markTop !== null) {
+          consider(markTop);
+        }
       }
+    }
+    const carriedTop = this.#carriedTextTopY();
+    if (carriedTop !== null) {
+      consider(carriedTop);
     }
 
     if (this.#dynamicsSidesInUse(voiceKey, state).has('above')) {
@@ -5781,8 +9330,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     return top;
   }
 
-  // Below-staff mirror of #otherAboveStaffDecorationTopY (tuplets and
-  // dynamics only, like #estimateBelowStaffBudget).
+  // Below-staff mirror of #otherAboveStaffDecorationTopY (tuplets, quarter-tone
+  // arrows and dynamics only, like #estimateBelowStaffBudget).
   #otherBelowStaffDecorationBottomY(
     voiceKey: VoiceKey,
     state: VoiceRenderState
@@ -5792,6 +9341,18 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     const tupletBottom = this.#tupletExtremeY(state, false, true);
     if (tupletBottom !== null) {
       bottom = tupletBottom;
+    }
+
+    const arrowBottom = this.#arrowAndBendReachY(state, false);
+    if (arrowBottom !== null) {
+      bottom = bottom === null ? arrowBottom : Math.max(bottom, arrowBottom);
+    }
+
+    for (const text of [
+      ...this.#placedBelowTexts,
+      ...this.#carriedTechniqueTexts.filter(({ above }) => !above),
+    ]) {
+      bottom = bottom === null ? text.bottom : Math.max(bottom, text.bottom);
     }
 
     if (this.#dynamicsSidesInUse(voiceKey, state).has('below')) {
@@ -5810,13 +9371,23 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // Which side a tuplet group's bracket is forced to, if any — read by both
   // the render pass and #tupletExtremeY so the reserved space and the drawn
   // bracket agree. A cross-staff role outranks the wrapper's own `placement`,
-  // since the measure already folded both wrappers' placement into it.
-  #tupletSideOverride(group: TupletGroup): TupletPlacement | null {
+  // since the measure already folded both wrappers' placement into it. With
+  // lyrics below, a single voice's bracket keeps above.
+  #tupletSideOverride(
+    state: VoiceRenderState,
+    group: TupletGroup
+  ): TupletPlacement | null {
     const role = this.#crossStaffTupletRoles?.get(group.element);
     if (role !== undefined) {
       return role.rendering === 'suppressed' ? null : role.rendering;
     }
-    return group.element.placement;
+    const { placement } = group.element;
+    return placement === null &&
+      this.lyricsBelow &&
+      state.direction === null &&
+      !resolveTupletBracketAbove(group.indices, state.stemDirections, null)
+      ? 'above'
+      : placement;
   }
 
   #isTupletSuppressed(group: TupletGroup): boolean {
@@ -5830,7 +9401,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     return resolveTupletBracketAbove(
       group.indices,
       state.stemDirections,
-      this.#tupletSideOverride(group)
+      this.#tupletSideOverride(state, group)
     );
   }
 
@@ -5912,8 +9483,261 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // With several voices, each voice's dynamics sit on its stem side. A single
   // voice and the synthetic tracks stay below.
   #dynamicsPlacedAbove(voiceKey: VoiceKey, state: VoiceRenderState): boolean {
-    return typeof voiceKey === 'number' && state.direction === 'up';
+    return (
+      this.lyricsBelow ||
+      (typeof voiceKey === 'number' && state.direction === 'up')
+    );
   }
+
+  /**
+   * Whether lyrics stand below the stave, so every voice's dynamics and a
+   * single voice's tuplet brackets go above.
+   */
+  protected get lyricsBelow(): boolean {
+    return false;
+  }
+
+  /**
+   * How far (local px) this staff's slurs and ties are expected to reach below
+   * its notes; they are drawn over it, outside its own ink. Null with none.
+   */
+  protected get connectorsBottomY(): number | null {
+    const ys = [...this.#voiceRenderStates.values()].flatMap((state) => [
+      this.#slurReachY(state, false),
+      ...state.elements.map((_, i) => this.#tieReachY(state, i, false)),
+    ]);
+    return ys.reduce(
+      (lowest, y) => (y === null ? lowest : Math.max(y, lowest ?? y)),
+      null
+    );
+  }
+
+  /** The side of the stave `element`'s own dynamics and hairpins go. */
+  dynamicsSideOf(element: Element): DynamicsSide {
+    const [first] = this.#voiceRenderStates;
+    const [voiceKey, state] =
+      [...this.#voiceRenderStates].find(([, { elements }]) =>
+        elements.includes(element as NoteChordOrRestElementType)
+      ) ??
+      first ??
+      [];
+    return voiceKey === undefined || state === undefined
+      ? this.lyricsBelow
+        ? 'above'
+        : 'below'
+      : this.#defaultDynamicsSide(voiceKey, state);
+  }
+
+  /**
+   * The dynamics row this staff's own music needs on one side, in local
+   * coordinates: the voices whose dynamics go there, else all of them.
+   */
+  ownDynamicsRowY(side: DynamicsSide): number {
+    const states = [...this.#voiceRenderStates];
+    const onSide = states.filter(
+      ([voiceKey, state]) => this.#defaultDynamicsSide(voiceKey, state) === side
+    );
+    const above = side === 'above';
+    return (onSide.length > 0 ? onSide : states).reduce(
+      (row, [, state]) =>
+        outermost([row, this.#dynamicsBaselineFor(state, above)], above),
+      above ? DYNAMICS_ABOVE_BASELINE_Y : DYNAMICS_BASELINE_Y
+    );
+  }
+
+  /** A row of `ownDynamicsRowY` in client coordinates. */
+  dynamicsRowToClientY(y: number): number {
+    const [first] = this.#voiceRenderStates;
+    return first === undefined
+      ? this.transcribeContainer.getBoundingClientRect().top + y
+      : this.#dynamicsLocalToClientY(first[0], y);
+  }
+
+  /**
+   * Set by the ancestor <music-composition>: the row (local coordinates) shared
+   * with the bars a hairpin joins this one to, so it is level with the
+   * markings at its ends. Compared by content.
+   */
+  get sharedDynamicsRows(): SharedDynamicsRows {
+    return this.#sharedDynamicsRows;
+  }
+
+  set sharedDynamicsRows(value: SharedDynamicsRows) {
+    const current = this.#sharedDynamicsRows;
+    const unchanged = (['above', 'below'] as const).every((side) => {
+      const [from, to] = [current[side], value[side]];
+      return from === undefined || to === undefined
+        ? from === to
+        : Math.abs(from - to) < DYNAMICS_ROW_EPSILON_PX;
+    });
+    if (unchanged) {
+      return;
+    }
+    this.#sharedDynamicsRows = value;
+    this.#renderNotes();
+  }
+
+  // Container px to client px and back, through the technique-label layer.
+  #labelMatrix(): { a: number; d: number; e: number; f: number } {
+    const container = this.#techniqueLabelContainers.values().next().value;
+    const matrix = container?.getScreenCTM?.();
+    if (matrix) {
+      return matrix;
+    }
+    const rect = this.transcribeContainer.getBoundingClientRect();
+    return { a: 1, d: 1, e: rect.left + this.describeEndX, f: rect.top };
+  }
+
+  #rectToClient<T extends PlacedAboveStaffRect>(rect: T): T {
+    const { a, d, e, f } = this.#labelMatrix();
+    return {
+      ...rect,
+      left: a * rect.left + e,
+      right: a * rect.right + e,
+      top: d * rect.top + f,
+      bottom: d * rect.bottom + f,
+    };
+  }
+
+  #rectToLocal<T extends PlacedAboveStaffRect>(rect: T): T {
+    const { a, d, e, f } = this.#labelMatrix();
+    return {
+      ...rect,
+      left: (rect.left - e) / a,
+      right: (rect.right - e) / a,
+      top: (rect.top - f) / d,
+      bottom: (rect.bottom - f) / d,
+    };
+  }
+
+  /**
+   * This staff's technique texts as placed (client px), for the ancestor
+   * <music-composition>'s run-on pass.
+   */
+  techniqueTextPlacements(): TechniqueTextPlacement[] {
+    return [
+      ...this.#placedTechniqueLabels
+        .filter(({ label }) => label.kind === 'text')
+        .map((placed) => ({ ...placed, above: true })),
+      ...this.#placedBelowTexts.map((placed) => ({ ...placed, above: false })),
+    ].map(({ element, above, left, right, top, bottom }) =>
+      this.#rectToClient({ element, above, left, right, top, bottom })
+    );
+  }
+
+  /** The right end (client px) of this staff's notes area. */
+  get notesAreaClientRight(): number {
+    const { a, e } = this.#labelMatrix();
+    return a * this.#notesAreaEndX + e;
+  }
+
+  /**
+   * The outermost ink (client Y) toward one side under a client span, or
+   * null with none: what a technique text of an earlier bar clears.
+   */
+  techniqueTextInkY(
+    span: { left: number; right: number },
+    above: boolean
+  ): number | null {
+    const local = this.#rectToLocal({ ...span, top: 0, bottom: 0 });
+    const ys: number[] = [];
+    for (const [voiceKey, state] of this.#voiceRenderStates) {
+      for (const j of state.noteXPositions.keys()) {
+        const y = this.#inkTopUnderLabel(voiceKey, state, j, local, above);
+        if (y !== null) {
+          ys.push(y);
+        }
+      }
+    }
+    const connector = this.#connectorTopUnderLabel(local, above);
+    if (connector !== null) {
+      ys.push(connector);
+    }
+    const y = outermostOrNull(ys, above);
+    if (y === null) {
+      return null;
+    }
+    const { d, f } = this.#labelMatrix();
+    return d * y + f;
+  }
+
+  /**
+   * Called by the ancestor <music-composition> (client px): how far each
+   * technique text may run on over later bars of its row and the ink under it
+   * there, the texts of earlier bars running on over this staff, and the
+   * row's right end, which a `dynamic-text` runs on to. Compared by content in
+   * local px; re-lays out and returns true on a change.
+   */
+  applyTechniqueTextRunOn(
+    runOn: ReadonlyMap<Element, TechniqueTextRunOn> | null,
+    carried: readonly CarriedTechniqueText[],
+    rowRight: number | null = null
+  ): boolean {
+    const { a, d, e, f } = this.#labelMatrix();
+    const localRowRight = rowRight === null ? null : (rowRight - e) / a;
+    const localRunOn =
+      runOn === null || runOn.size === 0
+        ? null
+        : new Map(
+            [...runOn].map(([element, { maxRight, inkY }]) => [
+              element,
+              {
+                maxRight: (maxRight - e) / a,
+                inkY: inkY === null ? null : (inkY - f) / d,
+              },
+            ])
+          );
+    const localCarried = carried.map((rect) => this.#rectToLocal(rect));
+    const near = (x: number | null, y: number | null): boolean =>
+      x === null || y === null ? x === y : Math.abs(x - y) < 0.5;
+    const current = this.#techniqueTextRunOn;
+    const sameRunOn =
+      (current?.size ?? 0) === (localRunOn?.size ?? 0) &&
+      [...(current ?? [])].every(([element, entry]) => {
+        const next = localRunOn?.get(element);
+        return (
+          next !== undefined &&
+          near(next.maxRight, entry.maxRight) &&
+          near(next.inkY, entry.inkY)
+        );
+      });
+    const sameCarried =
+      this.#carriedTechniqueTexts.length === localCarried.length &&
+      this.#carriedTechniqueTexts.every(
+        (rect, k) =>
+          rect.above === localCarried[k].above &&
+          (['left', 'right', 'top', 'bottom'] as const).every((edge) =>
+            near(rect[edge], localCarried[k][edge])
+          )
+      );
+    // The row's end only moves a `dynamic-text`, so a staff with none keeps
+    // it without re-laying out.
+    const rowRightMatters =
+      !near(localRowRight, this.#rowRightX) && this.#hasDynamicText();
+    this.#rowRightX = localRowRight;
+    if (sameRunOn && sameCarried && !rowRightMatters) {
+      return false;
+    }
+    this.#techniqueTextRunOn = localRunOn;
+    this.#carriedTechniqueTexts = localCarried;
+    this.#renderNotes();
+    return true;
+  }
+
+  #hasDynamicText(): boolean {
+    return [...this.#voiceRenderStates.values()].some((state) =>
+      state.elements.some(
+        (element) =>
+          element.nodeName !== MUSIC_REST_NODE &&
+          ((element as NoteOrChordElementType).dynamicText ?? null) !== null
+      )
+    );
+  }
+
+  protected override get borrowedInkBands(): readonly VerticalBand[] {
+    return this.#carriedTechniqueTexts.map((rect) => this.#rectToClient(rect));
+  }
+
   #dynamicsLocalToClientY(voiceKey: VoiceKey, y: number): number {
     const matrix = this.#dynamicsContainers.get(voiceKey)?.getScreenCTM?.();
     if (matrix) {
@@ -5951,107 +9775,260 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // An end whose start sits on the other staff, or in another measure, is
   // expected whenever an ancestor can see both — only a staff on its own
   // (or alone in its measure) treats it as an authoring mistake.
-  #pairVoiceHairpins(state: VoiceRenderState) {
+  #hairpinsCanLeaveStaff(): boolean {
     const measure = this.closest(MUSIC_MEASURE);
     const hasSiblingStaff =
       measure !== null &&
       Array.from<Element>(measure.children).filter((child) =>
         isStaffNodeName(child.nodeName)
       ).length > 1;
-    const warnOrphans =
-      this.closest(MUSIC_COMPOSITION) === null && !hasSiblingStaff;
+    return this.closest(MUSIC_COMPOSITION) !== null || hasSiblingStaff;
+  }
+
+  #pairVoiceHairpins(state: VoiceRenderState) {
     return pairHairpinsWithLeftovers(state.elements, state.noteXPositions, {
-      warnOrphans,
+      warnOrphans: !this.#hairpinsCanLeaveStaff(),
     });
   }
 
-  // A row the measure forced to the side opposite this voice's own clears
-  // the notes' real stems: those stems point away from it, so the
-  // conservative every-stem-toward-this-side clamp would float it far
-  // from the notes.
+  #warnSwellOnce(element: NoteOrChordElementType, message: string): void {
+    if (!this.#warnedSwells.has(element)) {
+      this.#warnedSwells.add(element);
+      console.warn(message, element);
+    }
+  }
+
+  // An unmatched hairpin end draws nothing on a staff on its own, so only one
+  // an ancestor may complete rules a swell out.
+  #conflictingSwells(
+    state: VoiceRenderState,
+    pairing: ReturnType<typeof pairHairpinsWithLeftovers>,
+    owners: readonly SwellOwner[]
+  ): ReadonlySet<NoteOrChordElementType> {
+    return new Set(
+      swellConflicts(
+        state.elements,
+        owners,
+        pairing.pairs,
+        this.#hairpinsCanLeaveStaff()
+          ? [...pairing.unpairedStarts, ...pairing.orphanEnds]
+          : []
+      )
+    );
+  }
+
+  // One row per voice and side, so several dynamics line up; every voice's
+  // where they all go above, and the bars' a hairpin joins.
   #dynamicsBaselineForSide(
     voiceKey: VoiceKey,
     state: VoiceRenderState,
     side: DynamicsSide
   ): number {
-    return this.#dynamicsBaselineFor(
-      state,
-      side === 'above',
-      side !== this.#defaultDynamicsSide(voiceKey, state)
-    );
+    const above = side === 'above';
+    const own =
+      this.lyricsBelow && above
+        ? this.ownDynamicsRowY(side)
+        : this.#dynamicsBaselineFor(state, above);
+    const shared =
+      side === this.#defaultDynamicsSide(voiceKey, state)
+        ? this.#sharedDynamicsRows[side]
+        : undefined;
+    return shared === undefined ? own : outermost([own, shared], above);
   }
 
-  // The outermost real extent of the voice toward one side: a stem tip where
-  // the stem points that way, otherwise the notehead's own edge.
-  #extremeRealExtentY(
+  // The voice's own row toward one side, clear of everything it draws there.
+  #dynamicsBaselineFor(state: VoiceRenderState, above: boolean): number {
+    return dynamicsRowY({
+      above,
+      inkYs: [
+        ...state.elements.flatMap((_, i) =>
+          [
+            this.#entryInkY(state, i, above),
+            this.#restInkY(state, i, above),
+            ...this.#entryLeftInkYs(state, i, above),
+          ].filter((y): y is number => y !== null)
+        ),
+        ...(above
+          ? []
+          : [
+              ...this.#placedBelowTexts,
+              ...this.#carriedTechniqueTexts.filter((text) => !text.above),
+            ].map(({ bottom }) => bottom)),
+        ...(above ? [] : [this.#phonemesBottomY() ?? []].flat()),
+      ],
+      curveYs: [
+        this.#slurReachY(state, above),
+        this.#tupletExtremeY(state, above, true),
+        this.#arrowAndBendReachY(state, above),
+        ...state.elements.map((_, i) => this.#tieReachY(state, i, above)),
+      ].filter((y): y is number => y !== null),
+    });
+  }
+
+  // How far entry i's accidentals and grace notes reach toward one side.
+  #entryLeftInkYs(
+    state: VoiceRenderState,
+    i: number,
+    above: boolean
+  ): (number | null)[] {
+    if (state.elements[i].nodeName === MUSIC_REST_NODE) {
+      return [];
+    }
+    return [
+      ...this.#shownAccidentals(state, i).map(({ accidental, headCenterY }) => {
+        const extent = accidentalVerticalExtent(accidental);
+        return above ? headCenterY - extent.above : headCenterY + extent.below;
+      }),
+      this.#graceInkY(state, i, above),
+    ];
+  }
+
+  // How far this voice's same-staff slurs may reach toward one side: past
+  // their notes' heads and the marks they enclose, plus the arc. Slurs are
+  // drawn after the dynamics row, so it clears this estimate. Null with no
+  // slur on that side.
+  #slurReachY(state: VoiceRenderState, placeAbove: boolean): number | null {
+    const ys = this.#slurReaches(state, placeAbove).map(({ y }) => y);
+    if (ys.length === 0) {
+      return null;
+    }
+    return placeAbove ? Math.min(...ys) : Math.max(...ys);
+  }
+
+  // Each of those slurs' own reach, by the entries it covers.
+  #slurReaches(
     state: VoiceRenderState,
     placeAbove: boolean
-  ): number | null {
-    let extreme: number | null = null;
-    const consider = (y: number) => {
-      extreme =
-        extreme === null
-          ? y
-          : placeAbove
-          ? Math.min(extreme, y)
-          : Math.max(extreme, y);
-    };
-    state.elements.forEach((element, index) => {
-      if (element.nodeName === MUSIC_REST_NODE) {
-        return;
+  ): { startIndex: number; endIndex: number; y: number }[] {
+    const roles = state.elements.map((element) =>
+      element.nodeName === MUSIC_REST_NODE
+        ? null
+        : (element as NoteOrChordElementType).slur ?? null
+    );
+    // Nested slurs first: an enclosing slur rides outside them.
+    const spans = slurSpans(roles).sort(
+      (a, b) => a.nestingLevel - b.nestingLevel
+    );
+    const reached: { startIndex: number; endIndex: number; y: number }[] = [];
+    const belowSpans: SlurSpan[] = [];
+    for (const span of spans) {
+      const stems = state.elements.flatMap((element, i) =>
+        i < span.startIndex ||
+        i > span.endIndex ||
+        element.nodeName === MUSIC_REST_NODE
+          ? []
+          : [
+              {
+                stemUp: state.stemDirections[i],
+                beamed: (element as NoteOrChordElementType).noFlags,
+              },
+            ]
+      );
+      if (stems.length === 0) {
+        continue;
       }
-      if (state.stemDirections[index] === placeAbove) {
-        const tip = this.#extremeStemTipY(state, [index], placeAbove);
-        if (tip !== null) {
-          consider(tip);
-        }
-        return;
+      const side = pickSlurSide(
+        stems,
+        belowSpans.some(
+          (inner) =>
+            inner.startIndex >= span.startIndex &&
+            inner.endIndex <= span.endIndex
+        ),
+        voiceSideOf(state)
+      );
+      if (side === 'below') {
+        belowSpans.push(span);
       }
-      const headYs = isNoteNodeName(element.nodeName)
-        ? [state.noteStaffYCoords.get(element as NoteElementType)]
-        : state.chordStaffYCoords.get(element as ChordElementType) ?? [];
-      for (const headY of headYs) {
-        if (headY === undefined) {
+      if (side !== (placeAbove ? 'above' : 'below')) {
+        continue;
+      }
+      const entries: SlurReachEntry[] = [];
+      for (let i = span.startIndex; i <= span.endIndex; i++) {
+        const element = state.elements[i];
+        if (element.nodeName === MUSIC_REST_NODE) {
           continue;
         }
-        const centerY = STAFF_Y_PADDING + headY - NOTE_HEAD_Y_OFFSET_CORRECTION;
-        consider(centerY + ((placeAbove ? -1 : 1) * STAFF_LINE_SPACING) / 2);
+        const headYs = isNoteNodeName(element.nodeName)
+          ? [state.noteStaffYCoords.get(element as NoteElementType)]
+          : state.chordStaffYCoords.get(element as ChordElementType) ?? [];
+        const resolved = headYs.filter((y): y is number => y !== undefined);
+        if (resolved.length === 0) {
+          continue;
+        }
+        const headY = placeAbove
+          ? Math.min(...resolved)
+          : Math.max(...resolved);
+        // Marks sit opposite the stem.
+        const marksOnSide = state.stemDirections[i] !== placeAbove;
+        const noteOrChord = element as NoteOrChordElementType;
+        const headCenterY =
+          STAFF_Y_PADDING + headY - NOTE_HEAD_Y_OFFSET_CORRECTION;
+        entries.push({
+          headCenterY,
+          markDepthPx: marksOnSide
+            ? articulationStackDepth(
+                noteOrChord.articulation,
+                noteOrChord.stress
+              ) * NOTE_SCALE
+            : 0,
+          stemDepthPx:
+            state.stemDirections[i] === placeAbove
+              ? Math.abs(
+                  (this.#extremeStemTipY(state, [i], placeAbove) ??
+                    headCenterY) - headCenterY
+                )
+              : 0,
+          inkDepthPx: Math.max(
+            NOTE_HEAD_RADIUS_PX,
+            ...this.#shownAccidentals(state, i).map((shown) => {
+              const { above, below } = accidentalVerticalExtent(
+                shown.accidental
+              );
+              return placeAbove
+                ? headCenterY - (shown.headCenterY - above)
+                : shown.headCenterY + below - headCenterY;
+            })
+          ),
+          index: i,
+        });
       }
-    });
-    return extreme;
-  }
-
-  // The voice's dynamics baseline, clamped past its worst stem tip on that
-  // side as if every stem pointed there. One row per voice, so several
-  // dynamics line up.
-  #dynamicsBaselineFor(
-    state: VoiceRenderState,
-    placeAbove: boolean,
-    realStems = false
-  ): number {
-    const extremeStemTipY = realStems
-      ? this.#extremeRealExtentY(state, placeAbove)
-      : this.#extremeStemTipY(state, state.elements.keys(), placeAbove);
-
-    // The value is a text baseline, so add the glyph's reach
-    // (≈DYNAMICS_FONT_SIZE) toward the stem.
-    if (placeAbove) {
-      if (extremeStemTipY === null) {
-        return DYNAMICS_ABOVE_BASELINE_Y;
+      const reach = estimatedSlurReachY({
+        entries,
+        side: placeAbove ? 'above' : 'below',
+        nestingLevel: span.nestingLevel,
+        noteheadOffsetPx: SLUR_NOTEHEAD_OFFSET_PX,
+        markClearancePx: SLUR_ARTICULATION_CLEARANCE_PX,
+        noteClearancePx: SLUR_NOTE_CLEARANCE_PX,
+        stemClearancePx: SLUR_BEYOND_BEAM_CLEARANCE_PX,
+        baseBulgePx: DEFAULT_BULGE_HEIGHT,
+        bulgeStepPx: BULGE_STEP_PX,
+        maxExtraBulgePx: SLUR_MAX_EXTRA_BULGE_PX,
+        enclosedReachY: reached
+          .filter(
+            (inner) =>
+              inner.startIndex >= span.startIndex &&
+              inner.endIndex <= span.endIndex
+          )
+          .reduce<number | null>(
+            (outermost, inner) =>
+              outermost === null
+                ? inner.y
+                : placeAbove
+                ? Math.min(outermost, inner.y)
+                : Math.max(outermost, inner.y),
+            null
+          ),
+        nestedGapPx: SLUR_NESTED_CLEARANCE_PX,
+      });
+      if (reach !== null) {
+        reached.push({
+          startIndex: span.startIndex,
+          endIndex: span.endIndex,
+          y: reach,
+        });
       }
-      return Math.min(
-        DYNAMICS_ABOVE_BASELINE_Y,
-        extremeStemTipY - DYNAMICS_FONT_SIZE - STAFF_LINE_SPACING
-      );
     }
-
-    if (extremeStemTipY === null) {
-      return DYNAMICS_BASELINE_Y;
-    }
-    return Math.max(
-      DYNAMICS_BASELINE_Y,
-      extremeStemTipY + DYNAMICS_FONT_SIZE + STAFF_LINE_SPACING
-    );
+    return reached;
   }
 
   // Runs with no notes too: the describe area and viewBox must still track
@@ -6065,5 +10042,6 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       })
     );
     this.drawConnectorsWhenStandalone();
+    this.onNotesLaidOut();
   }
 }

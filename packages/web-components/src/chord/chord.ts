@@ -1,3 +1,14 @@
+import { pitchAccidental } from '../rules/accidentalRules';
+import { parseBendContour } from '../rules/bendContourRules';
+import { slurStyleWarning } from '../rules/connectorPlacementRules';
+import { swellAttributeWarning } from '../rules/dynamicsRules';
+import { resolveGlissandoLabel } from '../rules/glissandoLabelRules';
+import {
+  bendConsistencyWarning,
+  glissandoShapeWarning,
+  resolveBend,
+  type ResolvedBend,
+} from '../rules/glissandoRules';
 import {
   applyGraceHeadOverhangs,
   applyResolvedGraceAccidentals,
@@ -5,9 +16,14 @@ import {
   GraceNoteDescriptor,
 } from '../rules/graceRules';
 import {
+  graceNoteheadWarning,
+  isHeadless,
   resolveChordToneNoteheads,
   triangleUnsupportedWarning,
 } from '../rules/noteheadRules';
+import { parsePhonemes, phonemesWarning } from '../rules/phonemeRules';
+import { parseSigns, signWarning } from '../rules/signRules';
+import { textAttributeWarning } from '../rules/techniqueTextRules';
 import { durationToDotCount } from '../rules/theoryConsts';
 import { generateYCoordinates, getChordNotes } from '../rules/theoryHelpers';
 import {
@@ -26,19 +42,26 @@ import type {
   GraceNoteheadsType,
   GraceNotesType,
   GraceOctavesType,
+  GraceQuarterTonesType,
   IChordElement,
   NoteElementType,
   NoteLetterOctave,
+  SignPlacement,
   TieValue,
 } from '../types/elements';
 import type {
+  AccidentalReminder,
   AccidentalType,
   ArpeggioType,
   ArticulationType,
+  BendShape,
+  BreathMark,
   Chord,
+  ConventionalAccidentalType,
   DurationType,
   DynamicMarking,
   GlissandoHint,
+  GlissandoShape,
   GraceDuration,
   GraceSlur,
   GraceType,
@@ -47,18 +70,27 @@ import type {
   Note,
   NoteheadType,
   NoteLetter,
+  NoteSign,
+  NoteSize,
   Octave,
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
+  QuarterTone,
+  SlurStyle,
   StemDirection,
+  StemMark,
   StressType,
+  SwellShape,
+  TextPlacement,
+  TextStyle,
   TieStyle,
   TremoloLabel,
   TremoloValue,
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  UnpitchedPlacement,
 } from '../types/theory';
 import {
   addLedgerLines,
@@ -69,27 +101,34 @@ import {
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_SCALE,
   noteHeadGeometry,
-  noteHeadLeftOverhangPx,
   parseAccidentalType,
   parseArpeggio,
   parseArticulation,
+  parseBendShape,
+  parseBreathMark,
   parseConnectorRole,
   parseDynamicMarking,
   parseGlissandoHint,
+  parseGlissandoShape,
   parseGraceArticulations,
   parseGraceDuration,
   parseGraceNoteheads,
   parseGraceNotes,
   parseGraceOctaves,
+  parseGraceQuarterTones,
   parseGraceSlur,
   parseGraceType,
   parseHairpinKind,
+  parseNote,
   parseNotehead,
   parseOctaveContinuationMode,
   parseOctaveDisplayMode,
   parseOctaveShiftAmount,
+  parseQuarterTone,
+  parseSlurStyle,
   parseStemDirection,
   parseStress,
+  parseSwellShape,
   parseTieStyle,
   parseTieValue,
   parseTremolo,
@@ -101,12 +140,14 @@ import {
 } from '../utils';
 import {
   CHORD_EVENTS,
+  isStaffNodeName,
   MUSIC_CHORD,
   MUSIC_NOTE,
   MUSIC_TREMOLO_NODE,
   NOTE_EVENTS,
   STAFF_TAGS,
   SVG_NS,
+  TREMOLO_LABELS,
 } from '../utils/consts';
 import { MaybeHTMLElement } from '../utils/maybeHTMLElement';
 import {
@@ -114,8 +155,25 @@ import {
   STAFF_TRANSCRIPTION_HEIGHT,
   STAFF_Y_PADDING,
 } from '../utils/notationDimensions';
-import { parseDuration, warnIfInvalidDuration } from '../utils/parsers';
-import { chordAugmentationDotLayout } from '../utils/svgCreator/chord';
+import {
+  parseAccidentalReminder,
+  parseDuration,
+  parseNoteSize,
+  parseStemMark,
+  parseTextPlacement,
+  parseTextStyle,
+  resolveNoteSize,
+  warnIfInvalidDuration,
+} from '../utils/parsers';
+import type { LedgerHeadExtent } from '../utils/svgCreator';
+import {
+  chordAugmentationDotLayout,
+  chordHeadExtentPx,
+  chordHeadLeftOverhangPx,
+  chordToneHeadExtentPx,
+} from '../utils/svgCreator/chord';
+import { noteSizeScale } from '../utils/svgCreator/note';
+import { techniqueTextLabel } from '../utils/svgCreator/techniqueLabel';
 import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
 
 /**
@@ -128,16 +186,32 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @customElement music-chord
  * @attr {Chord} chord - Chord name resolved into constituent pitches, e.g. `C`, `Am`, `Cmaj7`, `G/B`.
  * @attr {DurationType} duration - Note value for the chord, optionally dotted (`dotted-half`); every notehead takes the chord's dots. Defaults to `quarter`.
- * @attr {'start' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie, or `laissez-vibrer` (alias `lv`) for an open-ended "let ring" tie.
+ * @attr {'start' | 'continue' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie, `continue` for the middle of a tie chain (tied into and on to the next), or `laissez-vibrer` (alias `lv`) for an open-ended "let ring" tie.
  * @attr {boolean} lv-label - Draw an `l.v.` label on a `tie="laissez-vibrer"` tie.
  * @attr {'start' | 'end'} slur - Marks this chord as the start or end of a slur.
- * @attr {'start' | 'end'} glissando - Marks this chord as the start or end of a glissando (a straight line indicating a continuous slide between pitches).
- * @attr {'white-key' | 'black-key'} glissando-hint - Shown as text near a `glissando="start"` line ("white-note gliss." / "black-note gliss.") clarifying which keys it slides across.
+ * @attr {'start' | 'end'} glissando - Marks this chord as the start or end of a glissando or pitch bend: a line between two pitches, beside their noteheads.
+ * @attr {'white-key' | 'black-key' | 'gliss'} glissando-hint - Text above the line of a `glissando="start"`: which keys it slides across ("white-note gliss." / "black-note gliss."), or plain "gliss.".
+ * @attr {'straight' | 'dip' | 'wave'} glissando-shape - Contour of the line a `glissando="start"` draws: `dip` sinks a little and returns, `wave` oscillates. Defaults to `straight`.
+ * @attr {string} glissando-label - Text above the stave over this chord: `gliss` ("gliss.", for a passage with no line), `quasi-gliss` ("quasi gliss."), `chrom` / `chromatic` (above the first grace note when there are grace notes), `lip`, `bend`, or any other text drawn as written, `|` starting a new line. It shifts left rather than run past the bar.
+ * @attr {string} technique-text - Technique text over the chord, `|` starting a new line (see `<music-note>`).
+ * @attr {TextPlacement} technique-text-placement - `below` draws the technique text under the stave. Defaults to `above`.
+ * @attr {TextStyle} technique-text-style - `italic` sets the technique text in italics. Defaults to `normal`.
+ * @attr {string} dynamic-text - Italic text straight after the dynamic, on its baseline. Needs `dynamic`.
+ * @attr {'up' | 'down' | 'dip' | 'wave'} bend - A pitch bend: a line after each of this chord's heads, ending inside its own duration. A slotted note's own `bend` / `bend-to` replaces it for that tone. Ignored, with a warning, beside `glissando="start"` and on a `<music-tremolo>` member.
+ * @attr {Note} bend-to - Notes only, slotted ones included: ignored, with a warning, on a chord.
+ * @attr {string} bend-contour - Slotted notes only, one line a tone: ignored, with a warning, on a chord.
+ * @attr {QuarterTone} bend-to-quarter-tone - Applies to `bend-to`.
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
  * @attr {DynamicMarking} dynamic - Dynamic marking under the chord.
+ * @attr {SwellShape} swell - A swell under this chord over its tie chain (just its own value when untied): bare or `both` draws `< >`, louder to the middle and softer after it; `crescendo` or `diminuendo` draws that wedge alone. On a chord tied into, it covers the rest of the chain; with swells on two chords of one chain, the earlier wins. Inside a `<music-composition>` it crosses barlines and system breaks. A hairpin starting, ending or running over any chord of the chain wins.
+ * @attr {string} phonemes - Vowels or phonemes to form while the chord sounds, below the stave in square brackets: `,` separates them (`i,u`), `>` (or `→`) joins them with an arrow (`oo>ah`), and a trailing `>` leads to the next note's first phoneme, over a barline too. The first stands under the head; with an arrow out they are spaced evenly toward the next phoneme, else the last ends with the chord's value.
+ * @attr {DynamicMarking} dynamic-end - A second dynamic at the end of the chord's span (its tie chain's, with `swell`), just before the next entry or the barline. A `swell` ends before it.
  * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this chord starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement.
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
- * @attr {boolean} accidental-reminder - Shows every tone's accidental already in force in parentheses, as a reminder. A slotted `<music-note>`'s own `accidental-reminder` marks just that tone.
+ * @attr {AccidentalReminder} accidental-reminder - Shows every tone's accidental already in force as a reminder: bare or `bracketed` in parentheses, `plain` without. A slotted `<music-note>`'s own `accidental-reminder` marks just that tone, and its own `unpitched` makes that tone unpitched.
+ * @attr {string} sign - Comma-separated signs above the chord, stacked upward in that order (see `<music-note>`), centred on its main head column.
+ * @attr {StemMark} stem-mark - `cross` draws a small × through the stem, near its end; `multiphonic` an M (see `<music-note>`).
+ * @attr {NoteSize} size - `cue` draws the chord at ¾ size (see `<music-note>`). Unset, a chord takes its `<music-voice>`'s `size`.
  * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin.
  * @attr {'start' | 'end'} decrescendo - Start or end of a decrescendo hairpin.
  * @attr {'start' | 'end'} diminuendo - Alias of `decrescendo`.
@@ -151,19 +225,22 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {'start' | 'end'} arpeggiate - Marks the start or end of a `sempre arpeggiando` passage (every chord in it rolls unless it sets its own `arpeggio`).
  * @attr {string} grace - Comma-separated grace-note pitches preceding the chord, e.g. `"F#,G"`. The property also accepts a `Note[]`.
  * @attr {string} grace-octave - Comma-separated octaves aligned by index with `grace`. The property also accepts an `(Octave | null)[]`.
+ * @attr {string} grace-quarter-tone - Comma-separated quarter-tones (`up` / `down`) aligned by index with `grace`, e.g. `"up,,down"`; an empty slot is an ordinary pitch. The property also accepts a `(QuarterTone | null)[]`.
  * @attr {string} grace-articulation - Comma-separated per-grace articulation aligned by index with `grace`. The property also accepts an `(ArticulationType | null)[]`.
  * @attr {'acciaccatura' | 'appoggiatura' | 'trill'} grace-type - Grace-note style. `trill` is a plain unslashed notehead (unlike `acciaccatura`'s crossed-through slash), for a leading grace note that introduces a trill. Defaults to `acciaccatura`.
  * @attr {GraceDuration} grace-duration - Note value drawn for the grace notes.
  * @attr {'auto' | 'none'} grace-slur - Whether to draw the slur from the grace group to the chord. Defaults to `auto`.
  * @attr {DynamicMarking} grace-dynamic - A single dynamic for the whole grace group.
  * @attr {boolean} trill - Marks a trill start: draws the "tr" sign above the stave. Requires a staff (absent on a standalone chord). The wavy line spans forward through this chord's own `tie` chain — set `trill` once, not on every tied chord.
- * @attr {'auto' | 'none'} trill-line - `auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value).
+ * @attr {TrillLineMode} trill-line - `auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value); `double` draws two lines after the sign, a double trill.
  * @attr {boolean} trill-stop - Draws a vertical end-notch here instead of letting the line run to the next notehead.
- * @attr {AccidentalType} trill-accidental - Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature (the chord's topmost note). Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set.
+ * @attr {ConventionalAccidentalType} trill-accidental - Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature (the chord's topmost note). Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set.
  * @attr {Note} trill-note - Full override of the trilling pitch (letter + accidental), rendered as a small written notehead in parentheses after the chord's own notehead column — required when the trilling pitch shares the reference note's own letter (a chromatic/semitone trill) or otherwise isn't the plain diatonic neighbor. Wins over `trill-accidental` when both are set.
+ * @attr {QuarterTone} trill-quarter-tone - `up` / `down`: raises or lowers the trilling pitch by a quarter-tone, whether it comes from `trill-note`, `trill-accidental` or the diatonic neighbor.
  * @attr {'bracketed' | 'line-only'} trill-continuation - Controls a trill's line restatement after a system break, once its tie chain has carried it there. `bracketed` (default) redraws the sign in parentheses; `line-only` resumes with no restated sign. Ignored at an ordinary same-row barline (always resumes silently there). Meaningful only on the chord that started the trill.
  * @attr {string} trill-finish - Comma-separated grace-note pitch(es) placed *after* this chord (a trill's finishing/closing figure), e.g. `"F#,G"`. The property also accepts a `Note[]`. Always a plain unslashed notehead (no `grace-type` equivalent).
  * @attr {string} trill-finish-octave - Comma-separated octaves aligned by index with `trill-finish`; empty slots use this chord's reference octave. The property also accepts an `(Octave | null)[]`.
+ * @attr {string} trill-finish-quarter-tone - Comma-separated quarter-tones aligned by index with `trill-finish`, as `grace-quarter-tone`.
  * @attr {'none' | 'to-main' | 'to-next' | 'both'} trill-finish-slur - Which slur(s) the finishing grace note(s) draw: back to this chord (`to-main`, default), forward to the next note/chord (`to-next`), `both`, or `none`.
  * @attr {OctaveShiftAmount} octave-shift - Starts (or, if the same value as an already-open span, continues) an octave-transposition span at this chord: `8va`/`15ma`/`22ma` shift the written pitch up, `8vb`/`15mb`/`22mb` shift it down. Requires a staff (absent on a standalone chord).
  * @attr {OctaveDisplayMode} octave-mode - Set on the chord that starts an octave-transposition span: `col` renders the span's label as prose ("col 8va"/"col 8va bassa" for the matching amount) instead of a bare numeral. Defaults to `sign`. Meaningless without a matching `octave-shift`.
@@ -173,13 +250,15 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone chord).
  * @attr {string} shared-stem-for - `id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone chord).
  * @attr {string} slur-group - `id` shared by every breakpoint note/chord of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone chord).
- * @attr {NoteheadType} notehead - Notehead shape for every tone: `normal` (default), `x`, `diamond`, or `diamond-white` (see `<music-note>`). A slotted `<music-note>`'s own `notehead` overrides it for that tone — e.g. an artificial harmonic: a normal stopped note plus a `diamond-white` ("harmonic") touched note. `triangle-up` / `triangle-down` are not supported on chords (a normal head is drawn, with a warning).
- * @attr {string} grace-notehead - Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. The property also accepts a `(NoteheadType | null)[]`.
+ * @attr {NoteheadType} notehead - Notehead shape for every tone: `normal` (default), `x`, `x-plain`, `diamond`, `diamond-white` or `none` (see `<music-note>`); a tone with `none` draws no head, accidental, dot or ledger line. A slotted `<music-note>`'s own `notehead` overrides it for that tone — e.g. an artificial harmonic: a normal stopped note plus a `diamond-white` ("harmonic") touched note. `triangle-up` / `triangle-down` are not supported on chords (a normal head is drawn, with a warning).
+ * @attr {string} grace-notehead - Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles and `none` are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`.
  * @attr {TremoloValue} tremolo - Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the chord's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the chord's own). A semibreve chord takes them above or below its heads. The stem lengthens to carry them. Ignored on a `<music-tremolo>` member.
  * @attr {number} tremolo-tuplet - Tuplet numeral for a measured tremolo, drawn beyond the stem's end: the number of notes the chord stands for (`3`, `5`, `6`, …). Needs a `tremolo` stroke count.
- * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one.
+ * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one; `flz` / `flt` / `frull` mark a flutter-tongued single-note tremolo and run on over later tremolos until `ord` / `nat` / `norm` ("ord.") or another label, which goes on the ordinary note a flutter-tongued tie runs into.
+ * @attr {BreathMark} breath-mark - A breath after this chord: `tick` (✓, a break in the sound) or `comma` (a short pause or lift). Drawn above the stave in the gap before the next entry; standalone, just after the chord.
  * @attr {boolean} articulation-repeat - Draws the articulation's length mark (staccato, staccatissimo, tenuto, portato, tenuto-staccatissimo) once per repetition of a measured tremolo, in a row centred on the head; a row of more than 32 draws the mark once. Accents, fermatas and stress marks stay single.
  * @attr {TieStyle} tie-style - `dotted` draws the tie this chord starts as a dotted line, as some editions do for unmeasured tremolos; the tied-in chord then repeats its accidental across a barline. Defaults to `solid`.
+ * @attr {SlurStyle} slur-style - `dotted` draws the slur this chord starts as a dotted line, to mark phrase structure apart from a legato slur. Defaults to `solid`.
  * @attr {StemDirection} stem-direction - Forces this chord's stem direction (`up`/`down`), overriding the pitch-driven default. Unset (default) leaves the pitch, voice or beam-group default. On a beamed note, it applies to every note of that same-staff beam, since one beam has one stem direction; if notes of one beam force different directions, the first wins and a warning is logged.
  *
  * @example
@@ -203,10 +282,25 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'slur',
       'glissando',
       'glissando-hint',
+      'glissando-shape',
+      'glissando-label',
+      'technique-text',
+      'technique-text-placement',
+      'technique-text-style',
+      'dynamic-text',
+      'dynamic-end',
+      'bend',
+      'bend-to',
+      'bend-to-quarter-tone',
+      'bend-contour',
       'dynamic',
       'dynamic-shared',
       'dynamic-reminder',
       'accidental-reminder',
+      'stem-mark',
+      'sign',
+      'size',
+      'quarter-tone',
       'crescendo',
       'decrescendo',
       'diminuendo',
@@ -220,6 +314,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'arpeggiate',
       'grace',
       'grace-octave',
+      'grace-quarter-tone',
       'grace-articulation',
       'grace-type',
       'grace-duration',
@@ -230,9 +325,11 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'trill-stop',
       'trill-accidental',
       'trill-note',
+      'trill-quarter-tone',
       'trill-continuation',
       'trill-finish',
       'trill-finish-octave',
+      'trill-finish-quarter-tone',
       'trill-finish-slur',
       'octave-shift',
       'octave-mode',
@@ -250,6 +347,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'tremolo-label',
       'articulation-repeat',
       'tie-style',
+      'slur-style',
+      'breath-mark',
+      'swell',
+      'phonemes',
     ];
   }
 
@@ -260,6 +361,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
   #stemExtension = 0;
   #dottedTieAcrossBarline = false;
   #trillSignExtraLift = 0;
+  #signPlacement: SignPlacement | null = null;
   #articulationStemAnchorBeamLevels: number | null = null;
   #augmentationDotRows: number[] | null = null;
   #noFlags = false;
@@ -378,6 +480,24 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     this.#scheduleRender();
   }
 
+  // Where the staff puts this chord's signs; null standalone.
+  get signPlacement(): SignPlacement | null {
+    return this.#signPlacement;
+  }
+  set signPlacement(v: SignPlacement | null) {
+    if (
+      v === this.#signPlacement ||
+      (v !== null &&
+        this.#signPlacement !== null &&
+        v.bottomY === this.#signPlacement.bottomY &&
+        v.articulationLiftPx === this.#signPlacement.articulationLiftPx)
+    ) {
+      return;
+    }
+    this.#signPlacement = v;
+    this.#scheduleRender();
+  }
+
   get articulationStemAnchorBeamLevels(): number | null {
     return this.#articulationStemAnchorBeamLevels;
   }
@@ -449,15 +569,58 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
 
   // Per tone, in `notes` order: the chord's own `accidental-reminder`, or
   // a slotted <music-note>'s.
-  get toneAccidentalReminders(): boolean[] {
+  get toneAccidentalReminders(): (AccidentalReminder | null)[] {
     const chordReminder = this.accidentalReminder;
     const noteElements = Array.from(this.querySelectorAll(this.childNoteTag));
     return this.notes.map(
       (_, i) =>
-        chordReminder ||
-        ((noteElements[i] as NoteElementType | undefined)?.accidentalReminder ??
-          false)
+        (noteElements[i] as NoteElementType | undefined)?.accidentalReminder ??
+        chordReminder
     );
+  }
+
+  // Per tone, in `notes` order: a slotted <music-note>'s own `unpitched`.
+  get toneUnpitched(): (UnpitchedPlacement | null)[] {
+    const noteElements = Array.from(this.querySelectorAll(this.childNoteTag));
+    return this.notes.map(
+      (_, i) =>
+        (noteElements[i] as NoteElementType | undefined)?.unpitched ?? null
+    );
+  }
+
+  get toneQuarterTones(): (QuarterTone | null)[] {
+    const noteElements: NoteElementType[] = Array.from(
+      this.querySelectorAll(this.childNoteTag)
+    );
+    return this.notes.map((_, i) => noteElements[i]?.quarterTone ?? null);
+  }
+
+  // Per tone: a slotted note's own bend, else the chord's. A tone that starts
+  // a glissando draws that line instead.
+  get toneBends(): (ResolvedBend | null)[] {
+    const noteElements: NoteElementType[] = Array.from(
+      this.querySelectorAll(this.childNoteTag)
+    );
+    return this.notes.map(({ value, octave }, i) => {
+      const tone: NoteElementType | undefined = noteElements[i];
+      if (tone?.glissando === 'start') {
+        return null;
+      }
+      const bend = tone?.bend ?? null;
+      const bendTo = tone?.bendTo ?? null;
+      const contour = parseBendContour(tone?.bendContour ?? null);
+      return bend === null && bendTo === null && contour === null
+        ? this.bend && { shape: this.bend, target: null }
+        : resolveBend(
+            bend,
+            bendTo,
+            tone.bendToQuarterTone,
+            value,
+            octave ?? 4,
+            tone.quarterTone,
+            contour
+          );
+    });
   }
 
   get tie(): TieValue | null {
@@ -515,6 +678,103 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     }
   }
 
+  get glissandoShape(): GlissandoShape {
+    return parseGlissandoShape(this.readAttribute('glissando-shape'));
+  }
+  set glissandoShape(value: GlissandoShape) {
+    if (value === 'straight') {
+      this.removeAttribute('glissando-shape');
+    } else {
+      this.setAttribute('glissando-shape', value);
+    }
+  }
+
+  get glissandoLabel(): string | null {
+    return this.readAttribute('glissando-label');
+  }
+  set glissandoLabel(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('glissando-label');
+    } else {
+      this.setAttribute('glissando-label', value);
+    }
+  }
+
+  get techniqueText(): string | null {
+    return this.readAttribute('technique-text');
+  }
+  set techniqueText(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('technique-text');
+    } else {
+      this.setAttribute('technique-text', value);
+    }
+  }
+
+  get techniqueTextPlacement(): TextPlacement {
+    return (
+      parseTextPlacement(this.readAttribute('technique-text-placement')) ??
+      'above'
+    );
+  }
+  set techniqueTextPlacement(value: TextPlacement) {
+    this.setAttribute('technique-text-placement', value);
+  }
+
+  get techniqueTextStyle(): TextStyle {
+    return (
+      parseTextStyle(this.readAttribute('technique-text-style')) ?? 'normal'
+    );
+  }
+  set techniqueTextStyle(value: TextStyle) {
+    this.setAttribute('technique-text-style', value);
+  }
+
+  get dynamicText(): string | null {
+    const value = this.readAttribute('dynamic-text')?.trim() ?? '';
+    return value === '' ? null : value;
+  }
+  set dynamicText(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('dynamic-text');
+    } else {
+      this.setAttribute('dynamic-text', value);
+    }
+  }
+
+  get bend(): BendShape | null {
+    return parseBendShape(this.readAttribute('bend'));
+  }
+  set bend(value: BendShape | null) {
+    if (value === null) {
+      this.removeAttribute('bend');
+    } else {
+      this.setAttribute('bend', value);
+    }
+  }
+
+  get bendTo(): Note | null {
+    return parseNote(this.readAttribute('bend-to'));
+  }
+  set bendTo(value: Note | null) {
+    if (value === null) {
+      this.removeAttribute('bend-to');
+    } else {
+      this.setAttribute('bend-to', value);
+    }
+  }
+
+  get bendToQuarterTone(): QuarterTone | null {
+    return parseQuarterTone(this.readAttribute('bend-to-quarter-tone'));
+  }
+  set bendToQuarterTone(value: QuarterTone | null) {
+    if (value === null) {
+      this.removeAttribute('bend-to-quarter-tone');
+    } else {
+      this.setAttribute('bend-to-quarter-tone', value);
+    }
+  }
+
   get dynamic(): DynamicMarking | null {
     return parseDynamicMarking(this.readAttribute('dynamic'));
   }
@@ -544,11 +804,55 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     this.toggleAttribute('dynamic-reminder', value);
   }
 
-  get accidentalReminder(): boolean {
-    return this.readsAttribute('accidental-reminder');
+  get accidentalReminder(): AccidentalReminder | null {
+    return parseAccidentalReminder(this.readAttribute('accidental-reminder'));
   }
-  set accidentalReminder(value: boolean) {
-    this.toggleAttribute('accidental-reminder', value);
+  set accidentalReminder(value: AccidentalReminder | boolean | null) {
+    if (value === null || value === false) {
+      this.removeAttribute('accidental-reminder');
+    } else {
+      this.setAttribute(
+        'accidental-reminder',
+        value === true || value === 'bracketed' ? '' : value
+      );
+    }
+  }
+
+  get stemMark(): StemMark | null {
+    return parseStemMark(this.readAttribute('stem-mark'));
+  }
+  set stemMark(value: StemMark | null) {
+    if (value === null) {
+      this.removeAttribute('stem-mark');
+    } else {
+      this.setAttribute('stem-mark', value);
+    }
+  }
+  get sign(): NoteSign[] | null {
+    return parseSigns(this.readAttribute('sign'));
+  }
+  set sign(value: NoteSign[] | null) {
+    if (value === null || value.length === 0) {
+      this.removeAttribute('sign');
+    } else {
+      this.setAttribute('sign', value.join(','));
+    }
+  }
+
+  // The chord's own `size`, else its voice's.
+  get size(): NoteSize {
+    return resolveNoteSize(this.readAttribute('size'), this);
+  }
+  set size(value: NoteSize | null) {
+    if (value === null) {
+      this.removeAttribute('size');
+    } else {
+      this.setAttribute('size', value);
+    }
+  }
+
+  #scale(): number {
+    return noteSizeScale(this.size);
   }
 
   get crescendo(): HairpinRole | null {
@@ -669,20 +973,26 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     }
   }
 
-  // The widest tone's overhang — see noteHeadLeftOverhangPx.
   get headLeftOverhangPx(): number {
-    return Math.max(
-      0,
-      ...this.toneNoteheads.map((notehead) =>
-        noteHeadLeftOverhangPx(this.#stemUp, this.duration, notehead)
-      )
+    return chordHeadLeftOverhangPx({
+      duration: this.duration,
+      staffYCoordinates: this.#resolvedStaffYCoordinates(),
+      stemUp: this.#stemUp,
+      noFlags: this.#noFlags,
+      noteheads: this.toneNoteheads,
+      scale: this.#scale(),
+    });
+  }
+
+  #resolvedStaffYCoordinates(): number[] {
+    return (
+      this.#staffYCoordinates ??
+      (this.notes.length > 0 ? this.#resolveStandaloneYCoordinates() : [])
     );
   }
 
   get augmentationDotsRightEdgePx(): number | null {
-    const staffYCoordinates =
-      this.#staffYCoordinates ??
-      (this.notes.length > 0 ? this.#resolveStandaloneYCoordinates() : []);
+    const staffYCoordinates = this.#resolvedStaffYCoordinates();
     return (
       chordAugmentationDotLayout({
         duration: this.duration,
@@ -693,6 +1003,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         noteheads: this.toneNoteheads,
         stemExtension: this.#stemExtension,
         rowStaffYs: this.#augmentationDotRows,
+        scale: this.#scale(),
       })?.rightEdgeX ?? null
     );
   }
@@ -781,6 +1092,71 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       this.removeAttribute('tie-style');
     } else {
       this.setAttribute('tie-style', value);
+    }
+  }
+
+  get slurStyle(): SlurStyle {
+    return parseSlurStyle(this.readAttribute('slur-style'));
+  }
+  set slurStyle(value: SlurStyle) {
+    if (value === 'solid') {
+      this.removeAttribute('slur-style');
+    } else {
+      this.setAttribute('slur-style', value);
+    }
+  }
+
+  // A staff draws this chord's label and breath mark itself, including for a
+  // combined-voices chord it builds inside its own shadow root.
+  get #drawnByStaff(): boolean {
+    if (this.closest(STAFF_TAGS) !== null) {
+      return true;
+    }
+    const root = this.getRootNode();
+    return root instanceof ShadowRoot && isStaffNodeName(root.host.nodeName);
+  }
+
+  get swell(): SwellShape | null {
+    return parseSwellShape(this.readAttribute('swell'));
+  }
+  set swell(value: SwellShape | boolean | null) {
+    if (value === null || value === false) {
+      this.removeAttribute('swell');
+    } else {
+      this.setAttribute('swell', value === true ? '' : value);
+    }
+  }
+
+  get phonemes(): string | null {
+    return this.readAttribute('phonemes');
+  }
+  set phonemes(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('phonemes');
+    } else {
+      this.setAttribute('phonemes', value);
+    }
+  }
+
+  get dynamicEnd(): DynamicMarking | null {
+    return parseDynamicMarking(this.readAttribute('dynamic-end'));
+  }
+  set dynamicEnd(value: DynamicMarking | null) {
+    if (value === null) {
+      this.removeAttribute('dynamic-end');
+    } else {
+      this.setAttribute('dynamic-end', value);
+    }
+  }
+
+  get breathMark(): BreathMark | null {
+    return parseBreathMark(this.readAttribute('breath-mark'));
+  }
+  set breathMark(value: BreathMark | null) {
+    if (value === null) {
+      this.removeAttribute('breath-mark');
+    } else {
+      this.setAttribute('breath-mark', value);
     }
   }
 
@@ -955,10 +1331,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
   // Overrides only the accidental of the trilling (auxiliary) pitch —
   // normally the diatonic upper neighbor as modified by the key signature.
   // Ignored (with a warning) when trill-note is also set.
-  get trillAccidental(): AccidentalType | null {
+  get trillAccidental(): ConventionalAccidentalType | null {
     return parseAccidentalType(this.readAttribute('trill-accidental'));
   }
-  set trillAccidental(value: AccidentalType | null) {
+  set trillAccidental(value: ConventionalAccidentalType | null) {
     if (value === null) {
       this.removeAttribute('trill-accidental');
     } else {
@@ -977,6 +1353,19 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       this.removeAttribute('trill-note');
     } else {
       this.setAttribute('trill-note', value);
+    }
+  }
+
+  // Applies to the trilling pitch wherever it comes from: trill-note,
+  // trill-accidental or the diatonic neighbor.
+  get trillQuarterTone(): QuarterTone | null {
+    return parseQuarterTone(this.readAttribute('trill-quarter-tone'));
+  }
+  set trillQuarterTone(value: QuarterTone | null) {
+    if (value === null) {
+      this.removeAttribute('trill-quarter-tone');
+    } else {
+      this.setAttribute('trill-quarter-tone', value);
     }
   }
 
@@ -1022,6 +1411,18 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       this.removeAttribute('grace-octave');
     } else {
       this.setAttribute('grace-octave', attr);
+    }
+  }
+
+  get graceQuarterTone(): (QuarterTone | null)[] | null {
+    return parseGraceQuarterTones(this.readAttribute('grace-quarter-tone'));
+  }
+  set graceQuarterTone(value: GraceQuarterTonesType) {
+    const attr = graceListToAttr(value, parseGraceQuarterTones);
+    if (attr === null) {
+      this.removeAttribute('grace-quarter-tone');
+    } else {
+      this.setAttribute('grace-quarter-tone', attr);
     }
   }
 
@@ -1135,6 +1536,20 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     }
   }
 
+  get trillFinishQuarterTone(): (QuarterTone | null)[] | null {
+    return parseGraceQuarterTones(
+      this.readAttribute('trill-finish-quarter-tone')
+    );
+  }
+  set trillFinishQuarterTone(value: GraceQuarterTonesType) {
+    const attr = graceListToAttr(value, parseGraceQuarterTones);
+    if (attr === null) {
+      this.removeAttribute('trill-finish-quarter-tone');
+    } else {
+      this.setAttribute('trill-finish-quarter-tone', attr);
+    }
+  }
+
   get trillFinishSlur(): TrillFinishSlur {
     return parseTrillFinishSlur(this.readAttribute('trill-finish-slur'));
   }
@@ -1233,9 +1648,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
   }
 
   #warnedDynamicReminder = false;
+  #warnedDynamicText = false;
 
-  // A bracketed reminder needs a dynamic to bracket; warns once until one
-  // is set.
+  // A bracketed reminder needs a dynamic to bracket, and a dynamic-text a
+  // dynamic to follow; each warns once until one is set.
   #warnAboutDynamicReminder(): void {
     const missing = this.dynamicReminder && this.dynamic === null;
     if (missing && this.isConnected && !this.#warnedDynamicReminder) {
@@ -1244,11 +1660,19 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       );
     }
     this.#warnedDynamicReminder = missing && this.isConnected;
+    const textMissing = this.dynamicText !== null && this.dynamic === null;
+    if (textMissing && this.isConnected && !this.#warnedDynamicText) {
+      console.warn(`[music-chord] dynamic-text needs a dynamic to follow`);
+    }
+    this.#warnedDynamicText = textMissing && this.isConnected;
   }
 
   connectedCallback(): void {
     upgradeShadowedProperties(this);
     this.#warnAboutTremolo(null, null);
+    this.#warnAboutSlurStyle(null, null);
+    this.#warnAboutGlissandoShape(null, null);
+    this.#warnAboutBend(null, null);
     this.#warnAboutDynamicReminder();
     this.render();
     this.#childObserver = new MutationObserver(() => {
@@ -1258,7 +1682,18 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['notehead', 'instrument', 'accidental-reminder'],
+      attributeFilter: [
+        'notehead',
+        'instrument',
+        'accidental-reminder',
+        'unpitched',
+        'quarter-tone',
+        'bend',
+        'bend-to',
+        'bend-to-quarter-tone',
+        'bend-contour',
+        'glissando',
+      ],
     });
   }
 
@@ -1280,6 +1715,15 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       warnIfInvalidDuration(this.localName, newValue);
     }
 
+    if (name === 'quarter-tone') {
+      if (this.readAttribute(name) !== null) {
+        console.warn(
+          `[music-chord] quarter-tone does nothing on a chord; set it on the slotted notes it raises or lowers`
+        );
+      }
+      return;
+    }
+
     // `diminuendo` is rewritten to `decrescendo`, even before connecting.
     // The removeAttribute below re-enters with null, which must be a no-op.
     if (name === 'diminuendo') {
@@ -1294,16 +1738,59 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       const warning =
         name === 'notehead'
           ? triangleUnsupportedWarning([this.notehead], 'a chord')
-          : triangleUnsupportedWarning(
-              this.graceNotehead ?? [],
-              'a grace note'
-            );
+          : graceNoteheadWarning(this.graceNotehead ?? []);
       if (warning) {
         console.warn(`[music-chord] ${warning}`);
       }
     }
 
     this.#warnAboutTremolo(name, newValue);
+    this.#warnAboutSlurStyle(name, newValue);
+    this.#warnAboutGlissandoShape(name, newValue);
+    this.#warnAboutBend(name, newValue);
+    if (
+      name === 'glissando-label' &&
+      newValue !== null &&
+      resolveGlissandoLabel(newValue) === null
+    ) {
+      console.warn(`[music-chord] glissando-label is empty; drawing no label`);
+    }
+    const textWarning = textAttributeWarning(name, newValue);
+    if (textWarning !== null) {
+      console.warn(`[music-chord] ${textWarning}`);
+    }
+    const swellWarning = swellAttributeWarning(name, newValue);
+    if (swellWarning !== null) {
+      console.warn(`[music-chord] ${swellWarning}`);
+    }
+    if (
+      name === 'size' &&
+      newValue !== null &&
+      parseNoteSize(newValue) === null
+    ) {
+      console.warn(`[music-chord] size="${newValue}" isn't normal or cue`);
+    }
+    if (name === 'phonemes') {
+      const phonemeWarning = phonemesWarning(newValue);
+      if (phonemeWarning !== null) {
+        console.warn(`[music-chord] ${phonemeWarning}`);
+      }
+    }
+    if (name === 'sign') {
+      const warning = signWarning(newValue);
+      if (warning !== null) {
+        console.warn(`[music-chord] ${warning}`);
+      }
+    }
+    if (
+      name === 'breath-mark' &&
+      newValue !== null &&
+      parseBreathMark(newValue) === null
+    ) {
+      console.warn(
+        `[music-chord] breath-mark="${newValue}" is not "tick" or "comma"; ignoring it`
+      );
+    }
 
     if (!this.isConnected) {
       return;
@@ -1315,8 +1802,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       name === 'lv-label' ||
       name === 'glissando' ||
       name === 'glissando-hint' ||
+      name === 'glissando-shape' ||
       name === 'slur-group' ||
       name === 'tie-style' ||
+      name === 'slur-style' ||
       name === 'for'
     ) {
       this.dispatchEvent(
@@ -1325,6 +1814,15 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
           composed: true,
         })
       );
+      if (name === 'glissando') {
+        // The staff keeps room after a glissando's start.
+        this.dispatchEvent(
+          new CustomEvent(NOTE_EVENTS.NOTE_Y_CHANGE, {
+            bubbles: true,
+            composed: true,
+          })
+        );
+      }
       return;
     }
 
@@ -1334,7 +1832,8 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       name === 'decrescendo' ||
       name === 'grace-dynamic' ||
       name === 'dynamic-shared' ||
-      name === 'dynamic-reminder'
+      name === 'dynamic-reminder' ||
+      name === 'dynamic-text'
     ) {
       this.#warnAboutDynamicReminder();
       this.dispatchEvent(
@@ -1464,6 +1963,9 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     if (
       name === 'chord' ||
       name === 'accidental-reminder' ||
+      name === 'stem-mark' ||
+      name === 'sign' ||
+      name === 'size' ||
       name === 'arpeggio' ||
       name === 'arpeggio-for' ||
       name === 'arpeggio-hairpin' ||
@@ -1472,6 +1974,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       name === 'arpeggiate' ||
       name === 'grace' ||
       name === 'grace-octave' ||
+      name === 'grace-quarter-tone' ||
       name === 'grace-articulation' ||
       name === 'grace-notehead' ||
       name === 'notehead' ||
@@ -1479,13 +1982,26 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       name === 'grace-duration' ||
       name === 'grace-slur' ||
       name === 'trill-note' ||
+      name === 'trill-quarter-tone' ||
       name === 'trill-finish' ||
       name === 'trill-finish-octave' ||
+      name === 'trill-finish-quarter-tone' ||
       name === 'trill-finish-slur' ||
       name === 'duration' ||
       name === 'tremolo' ||
       name === 'tremolo-tuplet' ||
       name === 'tremolo-label' ||
+      name === 'breath-mark' ||
+      name === 'swell' ||
+      name === 'phonemes' ||
+      name === 'dynamic-end' ||
+      name === 'glissando-label' ||
+      name === 'technique-text' ||
+      name === 'technique-text-placement' ||
+      name === 'technique-text-style' ||
+      name === 'bend' ||
+      name === 'bend-to' ||
+      name === 'bend-to-quarter-tone' ||
       name === 'articulation-repeat'
     ) {
       // Each of these changes layout (beat time, a leftward or rightward
@@ -1564,11 +2080,19 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         : changed === 'tremolo-tuplet' && parseTremoloTuplet(newValue) === null
         ? 'is not a whole number of at least 2'
         : changed === 'tremolo-label' && parseTremoloLabel(newValue) === null
-        ? 'is not "trem" or "non-trem"'
+        ? `is not one of ${TREMOLO_LABELS.map((label) => `"${label}"`).join(
+            ', '
+          )}`
         : null;
     if (invalid !== null) {
       console.warn(
         `[music-chord] ${changed}="${newValue}" ${invalid}; ignoring it`
+      );
+      return;
+    }
+    if (changed === 'bend-contour' && newValue !== null) {
+      console.warn(
+        '[music-chord] bend-contour is ignored on a chord; put it on a slotted note, one line a tone'
       );
       return;
     }
@@ -1582,7 +2106,121 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       articulationRepeat: this.articulationRepeat,
       articulation: this.articulation,
       duration: this.duration,
+      label: this.tremoloLabel,
+      inTremoloGroup: this.parentElement?.nodeName === MUSIC_TREMOLO_NODE,
     })) {
+      console.warn(`[music-chord] ${warning}`);
+    }
+  }
+
+  #warnAboutGlissandoShape(
+    changed: string | null,
+    newValue: string | null
+  ): void {
+    if (
+      changed !== null &&
+      changed !== 'glissando-shape' &&
+      changed !== 'glissando'
+    ) {
+      return;
+    }
+    if (
+      changed === 'glissando-shape' &&
+      newValue !== null &&
+      newValue !== parseGlissandoShape(newValue)
+    ) {
+      console.warn(
+        `[music-chord] glissando-shape="${newValue}" is not "straight", "dip" or "wave"; ignoring it`
+      );
+      return;
+    }
+    if (!this.isConnected) {
+      return;
+    }
+    const warning = glissandoShapeWarning({
+      shape: this.glissandoShape,
+      glissando: this.glissando,
+    });
+    if (warning !== null) {
+      console.warn(`[music-chord] ${warning}`);
+    }
+  }
+
+  #lastBendWarning: string | null = null;
+
+  // An invalid value warns as soon as it's set; what doesn't fit together
+  // warns once connected.
+  #warnAboutBend(changed: string | null, newValue: string | null): void {
+    const invalid =
+      newValue === null
+        ? null
+        : changed === 'bend' && parseBendShape(newValue) === null
+        ? 'is not "up", "down", "dip" or "wave"'
+        : changed === 'bend-to' && parseNote(newValue) === null
+        ? 'is not a pitch such as "C#"'
+        : changed === 'bend-to-quarter-tone' &&
+          parseQuarterTone(newValue) === null
+        ? 'is not "up" or "down"'
+        : null;
+    if (invalid !== null) {
+      console.warn(
+        `[music-chord] ${changed}="${newValue}" ${invalid}; ignoring it`
+      );
+      return;
+    }
+    if (
+      !this.isConnected ||
+      (changed !== null &&
+        changed !== 'bend' &&
+        changed !== 'bend-to' &&
+        changed !== 'bend-to-quarter-tone' &&
+        changed !== 'glissando')
+    ) {
+      return;
+    }
+    const warning = bendConsistencyWarning({
+      bend: this.bend,
+      bendTo: this.bendTo,
+      glissando: this.glissando,
+      isChord: true,
+      inTremoloGroup: this.parentElement?.nodeName === MUSIC_TREMOLO_NODE,
+      onTriangle: false,
+      targetDirection: null,
+    });
+    if (warning !== null && warning !== this.#lastBendWarning) {
+      console.warn(`[music-chord] ${warning}`);
+    }
+    this.#lastBendWarning = warning;
+  }
+
+  #warnAboutSlurStyle(changed: string | null, newValue: string | null): void {
+    if (
+      changed !== null &&
+      changed !== 'slur-style' &&
+      changed !== 'slur' &&
+      changed !== 'slur-group'
+    ) {
+      return;
+    }
+    if (
+      changed === 'slur-style' &&
+      newValue !== null &&
+      newValue !== parseSlurStyle(newValue)
+    ) {
+      console.warn(
+        `[music-chord] slur-style="${newValue}" is not "solid" or "dotted"; ignoring it`
+      );
+      return;
+    }
+    if (!this.isConnected) {
+      return;
+    }
+    const warning = slurStyleWarning({
+      slurStyle: this.slurStyle,
+      slur: this.slur,
+      slurGroup: this.slurGroup,
+    });
+    if (warning !== null) {
       console.warn(`[music-chord] ${warning}`);
     }
   }
@@ -1631,17 +2269,37 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         trillFinishNotes: this.#buildTrillFinishDescriptors(this.notes),
         trillFinishSlur: this.trillFinishSlur,
         tremoloStrokeCount: this.#tremoloStrokeCount(),
+        stemMark: this.stemMark,
+        signs: this.sign,
+        signPlacement: this.#signPlacement,
         tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
         articulationRepeatCount: this.#repeatCount(),
-        tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,
+        tremoloLabel: this.#drawnByStaff ? null : this.tremoloLabel,
+        glissandoLabel: this.#drawnByStaff ? null : this.glissandoLabel,
+        techniqueText: this.#drawnByStaff
+          ? null
+          : techniqueTextLabel(this.techniqueText, this.techniqueTextStyle),
+        techniqueTextBelow: this.techniqueTextPlacement === 'below',
+        phonemes: this.#drawnByStaff ? null : parsePhonemes(this.phonemes),
+        breathMark: this.#drawnByStaff ? null : this.breathMark,
+        bends: this.#standaloneBends(),
+        scale: this.#scale(),
       });
       chordSvg.setAttribute('overflow', 'visible');
+      // An unpitched or headless tone takes no ledger line.
+      const unpitched = this.toneUnpitched;
+      const pitched = (_: unknown, i: number) =>
+        unpitched[i] === null && !isHeadless(toneNoteheads[i] ?? null);
       addLedgerLines(
         chordSvg,
-        this.#staffYCoordinates,
+        this.#staffYCoordinates.filter(pitched),
         this.#stemUp,
         STAFF_Y_PADDING - NOTE_HEAD_Y_OFFSET_CORRECTION,
-        this.#widestHeadExtent(toneNoteheads)
+        this.#ledgerHeadExtent(
+          this.#staffYCoordinates,
+          toneNoteheads,
+          unpitched
+        )
       );
 
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- constructor attaches the shadow root
@@ -1672,10 +2330,16 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
 
       const standaloneYCoordinates = this.#resolveStandaloneYCoordinates();
       const stemUp = Math.max(...standaloneYCoordinates) > MIDDLE_STAFF_Y;
-      // Standalone, a reminder brackets each tone's own accidental.
+      // Standalone, a reminder shows each tone's own accidental.
       const reminders = this.toneAccidentalReminders;
+      const unpitched = this.toneUnpitched;
       const noteAccidentals = this.#resolveStandaloneNoteAccidentals().map(
-        (accidental, i) => (reminders[i] ? accidental ?? 'natural' : accidental)
+        (accidental, i) =>
+          unpitched[i] !== null || isHeadless(toneNoteheads[i] ?? null)
+            ? null
+            : reminders[i] !== null
+            ? accidental ?? 'natural'
+            : accidental
       );
 
       const [chordSvg] = createChordSvg({
@@ -1692,13 +2356,16 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         arpeggioHairpinTo: this.arpeggioHairpinTo,
         stemUp,
         noteAccidentals,
-        noteAccidentalsParenthesized: reminders,
+        noteAccidentalsParenthesized: reminders.map(
+          (reminder) => reminder === 'bracketed'
+        ),
         noteheads: toneNoteheads,
         noFlags: false,
         noStem: this.#noStem,
         // Standalone, nothing else lengthens the stem for tremolo strokes.
         stemExtension: unbeamedTremoloStemExtensionPx({
           tremolo: this.tremolo,
+          stemMark: this.stemMark,
           duration: this.duration,
           headYs: standaloneYCoordinates,
           stemUp,
@@ -1714,9 +2381,21 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         trillFinishNotes: this.#buildTrillFinishDescriptors(notes),
         trillFinishSlur: this.trillFinishSlur,
         tremoloStrokeCount: this.#tremoloStrokeCount(),
+        stemMark: this.stemMark,
+        signs: this.sign,
+        signPlacement: this.#signPlacement,
         tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
         articulationRepeatCount: this.#repeatCount(),
-        tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,
+        tremoloLabel: this.#drawnByStaff ? null : this.tremoloLabel,
+        glissandoLabel: this.#drawnByStaff ? null : this.glissandoLabel,
+        techniqueText: this.#drawnByStaff
+          ? null
+          : techniqueTextLabel(this.techniqueText, this.techniqueTextStyle),
+        techniqueTextBelow: this.techniqueTextPlacement === 'below',
+        phonemes: this.#drawnByStaff ? null : parsePhonemes(this.phonemes),
+        breathMark: this.#drawnByStaff ? null : this.breathMark,
+        bends: this.#standaloneBends(),
+        scale: this.#scale(),
       });
       chordSvg.setAttribute('overflow', 'visible');
 
@@ -1741,6 +2420,15 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       this.shadowRoot!.appendChild(svg);
       this.#wireInteractionEvents(svg);
     }
+  }
+
+  // A staff draws its chords' bends itself.
+  #standaloneBends(): (ResolvedBend | null)[] {
+    return this.#drawnByStaff ||
+      this.glissando === 'start' ||
+      this.parentElement?.nodeName === MUSIC_TREMOLO_NODE
+      ? []
+      : this.toneBends;
   }
 
   #wireInteractionEvents(svg: SVGSVGElement): void {
@@ -1768,21 +2456,43 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
 
   // Grace descriptors are relative to the chord's reference note (notes[0]).
   // Ledger lines span the widest head in the chord.
-  #widestHeadExtent(toneNoteheads: NoteheadType[]): {
-    cxPx: number;
-    halfWidthPx: number;
-  } {
+  #ledgerHeadExtent(
+    staffYCoordinates: readonly number[],
+    toneNoteheads: NoteheadType[],
+    unpitched: readonly (UnpitchedPlacement | null)[] = []
+  ): LedgerHeadExtent {
     const geometries = (
       toneNoteheads.length > 0 ? toneNoteheads : (['normal'] as const)
     ).map((notehead) =>
-      noteHeadGeometry(this.#stemUp, this.duration, this.#noFlags, notehead)
+      noteHeadGeometry(
+        this.#stemUp,
+        this.duration,
+        this.#noFlags,
+        notehead,
+        this.#scale()
+      )
     );
     const widest = geometries.reduce((a, b) =>
       b.halfWidth > a.halfWidth ? b : a
     );
+    const heads = {
+      duration: this.duration,
+      staffYCoordinates,
+      stemUp: this.#stemUp,
+      noFlags: this.#noFlags,
+      noteheads: toneNoteheads,
+      scale: this.#scale(),
+    };
     return {
       cxPx: widest.cx * NOTE_SCALE,
       halfWidthPx: widest.halfWidth * NOTE_SCALE,
+      scale: this.#scale(),
+      all: chordHeadExtentPx(heads),
+      tones: staffYCoordinates.flatMap((staffY, index) =>
+        (unpitched[index] ?? null) === null
+          ? [{ staffY, ...chordToneHeadExtentPx(heads, index) }]
+          : []
+      ),
     };
   }
 
@@ -1797,7 +2507,8 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       notes[0].value[0] as NoteLetter,
       notes[0].octave ?? 4,
       this.graceArticulation ?? [],
-      this.graceNotehead
+      this.graceNotehead,
+      this.graceQuarterTone
     );
     applyResolvedGraceAccidentals(graceNotes, this.#resolvedGraceAccidentals);
     applyGraceHeadOverhangs(graceNotes, this.graceHeadLeftOverhangsPx);
@@ -1817,7 +2528,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       trillFinishLetters,
       this.trillFinishOctave ?? [],
       notes[0].value[0] as NoteLetter,
-      notes[0].octave ?? 4
+      notes[0].octave ?? 4,
+      [],
+      null,
+      this.trillFinishQuarterTone
     );
     applyResolvedGraceAccidentals(
       trillFinishNotes,
@@ -1860,14 +2574,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
   }
 
   #resolveStandaloneNoteAccidentals(): (AccidentalType | null | undefined)[] {
-    return this.notes.map((note) => {
-      if (note.value.includes('#')) {
-        return 'sharp';
-      } else if (note.value.length > 1 && note.value[1] === 'b') {
-        return 'flat';
-      }
-      return null;
-    });
+    const quarterTones = this.toneQuarterTones;
+    return this.notes.map((note, i) =>
+      pitchAccidental(note.value, quarterTones[i])
+    );
   }
 }
 

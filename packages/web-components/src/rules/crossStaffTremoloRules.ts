@@ -15,6 +15,7 @@ export type CrossStaffTremoloMember<TElement> = {
   duration: DurationType;
   /** Whole-note fraction this member takes: its share of the written value. */
   beatLength: number;
+  cue?: boolean;
 };
 
 export type CrossStaffTremoloEntry<TTremolo, TElement> = {
@@ -109,6 +110,12 @@ export function resolveCrossStaffTremoloGroups<TTremolo, TElement>(
     }
     if (top.isNested || bottom.isNested) {
       skip('is nested inside, or holds, another wrapper');
+      continue;
+    }
+    if ([...top.members, ...bottom.members].some((member) => member.cue)) {
+      skip(
+        'has a cue-sized member; a cross-staff tremolo takes full-size notes only'
+      );
       continue;
     }
     if (top.strokes !== bottom.strokes) {

@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import '../note/index';
-import { MUSIC_CLEF, MUSIC_VOICE } from '../utils/consts';
+import { MUSIC_CLEF, MUSIC_VOICE, NOTE_EVENTS } from '../utils/consts';
 import './index';
 
 afterEach(() => {
@@ -75,5 +75,17 @@ describe('barline inside a voice', () => {
       expect.stringContaining('is not allowed inside <music-voice>')
     );
     warn.mockRestore();
+  });
+});
+
+describe(`${MUSIC_VOICE} size`, () => {
+  it('re-lays out its staff when its size changes', () => {
+    const voice = document.createElement(MUSIC_VOICE);
+    document.body.appendChild(voice);
+    const handler = jest.fn();
+    voice.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+    voice.setAttribute('size', 'cue');
+    voice.removeAttribute('size');
+    expect(handler).toHaveBeenCalledTimes(2);
   });
 });

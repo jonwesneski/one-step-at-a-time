@@ -21,6 +21,7 @@ import {
   BEAM_ESTIMATE_NOTE_SPACING_PX,
   KNEED_BEAM_TRIGGER_STEM_PX,
 } from '../utils/notationDimensions';
+import { noteSizeScale } from '../utils/svgCreator/note';
 import {
   resolveBeamPlacement,
   resolveKneedBeamPlacement,
@@ -52,7 +53,9 @@ export function buildBeamsRenderer(
   tremoloGroups: readonly TremoloGroupPlacement[] = [],
   // Where mid-bar barlines fall, in the same beat-offset space; a beam breaks
   // at each.
-  barlineBeatOffsets: readonly number[] = []
+  barlineBeatOffsets: readonly number[] = [],
+  // Flutter-tongued tremolo entries, which beam with plain notes.
+  flutterTonguedIndices: ReadonlySet<number> = new Set()
 ): {
   beamsBuilder: BeamsBuilder;
   beamRenderer: ReturnType<BeamsBuilder['buildRenderer']>;
@@ -86,7 +89,8 @@ export function buildBeamsRenderer(
       headExtents,
       externallyBeamedIndices ?? new Set()
     ),
-    barlineBeatOffsets
+    barlineBeatOffsets,
+    flutterTonguedIndices
   );
   // stemDirectionsOverride lets a caller impose a fixed per-voice policy
   // (voice 1 always up, voice 2 always down — see rules/voiceRules.ts)
@@ -149,10 +153,20 @@ export function buildBeamsRenderer(
         lowestHeadStaffY: lowest,
         minimumStemPx: beamedTremoloMinimumStemPx({
           tremolo: tremoloOf(element),
+          stemMark:
+            element.nodeName === MUSIC_REST_NODE
+              ? null
+              : (element as NoteElementType | ChordElementType).stemMark,
           duration: element.duration,
           nearestHeadY: stemUp ? highest : lowest,
           stemUp,
         }),
+        scale:
+          element.nodeName === MUSIC_REST_NODE
+            ? 1
+            : noteSizeScale(
+                (element as NoteElementType | ChordElementType).size
+              ),
       };
     }
   );
@@ -190,7 +204,9 @@ function tremoloOf(element: NoteChordOrRestElementType): TremoloValue | null {
 // forced direction keeps its beam, and so does a group a clef change falls
 // inside, since the clef sits in the stave where a kneed beam would run. A
 // group with tremolo strokes keeps its beam too: the strokes need the stem
-// length a kneed beam takes away.
+// length a kneed beam takes away. A cue group keeps its beam as well: a knee
+// is laid out at full size only. So does a group reaching over a rest, whose
+// beam keeps to one side of it.
 function applyKneedBeams(
   elements: NoteChordOrRestElementType[],
   beamsBuilder: BeamsBuilder,
@@ -212,8 +228,11 @@ function applyKneedBeams(
         (index) =>
           forcedDirections?.has(elements[index]) ||
           tremoloOf(elements[index]) !== null ||
+          (elements[index] as NoteElementType | ChordElementType).size ===
+            'cue' ||
           beamsBuilder.isTremoloMember(index)
-      )
+      ) ||
+      beamsBuilder.beamOverRestsFor(i).length > 0
     ) {
       continue;
     }

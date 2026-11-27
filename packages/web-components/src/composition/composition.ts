@@ -9,10 +9,20 @@ import {
 } from '../rules/barlineRules';
 import type { ObstacleRect } from '../rules/connectorPlacementRules';
 import {
+  dynamicTextHalfWidth,
+  dynamicTextTrailingPx,
   type HairpinEndpoint,
+  type HairpinSegment,
   pairHairpinsWithLeftovers,
   pairSharedHairpinsAcrossStaves,
   resolveHairpinSegments,
+  resolveSwellOwners,
+  resolveSwellSegments,
+  swellConflicts,
+  swellGapForPhonemes,
+  swellMidpoint,
+  type SwellPiece,
+  type SwellRow,
 } from '../rules/dynamicsRules';
 import {
   type EndingGroup,
@@ -23,9 +33,18 @@ import {
   resolveEndingSegments,
 } from '../rules/endingRules';
 import {
+  flutterEntryOf,
+  missingFlutterCancelWarning,
+  resolveFlutterPassages,
+} from '../rules/flutterTongueRules';
+import {
+  type BarSpan,
+  type DynamicsSide,
   dynamicTextCenterClearOfStems,
   type HairpinEndpointText,
+  joinBarSpans,
   resolveSharedHairpinY,
+  type SharedDynamicsRows,
 } from '../rules/hairpinPlacementRules';
 import {
   type EndWarnings,
@@ -42,12 +61,19 @@ import {
   resolveOctaveSpans,
 } from '../rules/octaveRules';
 import {
+  parsePhonemes,
+  phonemeArrow,
+  resolvePhonemeRuns,
+} from '../rules/phonemeRules';
+import {
   type BoundaryState,
   type Component,
   type DescribeReminder,
   resolveRepeatWarnings,
 } from '../rules/repeatWarningRules';
 import type { MarkerBeat } from '../rules/streamMarkerRules';
+import { techniqueTextMaxRight } from '../rules/techniqueTextRules';
+import { tiesOn } from '../rules/tieRules';
 import {
   resolveTrillContinuationSegments,
   resolveTrillSpans,
@@ -68,6 +94,7 @@ import type {
 } from '../types/elements';
 import type {
   ClefType,
+  DynamicMarking,
   EndingNumbering,
   HairpinKind,
   MeasureNumberDisplay,
@@ -77,12 +104,15 @@ import type {
 } from '../types/theory';
 import {
   createDynamicMarkingSvg,
+  createDynamicTextSvg,
   createHairpinSvg,
   createOctaveContinuationSignSvg,
   createOctaveCornerSvg,
   createOctaveExtensionLineSvg,
   createOctaveLocoLabelSvg,
   createOctaveSignSvg,
+  createPhonemeArrowSvg,
+  createSwellSvg,
   createTrillContinuationSignSvg,
   createTrillLineSvg,
   createTrillNotchSvg,
@@ -91,17 +121,15 @@ import {
 } from '../utils';
 import {
   buildConnectorSvgs,
-  collectArpeggioTiePairs,
+  collectConnectorPairs,
   collectEntryObstacles,
-  collectNoteLikeElements,
-  collectPhraseSlurPairs,
   collectStemRects,
   type ConnectorPair,
   type EntryObstacles,
-  pairConnectors,
   partitionByVoice,
   resolveDoubleStemmedBeamConnectorContext,
   resolveSlurGroupPlacement,
+  ROW_TOLERANCE_PX,
 } from '../utils/connectorsBuilder';
 import {
   BARLINE_EVENTS,
@@ -110,6 +138,7 @@ import {
   isChordNodeName,
   isNoteNodeName,
   isStaffNodeName,
+  LYRICS_EVENTS,
   MEASURE_EVENTS,
   MUSIC_COMPOSITION,
   MUSIC_MEASURE,
@@ -123,7 +152,9 @@ import {
 } from '../utils/consts';
 import {
   COMPOSITION_MAX_WIDTH_PX,
-  DYNAMICS_BASELINE_Y,
+  CONTINUED_CONNECTOR_LEAD_PX,
+  HAIRPIN_AXIS_RISE_PX,
+  HAIRPIN_DYNAMIC_GAP_PX,
   HAIRPIN_OPEN_HEIGHT,
   OCTAVE_LOCO_GAP_PX,
   OCTAVE_SIGN_ABOVE_STAFF_Y,
@@ -132,6 +163,8 @@ import {
   OCTAVE_SIGN_LEADING_GAP_PX,
   OCTAVE_SIGN_LINE_GAP_PX,
   OCTAVE_SIGN_TRAILING_GAP_PX,
+  PHONEME_ARROW_GAP_PX,
+  PHONEME_ARROW_HEAD_LENGTH_PX,
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
   TRILL_ABOVE_STAFF_GAP_PX,
@@ -254,6 +287,103 @@ type OctaveRowSource = HTMLElement & {
   > | null;
 };
 
+// A notation staff's flutter-tongue carry-in, duck-typed like the octave
+// hooks above.
+type FlutterCarryInTarget = HTMLElement & {
+  flutterCarryIn?: ReadonlySet<VoiceNumber>;
+};
+
+// A notation staff's part in swells over a barline, duck-typed like the
+// octave hooks above (client px).
+type SwellStaff = HTMLElement & {
+  swellEntryGeometry?: (
+    element: Element
+  ) => { x: number; startX: number; endX: number; beats: number } | null;
+  swellContinuations?: {
+    covered: ReadonlySet<Element>;
+    dynamicEnds: ReadonlyMap<Element, DynamicMarking>;
+  };
+};
+
+// A notation staff's phoneme rows and boxes, duck-typed like the octave
+// hooks above (client px, rows local).
+type PhonemeStaff = HTMLElement & {
+  ownPhonemeRows?: () => ReadonlyMap<unknown, number>;
+  phonemeBoxes?: (
+    element: Element
+  ) => { left: number; right: number; arrowY: number }[];
+  phonemeContinuations?: {
+    nextAnchors: ReadonlyMap<Element, number>;
+    continued: ReadonlySet<Element>;
+    rows: ReadonlyMap<unknown, number>;
+  };
+};
+
+// One phoneme of a run over a barline, with its bar's staff.
+type PhonemeEnd = {
+  element: NoteOrChordElementType;
+  index: number;
+  staff: PhonemeStaff;
+  rowIndex: number;
+};
+
+// A swell whose tie chain runs on past its bar: the composition draws it.
+type CrossBarSwell = {
+  owner: NoteOrChordElementType;
+  track: number;
+  entries: {
+    element: NoteOrChordElementType;
+    staff: SwellStaff;
+    bar: number;
+    rowIndex: number;
+  }[];
+};
+
+// A notation staff's dynamics rows, duck-typed like the octave hooks above.
+type DynamicsRowStaff = HTMLElement & {
+  dynamicsSideOf?: (element: Element) => DynamicsSide;
+  ownDynamicsRowY?: (side: DynamicsSide) => number;
+  dynamicsRowToClientY?: (y: number) => number;
+  sharedDynamicsRows?: SharedDynamicsRows;
+};
+
+// A notation staff's technique texts, duck-typed like the octave hooks above
+// (client px).
+type TechniqueTextBox = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  above: boolean;
+};
+type TechniqueTextStaff = HTMLElement & {
+  techniqueTextPlacements?: () => readonly (TechniqueTextBox & {
+    element: Element;
+  })[];
+  notesAreaClientRight?: number;
+  techniqueTextInkY?: (
+    span: { left: number; right: number },
+    above: boolean
+  ) => number | null;
+  applyTechniqueTextRunOn?: (
+    runOn: ReadonlyMap<Element, { maxRight: number; inkY: number | null }>,
+    carried: readonly TechniqueTextBox[],
+    rowRight: number
+  ) => boolean;
+};
+
+// A vocal staff's lyric line, duck-typed the same way.
+type LyricStaff = HTMLElement & {
+  ownLyricsRowY?: number | null;
+  alignLyricsRow?: (y: number | null) => boolean;
+};
+
+type CrossMeasureHairpin = {
+  kind: HairpinKind;
+  startElement: NoteOrChordElementType;
+  endElement: NoteOrChordElementType;
+};
+
 // <music-measure>'s continuation hand-off and a staff's octave breaks,
 // duck-typed like reserveMeasureSpace below.
 type OctaveContinuationReceiver = HTMLElement & {
@@ -332,6 +462,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
     #rowSpaceMeasures = new Set<HTMLElement>();
     #rowAlignedStaves = new Set<StaffElementBaseType>();
     #redrawScheduled: boolean;
+    #warnedFlutterCancels = new WeakSet<NoteChordOrRestElementType>();
     #boundRedraw: () => void;
     // An ending or barline change can renumber bars, which only the
     // composition sees whole.
@@ -564,6 +695,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           this.#boundRepeatAttributeChange,
         ],
         [BARLINE_EVENTS.ATTRIBUTE_CHANGE, this.#boundRedraw],
+        [LYRICS_EVENTS.CHANGE, this.#boundRedraw],
       ];
     }
 
@@ -610,25 +742,41 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         if (this.#updateEndings()) {
           this.#alignRowStaffSpace();
         }
+        this.#updateFlutterPassages();
         for (const staff of Array.from(
           this.querySelectorAll<StaffElementBaseType>(STAFF_TAGS)
         )) {
           staff.respaceToCurrentWidth();
         }
+        if (this.#updateTechniqueTextRunOn()) {
+          this.#alignRowStaffSpace();
+          this.#updateTechniqueTextRunOn();
+        }
+        const swells = this.#crossBarSwells();
+        if (this.#updateSwellContinuations(swells)) {
+          this.#alignRowStaffSpace();
+        }
+        if (this.#updatePhonemeContinuations()) {
+          this.#alignRowStaffSpace();
+        }
         const octaveContinuations = this.#resolveOctaveContinuations();
         this.#applyOctaveRowHeights(octaveContinuations);
         this.#applyOctaveContinuationCoverage(octaveContinuations);
+        const lyricsMoved = this.#alignLyricsRows();
+        if (this.#shareHairpinRows(swells.swells) || lyricsMoved) {
+          this.#alignRowStaffSpace();
+        }
         this.#redrawConnectors();
         if (this.#reserveRowOverlaySpace()) {
           this.#redrawConnectors();
         }
-        this.#redrawHairpins();
+        this.#redrawHairpins(swells.swells);
         this.#redrawTrills();
         // A measure stepping its beams or gap decorations around a drawn
         // continuation moves what connectors and hairpins avoid.
         if (this.#redrawOctaveSigns(octaveContinuations)) {
           this.#redrawConnectors();
-          this.#redrawHairpins();
+          this.#redrawHairpins(swells.swells);
         }
       });
     }
@@ -710,6 +858,121 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#rowAlignedStaves = alignedStaves;
     }
 
+    // Puts the lyrics of every bar of a system on one line, the lowest any of
+    // them needs. Returns whether any line moved.
+    #alignLyricsRows(): boolean {
+      let changed = false;
+      for (const track of this.#buildStaffTracks()) {
+        const rowYs = new Map<number, number>();
+        for (const { staff, rowIndex } of track) {
+          const own = (staff as LyricStaff).ownLyricsRowY ?? null;
+          if (own !== null) {
+            rowYs.set(rowIndex, Math.max(own, rowYs.get(rowIndex) ?? own));
+          }
+        }
+        for (const { staff, rowIndex } of track) {
+          changed =
+            (staff as LyricStaff).alignLyricsRow?.(
+              rowYs.get(rowIndex) ?? null
+            ) || changed;
+        }
+      }
+      return changed;
+    }
+
+    // Technique texts run on over later bars of their row, one track per
+    // staff position: each staff learns how far its texts may reach and the
+    // ink under them there, and the texts running on over it. A text changing
+    // moves what later bars clear, so this repeats until nothing changes.
+    // Returns whether any staff re-laid out.
+    #updateTechniqueTextRunOn(): boolean {
+      let changedAtAll = false;
+      for (let pass = 0; pass < 3; pass++) {
+        let changed = false;
+        for (const track of this.#buildStaffTracks()) {
+          const rows = new Map<number, TechniqueTextStaff[]>();
+          for (const { staff, rowIndex } of track) {
+            const textStaff = staff as TechniqueTextStaff;
+            if (typeof textStaff.applyTechniqueTextRunOn === 'function') {
+              rows.set(rowIndex, [...(rows.get(rowIndex) ?? []), textStaff]);
+            }
+          }
+          for (const staves of rows.values()) {
+            changed = this.#runOnTechniqueTexts(staves) || changed;
+          }
+        }
+        changedAtAll = changedAtAll || changed;
+        if (!changed) {
+          break;
+        }
+      }
+      return changedAtAll;
+    }
+
+    // One row of one staff position's bars, in order.
+    #runOnTechniqueTexts(staves: readonly TechniqueTextStaff[]): boolean {
+      const placements = staves.map(
+        (staff) => staff.techniqueTextPlacements?.() ?? []
+      );
+      const rowRight = staves[staves.length - 1].notesAreaClientRight ?? 0;
+      const runOns = staves.map(
+        () => new Map<Element, { maxRight: number; inkY: number | null }>()
+      );
+      const carried = staves.map((): TechniqueTextBox[] => []);
+      staves.forEach((staff, p) => {
+        const ownBarRight = staff.notesAreaClientRight ?? 0;
+        for (const text of placements[p]) {
+          const nextTextX =
+            placements
+              .slice(p + 1)
+              .map((later) =>
+                later
+                  .filter(({ above }) => above === text.above)
+                  .map(({ left }) => left)
+              )
+              .find((xs) => xs.length > 0)
+              ?.reduce((x, y) => Math.min(x, y)) ?? null;
+          const inkYs: number[] = [];
+          for (let q = p + 1; q < staves.length; q++) {
+            if (staves[q].getBoundingClientRect().left >= text.right) {
+              break;
+            }
+            const inkY = staves[q].techniqueTextInkY?.(text, text.above);
+            if (inkY !== null && inkY !== undefined) {
+              inkYs.push(inkY);
+            }
+            carried[q].push({
+              left: text.left,
+              right: text.right,
+              top: text.top,
+              bottom: text.bottom,
+              above: text.above,
+            });
+          }
+          runOns[p].set(text.element, {
+            maxRight: techniqueTextMaxRight({
+              rowRight,
+              nextTextX,
+              ownBarRight,
+            }),
+            inkY:
+              inkYs.length === 0
+                ? null
+                : text.above
+                ? Math.min(...inkYs)
+                : Math.max(...inkYs),
+          });
+        }
+      });
+      let changed = false;
+      staves.forEach((staff, p) => {
+        changed =
+          staff.applyTechniqueTextRunOn?.(runOns[p], carried[p], rowRight) ||
+          changed;
+      });
+      return changed;
+    }
+
     // Groups measures into visual rows by top-position (5px tolerance),
     // shared by every method here that needs row boundaries.
     #computeMeasureRows(): HTMLElement[][] {
@@ -756,20 +1019,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         overlay.removeChild(overlay.firstChild);
       }
 
-      const noteLikeElements = collectNoteLikeElements(this);
-      const byVoice = partitionByVoice(noteLikeElements);
-      const pairs = [
-        ...[...byVoice.values()].flatMap((notes) => pairConnectors(notes)),
-        ...collectArpeggioTiePairs(this),
-        ...collectPhraseSlurPairs(this),
-      ];
+      const { noteLikeElements, pairs } = collectConnectorPairs(this);
       this.#markDottedTiesAcrossBarlines(noteLikeElements, pairs);
       if (pairs.length === 0) {
         return;
       }
 
       const rootRect = wrapper.getBoundingClientRect();
-      const rowLeft = this.#computeNotesAreaLeft(rootRect);
 
       // Double-stemmed beam context, as measure.ts#redrawConnectors resolves
       // it. This runs a frame after each measure drew its beam polygons.
@@ -779,7 +1035,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
 
       const svgs = buildConnectorSvgs(pairs, {
         rootRect,
-        rowLeft,
+        rowLeftOf: (end) => {
+          const staff = end.closest(STAFF_TAGS) as HTMLElement | null;
+          return (
+            (staff
+              ? this.#computeNotesAreaLeftForStaff(
+                  this.#firstStaffInRowOf(staff),
+                  rootRect
+                )
+              : this.#computeNotesAreaLeft(rootRect)) +
+            CONTINUED_CONNECTOR_LEAD_PX
+          );
+        },
         beamRects,
         groupSlurStaves: resolveSlurGroupPlacement(pairs, elementToGroup),
         innerVoiceElements: innerVoiceStemAnchorElements,
@@ -830,6 +1097,30 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return describeContainer.getBoundingClientRect().right - rootRect.left;
     }
 
+    // The same staff in the first measure of its row.
+    #firstStaffInRowOf(staff: HTMLElement): HTMLElement {
+      const measure = staff.closest(MUSIC_MEASURE);
+      if (measure === null) {
+        return staff;
+      }
+      const stavesOf = (element: Element): Element[] =>
+        Array.from(element.querySelectorAll(STAFF_TAGS));
+      const rowTop = measure.getBoundingClientRect().top;
+      const firstMeasure = Array.from(
+        this.querySelectorAll(MUSIC_MEASURE)
+      ).find(
+        (candidate) =>
+          Math.abs(candidate.getBoundingClientRect().top - rowTop) <=
+          ROW_TOLERANCE_PX
+      );
+      const index = stavesOf(measure).indexOf(staff);
+      return (
+        (firstMeasure &&
+          (stavesOf(firstMeasure)[index] as HTMLElement | undefined)) ??
+        staff
+      );
+    }
+
     #computeNotesAreaLeftForStaff(
       staff: HTMLElement,
       rootRect: DOMRect
@@ -843,32 +1134,30 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return describeContainer.getBoundingClientRect().right - rootRect.left;
     }
 
-    #getDynamicsBaselineY(element: Element, rootRect: DOMRect): number {
-      const staff = element.closest(NOTATION_STAFF_TAGS) as HTMLElement | null;
-      if (!staff) {
+    // The row of a hairpin in the bar of one of its ends, on the side its start
+    // keeps to.
+    #hairpinRowY(
+      staff: DynamicsRowStaff | null,
+      side: DynamicsSide,
+      rootRect: DOMRect
+    ): number {
+      const own = staff?.ownDynamicsRowY?.(side);
+      if (staff === null || own === undefined) {
         return 0;
       }
-      const staffRect = staff.getBoundingClientRect();
-      return staffRect.top - rootRect.top + DYNAMICS_BASELINE_Y;
+      const row = staff.sharedDynamicsRows?.[side] ?? own;
+      return (staff.dynamicsRowToClientY?.(row) ?? row) - rootRect.top;
     }
 
     // Hairpins whose two ends sit in different measures. Each staff track
     // (every measure's Nth staff, see #buildStaffTracks) and voice pairs on
     // its own, so one hand's start never takes the other hand's end. A start
     // still open afterwards may end on the partner track — the other hand of
-    // a grand staff; a shared (both-hands) one is drawn in that row's gap,
-    // clear of beams, like measure.ts#redrawMeasureDynamics within a measure.
-    #redrawHairpins() {
-      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
-        '.connectors-overlay'
-      );
-      const wrapper = this.shadowRoot?.querySelector<HTMLElement>(
-        '.composition-wrapper'
-      );
-      if (!overlay || !wrapper) {
-        return;
-      }
-
+    // a grand staff.
+    #pairHairpinsAcrossMeasures(): {
+      pairs: CrossMeasureHairpin[];
+      orphanEnds: HairpinEndpoint[];
+    } {
       const selector = `${noteSelector('[crescendo]')}, ${noteSelector(
         '[decrescendo]'
       )}, ${chordSelector('[crescendo]')}, ${chordSelector('[decrescendo]')}`;
@@ -887,11 +1176,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           MEASURE_ORDINAL_STRIDE +
         element.getBoundingClientRect().left;
 
-      const pairs: {
-        kind: HairpinKind;
-        startElement: NoteOrChordElementType;
-        endElement: NoteOrChordElementType;
-      }[] = [];
+      const pairs: CrossMeasureHairpin[] = [];
       const leftovers = tracks.map((track) => {
         const elements = track.flatMap(({ staff }) =>
           Array.from(staff.querySelectorAll(selector))
@@ -942,16 +1227,126 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           });
         }
       });
-      for (const { orphanEnds } of leftovers) {
-        for (const end of orphanEnds) {
-          console.warn(
-            `[dynamicsRules] orphan ${end.kind} end (no matching start)`
-          );
+      return {
+        pairs,
+        orphanEnds: leftovers.flatMap(({ orphanEnds }) => orphanEnds),
+      };
+    }
+
+    // The bars a hairpin runs over share one dynamics row in each system, the
+    // furthest out any of them needs, so it is level with the markings at its
+    // ends. Rows are in staff coordinates, which the row alignment above keeps
+    // the same for every bar of a system. Returns whether any row changed.
+    #shareHairpinRows(swells: readonly CrossBarSwell[]): boolean {
+      const tracks = this.#buildStaffTracks();
+      const spansByRow = new Map<
+        string,
+        { side: DynamicsSide; track: DynamicsRowStaff[]; spans: BarSpan[] }
+      >();
+      const positions = new Map<Element, { track: number; bar: number }>();
+      tracks.forEach((track, trackIndex) =>
+        track.forEach(({ staff }, bar) =>
+          positions.set(staff, { track: trackIndex, bar })
+        )
+      );
+      const spans = [
+        ...this.#pairHairpinsAcrossMeasures().pairs,
+        ...swells.map((swell) => ({
+          startElement: swell.owner,
+          endElement: swell.entries[swell.entries.length - 1].element,
+        })),
+      ];
+      for (const pair of spans) {
+        const startStaff =
+          pair.startElement.closest<DynamicsRowStaff>(NOTATION_STAFF_TAGS);
+        const start = startStaff && positions.get(startStaff);
+        const endStaff = pair.endElement.closest(NOTATION_STAFF_TAGS);
+        const end = endStaff && positions.get(endStaff);
+        if (
+          !start ||
+          !end ||
+          start.track !== end.track ||
+          start.bar === end.bar ||
+          pair.startElement.dynamicShared
+        ) {
+          continue;
         }
+        const side = startStaff.dynamicsSideOf?.(pair.startElement) ?? 'below';
+        const track = tracks[start.track];
+        for (let bar = start.bar; bar <= end.bar; bar++) {
+          const { rowIndex } = track[bar];
+          const key = `${start.track}/${rowIndex}/${side}`;
+          const row = spansByRow.get(key) ?? {
+            side,
+            track: track.map(({ staff }) => staff as DynamicsRowStaff),
+            spans: [],
+          };
+          spansByRow.set(key, row);
+          const open = row.spans[row.spans.length - 1];
+          if (open !== undefined && open.to === bar - 1 && bar > start.bar) {
+            open.to = bar;
+          } else {
+            row.spans.push({ from: bar, to: bar });
+          }
+        }
+      }
+
+      const rows = new Map<Element, { above?: number; below?: number }>();
+      for (const { side, track, spans } of spansByRow.values()) {
+        for (const { from, to } of joinBarSpans(spans)) {
+          const staves = track.slice(from, to + 1);
+          const ys = staves.flatMap(
+            (staff) => staff.ownDynamicsRowY?.(side) ?? []
+          );
+          const y = side === 'above' ? Math.min(...ys) : Math.max(...ys);
+          for (const staff of staves) {
+            rows.set(staff, { ...rows.get(staff), [side]: y });
+          }
+        }
+      }
+
+      let changed = false;
+      for (const staff of Array.from(
+        this.querySelectorAll<DynamicsRowStaff>(NOTATION_STAFF_TAGS)
+      )) {
+        if (staff.ownDynamicsRowY === undefined) {
+          continue;
+        }
+        const before = staff.sharedDynamicsRows;
+        staff.sharedDynamicsRows = rows.get(staff) ?? {};
+        changed ||= staff.sharedDynamicsRows !== before;
+      }
+      return changed;
+    }
+
+    // A shared (both-hands) hairpin is drawn in its row's gap, clear of beams,
+    // like measure.ts#redrawMeasureDynamics within a measure.
+    #redrawHairpins(swells: readonly CrossBarSwell[]) {
+      const overlay = this.shadowRoot?.querySelector<SVGSVGElement>(
+        '.connectors-overlay'
+      );
+      const wrapper = this.shadowRoot?.querySelector<HTMLElement>(
+        '.composition-wrapper'
+      );
+      if (!overlay || !wrapper) {
+        return;
+      }
+      const { pairs, orphanEnds } = this.#pairHairpinsAcrossMeasures();
+      for (const end of orphanEnds) {
+        console.warn(
+          `[dynamicsRules] orphan ${end.kind} end (no matching start)`
+        );
       }
 
       const rootRect = wrapper.getBoundingClientRect();
       let entryObstacles: EntryObstacles | null = null;
+      const obstaclesOf = (): EntryObstacles =>
+        (entryObstacles ??= collectEntryObstacles(
+          this,
+          rootRect,
+          Array.from(this.querySelectorAll(MUSIC_MEASURE)),
+          { excludeGlyphSelector: '.stem' }
+        ));
       let stems: ObstacleRect[] | null = null;
       const staffSelector = NOTATION_STAFF_TAGS;
 
@@ -989,7 +1384,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             .top - rootRect.top;
         const startBounds = {
           left: startRect.left - rootRect.left,
-          right: startRect.right - rootRect.left,
+          right: Math.max(
+            startRect.right - rootRect.left,
+            startElement.dynamic === null ||
+              (startElement.dynamicText ?? null) === null
+              ? -Infinity
+              : this.#headCenterX(startElement, rootRect) +
+                  dynamicTextHalfWidth(
+                    startElement.dynamic,
+                    startElement.dynamicReminder
+                  ) +
+                  dynamicTextTrailingPx(startElement.dynamicText) +
+                  HAIRPIN_DYNAMIC_GAP_PX
+          ),
           top: rowTop(startElement, startRect),
         };
         const endBounds = {
@@ -998,8 +1405,14 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           top: rowTop(endElement, endRect),
         };
 
-        const startCenterY = this.#getDynamicsBaselineY(startElement, rootRect);
-        const endCenterY = this.#getDynamicsBaselineY(endElement, rootRect);
+        const side =
+          (startStaff as DynamicsRowStaff | null)?.dynamicsSideOf?.(
+            startElement
+          ) ?? 'below';
+        const startCenterY =
+          this.#hairpinRowY(startStaff, side, rootRect) - HAIRPIN_AXIS_RISE_PX;
+        const endCenterY =
+          this.#hairpinRowY(endStaff, side, rootRect) - HAIRPIN_AXIS_RISE_PX;
 
         // Use each staff's actual bounding rect so the hairpin ends exactly at
         // the barline (staff right edge) and begins exactly at the notes-area
@@ -1032,16 +1445,19 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             return null;
           }
           stems ??= collectStemRects(this, rootRect);
+          const text = element.dynamicText ?? null;
           return {
             marking: element.dynamic,
             bracketed: element.dynamicReminder,
+            text,
             centerX: dynamicTextCenterClearOfStems(
               this.#headCenterX(element, rootRect),
               element.dynamic,
               stems,
               gap,
               awayDirection,
-              element.dynamicReminder
+              element.dynamicReminder,
+              text
             ),
           };
         };
@@ -1062,32 +1478,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           const segmentEndText =
             segmentIndex === segments.length - 1 ? endText : null;
           if (startElement.dynamicShared) {
-            entryObstacles ??= collectEntryObstacles(
-              this,
-              rootRect,
-              Array.from(this.querySelectorAll(MUSIC_MEASURE)),
-              { excludeGlyphSelector: '.stem' }
-            );
-            const segmentStaff =
-              segmentIndex === segments.length - 1 ? endStaff : startStaff;
-            const gap = this.#sharedHairpinGap(segmentStaff, rootRect);
-            if (gap !== null) {
-              centerY =
-                resolveSharedHairpinY({
-                  kind: segment.kind,
-                  startX: segment.startX,
-                  endX: segment.endX,
-                  openHeight: HAIRPIN_OPEN_HEIGHT,
-                  topGapEdgeY: gap.topGapEdgeY,
-                  bottomGapEdgeY: gap.bottomGapEdgeY,
-                  beamSlices: entryObstacles.beamSlices,
-                  obstacles: entryObstacles.entries.flatMap(
-                    (entry) => entry.glyphRects
-                  ),
-                  startText: segmentStartText,
-                  endText: segmentEndText,
-                }) ?? centerY;
-            }
+            centerY =
+              this.#sharedSegmentY(
+                segment,
+                segmentIndex === segments.length - 1 ? endStaff : startStaff,
+                rootRect,
+                segmentStartText,
+                segmentEndText,
+                obstaclesOf
+              ) ?? centerY;
             for (const text of [segmentStartText, segmentEndText]) {
               if (text !== null) {
                 overlay.appendChild(
@@ -1095,6 +1494,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
                     bracketed: text.bracketed,
                   })
                 );
+                if (text.text) {
+                  overlay.appendChild(
+                    createDynamicTextSvg(
+                      text.text,
+                      text.marking,
+                      text.centerX,
+                      centerY,
+                      { bracketed: text.bracketed }
+                    )
+                  );
+                }
               }
             }
           }
@@ -1111,6 +1521,580 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           );
         });
       }
+      this.#drawCrossBarSwells(swells, overlay, rootRect, obstaclesOf);
+      this.#drawPhonemeArrows(overlay, rootRect);
+    }
+
+    // Swells whose tie chain runs on past the bar of the note they start on,
+    // walked over each track's voices across measures, as the staff walks its
+    // own. Also the swells an earlier bar's covers, and those a hairpin over
+    // the chain rules out.
+    #crossBarSwells(): {
+      swells: CrossBarSwell[];
+      covered: NoteOrChordElementType[];
+    } {
+      const swells: CrossBarSwell[] = [];
+      const covered: NoteOrChordElementType[] = [];
+      const hairpins = this.#pairHairpinsAcrossMeasures().pairs;
+      this.#buildStaffTracks().forEach((track, trackIndex) => {
+        const flattened = track.map(({ staff }) =>
+          flattenStaffSlotElements(Array.from(staff.children))
+        );
+        for (const voiceNumber of [1, 2, 3] as VoiceNumber[]) {
+          const elements: NoteChordOrRestElementType[] = [];
+          const barOf: number[] = [];
+          const barEnds: number[] = [];
+          flattened.forEach((flatten, bar) => {
+            const voiceElements =
+              flatten.voices.get(voiceNumber)?.flatElements ?? [];
+            elements.push(...voiceElements);
+            barOf.push(...voiceElements.map(() => bar));
+            barEnds.push(elements.length - 1);
+          });
+          const { owners, overridden } = resolveSwellOwners(elements);
+          const carried = owners.filter(({ index, lastIndex }) => {
+            const bar = barOf[index];
+            let last = index;
+            while (last < lastIndex && barOf[last + 1] === bar) {
+              last++;
+            }
+            return (
+              last === barEnds[bar] &&
+              tiesOn((elements[last] as NoteOrChordElementType).tie ?? null)
+            );
+          });
+          for (const index of overridden) {
+            const coveringOwner = owners.filter((owner) => owner.index < index);
+            const by = coveringOwner[coveringOwner.length - 1];
+            if (by !== undefined && barOf[by.index] !== barOf[index]) {
+              covered.push(elements[index] as NoteOrChordElementType);
+            }
+          }
+          const inList = (element: Element) =>
+            elements.includes(element as NoteChordOrRestElementType);
+          const conflicting = new Set<Element>(
+            swellConflicts(
+              elements,
+              carried,
+              hairpins.filter(
+                (pair) => inList(pair.startElement) && inList(pair.endElement)
+              ),
+              hairpins
+                .filter(
+                  (pair) =>
+                    inList(pair.startElement) !== inList(pair.endElement)
+                )
+                .map((pair) => ({
+                  element: inList(pair.startElement)
+                    ? pair.startElement
+                    : pair.endElement,
+                }))
+            )
+          );
+          for (const { index, lastIndex } of carried) {
+            const owner = elements[index] as NoteOrChordElementType;
+            if (conflicting.has(owner)) {
+              this.#warnSwellOnce(
+                owner,
+                '[music-composition] swell is not drawn: a hairpin starts, ends or runs over its tie chain'
+              );
+              continue;
+            }
+            swells.push({
+              owner,
+              track: trackIndex,
+              entries: elements
+                .slice(index, lastIndex + 1)
+                .map((element, offset) => {
+                  const bar = barOf[index + offset];
+                  return {
+                    element: element as NoteOrChordElementType,
+                    staff: track[bar].staff as SwellStaff,
+                    bar,
+                    rowIndex: track[bar].rowIndex,
+                  };
+                }),
+            });
+          }
+        }
+      });
+      return { swells, covered };
+    }
+
+    // Each voice's phoneme runs, walked over its track across measures: the
+    // arrows that cross a barline, and the staves each run joins in a system.
+    #crossBarPhonemes(): {
+      links: { from: PhonemeEnd; to: PhonemeEnd }[];
+      shared: { voice: VoiceNumber; staves: PhonemeStaff[] }[];
+    } {
+      const links: { from: PhonemeEnd; to: PhonemeEnd }[] = [];
+      const shared: { voice: VoiceNumber; staves: PhonemeStaff[] }[] = [];
+      for (const track of this.#buildStaffTracks()) {
+        const flattened = track.map(({ staff }) =>
+          flattenStaffSlotElements(Array.from(staff.children))
+        );
+        for (const voice of [1, 2, 3] as VoiceNumber[]) {
+          const elements: NoteChordOrRestElementType[] = [];
+          const barOf: number[] = [];
+          flattened.forEach((flatten, bar) => {
+            const voiceElements = flatten.voices.get(voice)?.flatElements ?? [];
+            elements.push(...voiceElements);
+            barOf.push(...voiceElements.map(() => bar));
+          });
+          const runs = resolvePhonemeRuns(
+            elements.map((element) => ({
+              phonemes:
+                element.nodeName === MUSIC_REST_NODE
+                  ? null
+                  : parsePhonemes(
+                      (element as NoteOrChordElementType).phonemes ?? null
+                    ),
+              rest: element.nodeName === MUSIC_REST_NODE,
+            }))
+          );
+          const endOf = ({
+            entry,
+            index,
+          }: {
+            entry: number;
+            index: number;
+          }): PhonemeEnd => ({
+            element: elements[entry] as NoteOrChordElementType,
+            index,
+            staff: track[barOf[entry]].staff as PhonemeStaff,
+            rowIndex: track[barOf[entry]].rowIndex,
+          });
+          for (const run of runs) {
+            const bars = new Set(run.items.map(({ entry }) => barOf[entry]));
+            const last = run.items[run.items.length - 1];
+            if (run.end === 'open') {
+              this.#warnPhonemeOnce(elements[last.entry]);
+            } else if (run.end === 'dangling') {
+              const breaker = elements.findIndex(
+                (element, i) =>
+                  i > last.entry && element.nodeName !== MUSIC_REST_NODE
+              );
+              if (breaker >= 0 && barOf[breaker] !== barOf[last.entry]) {
+                this.#warnPhonemeOnce(elements[last.entry]);
+              }
+            }
+            if (bars.size < 2) {
+              continue;
+            }
+            run.items.slice(1).forEach((item, k) => {
+              const before = run.items[k];
+              if (barOf[item.entry] !== barOf[before.entry]) {
+                links.push({ from: endOf(before), to: endOf(item) });
+              }
+            });
+            const byRow = new Map<number, PhonemeStaff[]>();
+            for (const bar of bars) {
+              const { staff, rowIndex } = track[bar];
+              byRow.set(rowIndex, [
+                ...(byRow.get(rowIndex) ?? []),
+                staff as PhonemeStaff,
+              ]);
+            }
+            for (const staves of byRow.values()) {
+              if (staves.length > 1) {
+                shared.push({ voice, staves });
+              }
+            }
+          }
+        }
+      }
+      return { links, shared };
+    }
+
+    #warnedPhonemes = new WeakSet<Element>();
+
+    #warnPhonemeOnce(element: Element): void {
+      if (!this.#warnedPhonemes.has(element)) {
+        this.#warnedPhonemes.add(element);
+        console.warn(
+          '[music-composition] a phoneme arrow leads to no phoneme on the next note; the bracket closes after it',
+          element
+        );
+      }
+    }
+
+    // Tells each staff where an arrow out of its bar aims (the next phoneme's
+    // head, or the end of the system), which of its runs began in an earlier
+    // bar, and the row a run shares over the bars of one system. Returns
+    // whether any staff changed.
+    #updatePhonemeContinuations(): boolean {
+      const { links, shared } = this.#crossBarPhonemes();
+      const wrapper = this.shadowRoot?.querySelector<HTMLElement>(
+        '.composition-wrapper'
+      );
+      const rootRect =
+        wrapper?.getBoundingClientRect() ?? this.getBoundingClientRect();
+      const byStaff = new Map<
+        Element,
+        {
+          nextAnchors: Map<Element, number>;
+          continued: Set<Element>;
+          rows: Map<unknown, number>;
+        }
+      >();
+      const forStaff = (staff: Element) => {
+        const entry = byStaff.get(staff) ?? {
+          nextAnchors: new Map<Element, number>(),
+          continued: new Set<Element>(),
+          rows: new Map<unknown, number>(),
+        };
+        byStaff.set(staff, entry);
+        return entry;
+      };
+      for (const { from, to } of links) {
+        forStaff(from.staff).nextAnchors.set(
+          from.element,
+          from.rowIndex === to.rowIndex
+            ? this.#headCenterX(to.element, rootRect) + rootRect.left
+            : this.#rowRightOf(from.staff)
+        );
+        forStaff(to.staff).continued.add(to.element);
+      }
+      for (const { voice, staves } of shared) {
+        const ys = staves.flatMap(
+          (staff) => staff.ownPhonemeRows?.().get(voice) ?? []
+        );
+        if (ys.length === 0) {
+          continue;
+        }
+        const y = Math.max(...ys);
+        for (const staff of staves) {
+          const rows = forStaff(staff).rows;
+          rows.set(voice, Math.max(rows.get(voice) ?? y, y));
+        }
+      }
+      let changed = false;
+      for (const staff of Array.from(
+        this.querySelectorAll<PhonemeStaff>(NOTATION_STAFF_TAGS)
+      )) {
+        if (staff.phonemeContinuations === undefined) {
+          continue;
+        }
+        const before = staff.phonemeContinuations;
+        staff.phonemeContinuations = byStaff.get(staff) ?? {
+          nextAnchors: new Map(),
+          continued: new Set(),
+          rows: new Map(),
+        };
+        changed ||= staff.phonemeContinuations !== before;
+      }
+      return changed;
+    }
+
+    // The right edge (client px) of the system a staff stands in: its
+    // track's last staff in that row.
+    #rowRightOf(staff: Element): number {
+      for (const track of this.#buildStaffTracks()) {
+        const slot = track.find((candidate) => candidate.staff === staff);
+        if (slot !== undefined) {
+          const row = track.filter(
+            (candidate) => candidate.rowIndex === slot.rowIndex
+          );
+          return row[row.length - 1].staff.getBoundingClientRect().right;
+        }
+      }
+      return staff.getBoundingClientRect().right;
+    }
+
+    // The arrows of phoneme runs over a barline, at their phonemes' height;
+    // over a system break, one to the end of the system without a head and a
+    // lead-in to the next phoneme.
+    #drawPhonemeArrows(overlay: SVGSVGElement, rootRect: DOMRect): void {
+      const tracks = this.#buildStaffTracks();
+      const rowStartOf = (staff: Element): number => {
+        for (const track of tracks) {
+          const slot = track.find((candidate) => candidate.staff === staff);
+          if (slot !== undefined) {
+            const first = track.find(
+              (candidate) => candidate.rowIndex === slot.rowIndex
+            );
+            return this.#computeNotesAreaLeftForStaff(
+              (first ?? slot).staff,
+              rootRect
+            );
+          }
+        }
+        return 0;
+      };
+      for (const { from, to } of this.#crossBarPhonemes().links) {
+        const fromBox = from.staff.phonemeBoxes?.(from.element)[from.index];
+        const toBox = to.staff.phonemeBoxes?.(to.element)[to.index];
+        if (fromBox === undefined || toBox === undefined) {
+          continue;
+        }
+        const draw = (
+          arrow: { fromX: number; toX: number; head: boolean } | null,
+          y: number
+        ) => {
+          if (arrow !== null) {
+            overlay.appendChild(
+              createPhonemeArrowSvg(
+                arrow.fromX - rootRect.left,
+                arrow.toX - rootRect.left,
+                y - rootRect.top,
+                arrow.head
+              )
+            );
+          }
+        };
+        if (from.rowIndex === to.rowIndex) {
+          draw(phonemeArrow(fromBox.right, toBox.left), fromBox.arrowY);
+          continue;
+        }
+        const out = phonemeArrow(
+          fromBox.right,
+          this.#rowRightOf(from.staff) + PHONEME_ARROW_GAP_PX
+        );
+        draw(out && { ...out, head: false }, fromBox.arrowY);
+        // From the start of the system, and long enough for its head.
+        const rowStart = rowStartOf(to.staff) + rootRect.left;
+        draw(
+          phonemeArrow(
+            Math.min(
+              rowStart,
+              toBox.left -
+                2 * PHONEME_ARROW_GAP_PX -
+                PHONEME_ARROW_HEAD_LENGTH_PX -
+                CONTINUED_CONNECTOR_LEAD_PX
+            ) - PHONEME_ARROW_GAP_PX,
+            toBox.left
+          ),
+          toBox.arrowY
+        );
+      }
+    }
+
+    #warnedSwells = new WeakSet<Element>();
+
+    #warnSwellOnce(element: Element, message: string): void {
+      if (!this.#warnedSwells.has(element)) {
+        this.#warnedSwells.add(element);
+        console.warn(message, element);
+      }
+    }
+
+    // Tells each staff which of its swells an earlier bar's covers, and the
+    // `dynamic-end` to draw where a swell over a barline ends. Returns whether
+    // any staff changed.
+    #updateSwellContinuations({
+      swells,
+      covered,
+    }: {
+      swells: readonly CrossBarSwell[];
+      covered: readonly NoteOrChordElementType[];
+    }): boolean {
+      const byStaff = new Map<
+        Element,
+        { covered: Set<Element>; dynamicEnds: Map<Element, DynamicMarking> }
+      >();
+      const forStaff = (staff: Element) => {
+        const entry = byStaff.get(staff) ?? {
+          covered: new Set<Element>(),
+          dynamicEnds: new Map<Element, DynamicMarking>(),
+        };
+        byStaff.set(staff, entry);
+        return entry;
+      };
+      for (const element of covered) {
+        const staff = element.closest(NOTATION_STAFF_TAGS);
+        if (staff !== null) {
+          forStaff(staff).covered.add(element);
+        }
+        this.#warnSwellOnce(
+          element,
+          '[music-composition] swell is not drawn: an earlier swell on its tie chain covers it'
+        );
+      }
+      for (const { owner, entries } of swells) {
+        const marking = owner.dynamicEnd ?? null;
+        const last = entries[entries.length - 1];
+        if (marking !== null) {
+          forStaff(last.staff).dynamicEnds.set(last.element, marking);
+        }
+      }
+      let changed = false;
+      for (const staff of Array.from(
+        this.querySelectorAll<SwellStaff>(NOTATION_STAFF_TAGS)
+      )) {
+        if (staff.swellContinuations === undefined) {
+          continue;
+        }
+        const before = staff.swellContinuations;
+        staff.swellContinuations = byStaff.get(staff) ?? {
+          covered: new Set(),
+          dynamicEnds: new Map(),
+        };
+        changed ||= staff.swellContinuations !== before;
+      }
+      return changed;
+    }
+
+    // Each swell over a barline, one row of wedges per system it crosses: on
+    // its start's dynamics row, or in the gap for a shared one, with the gap
+    // between its wedges over the chain's middle beat.
+    #drawCrossBarSwells(
+      swells: readonly CrossBarSwell[],
+      overlay: SVGSVGElement,
+      rootRect: DOMRect,
+      obstaclesOf: () => EntryObstacles
+    ): void {
+      const tracks = this.#buildStaffTracks();
+      for (const swell of swells) {
+        const { owner, entries } = swell;
+        const shape = owner.swell;
+        const geometries = entries.map(({ element, staff }) =>
+          staff.swellEntryGeometry?.(element)
+        );
+        if (
+          shape === null ||
+          geometries.some(
+            (geometry) => geometry === null || geometry === undefined
+          )
+        ) {
+          continue;
+        }
+        const at = (index: number) =>
+          geometries[index] as NonNullable<(typeof geometries)[number]>;
+        const ownerStaff = entries[0].staff as DynamicsRowStaff;
+        const side = ownerStaff.dynamicsSideOf?.(owner) ?? 'below';
+        const track = tracks[swell.track];
+        const rowIndices = [...new Set(entries.map((entry) => entry.rowIndex))];
+        const rowStaves = (rowIndex: number) =>
+          track.filter((slot) => slot.rowIndex === rowIndex);
+        const rows: SwellRow[] = rowIndices.map((rowIndex, row) => {
+          const staves = rowStaves(rowIndex);
+          const firstEntry = entries.find(
+            (entry) => entry.rowIndex === rowIndex
+          );
+          const lastEntryIndex =
+            entries.length -
+            1 -
+            [...entries]
+              .reverse()
+              .findIndex((entry) => entry.rowIndex === rowIndex);
+          return {
+            startX:
+              row === 0
+                ? at(0).startX - rootRect.left
+                : this.#computeNotesAreaLeftForStaff(staves[0].staff, rootRect),
+            endX:
+              row === rowIndices.length - 1
+                ? at(lastEntryIndex).endX - rootRect.left
+                : staves[staves.length - 1].staff.getBoundingClientRect()
+                    .right - rootRect.left,
+            centerY:
+              this.#hairpinRowY(
+                (firstEntry?.staff ?? null) as DynamicsRowStaff | null,
+                side,
+                rootRect
+              ) - HAIRPIN_AXIS_RISE_PX,
+          };
+        });
+        let beat = 0;
+        const pieces: SwellPiece[] = entries.map((entry, index) => {
+          const row = rowIndices.indexOf(entry.rowIndex);
+          const next = entries[index + 1];
+          const startBeat = beat;
+          beat += at(index).beats;
+          return {
+            row,
+            startBeat,
+            endBeat: beat,
+            startX: at(index).x - rootRect.left,
+            endX:
+              next === undefined
+                ? at(index).endX - rootRect.left
+                : next.rowIndex === entry.rowIndex
+                ? at(index + 1).x - rootRect.left
+                : rows[row].endX,
+          };
+        });
+        const mid = swellMidpoint(pieces);
+        const segments = resolveSwellSegments({
+          shape,
+          rows,
+          mid,
+          minGap: swellGapForPhonemes(
+            mid.x + rootRect.left,
+            entries
+              .filter((entry) => entry.rowIndex === rowIndices[mid.row])
+              .flatMap(
+                ({ element, staff }) =>
+                  (staff as PhonemeStaff).phonemeBoxes?.(element) ?? []
+              )
+          ),
+        });
+        if (segments === null) {
+          this.#warnSwellOnce(
+            owner,
+            '[music-composition] swell is not drawn: its dynamics leave no room for it'
+          );
+          continue;
+        }
+        const group = createSwellSvg(
+          owner.dynamicShared
+            ? segments.map((segment) => {
+                const row = rows.findIndex(
+                  (candidate) => candidate.centerY === segment.centerY
+                );
+                const staff =
+                  entries.find(
+                    (entry) => entry.rowIndex === rowIndices[Math.max(row, 0)]
+                  )?.staff ?? null;
+                return {
+                  ...segment,
+                  centerY:
+                    this.#sharedSegmentY(
+                      segment,
+                      staff,
+                      rootRect,
+                      null,
+                      null,
+                      obstaclesOf
+                    ) ?? segment.centerY,
+                };
+              })
+            : segments
+        );
+        overlay.appendChild(group);
+      }
+    }
+
+    // A shared (both-hands) hairpin segment's centre line in the gap below
+    // `staff`, clear of the beams and entries there. Null with no gap.
+    #sharedSegmentY(
+      segment: HairpinSegment,
+      staff: HTMLElement | null,
+      rootRect: DOMRect,
+      startText: HairpinEndpointText | null,
+      endText: HairpinEndpointText | null,
+      obstaclesOf: () => EntryObstacles
+    ): number | null {
+      const gap = this.#sharedHairpinGap(staff, rootRect);
+      if (gap === null) {
+        return null;
+      }
+      const entryObstacles = obstaclesOf();
+      return resolveSharedHairpinY({
+        kind: segment.kind,
+        startX: segment.startX,
+        endX: segment.endX,
+        openHeight: HAIRPIN_OPEN_HEIGHT,
+        topGapEdgeY: gap.topGapEdgeY,
+        bottomGapEdgeY: gap.bottomGapEdgeY,
+        beamSlices: entryObstacles.beamSlices,
+        obstacles: [
+          ...entryObstacles.entries.flatMap((entry) => entry.glyphRects),
+          ...entryObstacles.decorationRects,
+        ],
+        startText,
+        endText,
+      });
     }
 
     #headCenterX(element: NoteOrChordElementType, rootRect: DOMRect): number {
@@ -1196,6 +2180,69 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         tracks.push(track);
       }
       return tracks;
+    }
+
+    // Flutter-tongue passages run on across barlines, one track per voice:
+    // each staff learns which of its voices enter with a passage open, and a
+    // flutter-tongued note tied into an ordinary one without `ord.` warns.
+    #updateFlutterPassages() {
+      for (const track of this.#buildStaffTracks()) {
+        const staves = track.map(({ staff }) => staff as FlutterCarryInTarget);
+        if (!staves.some((staff) => 'flutterCarryIn' in staff)) {
+          continue;
+        }
+        const flattened = staves.map((staff) =>
+          flattenStaffSlotElements(Array.from(staff.children))
+        );
+        const carryIn = staves.map(() => new Set<VoiceNumber>());
+        for (const voiceNumber of [1, 2, 3] as VoiceNumber[]) {
+          const elements: NoteChordOrRestElementType[] = [];
+          const measureIndexOf: number[] = [];
+          const openAtStart: boolean[] = [];
+          let open = false;
+          flattened.forEach((flatten, measureIndex) => {
+            const voiceElements =
+              flatten.voices.get(voiceNumber)?.flatElements ?? [];
+            openAtStart.push(open);
+            open = resolveFlutterPassages(
+              voiceElements.map(flutterEntryOf),
+              open
+            ).openAtEnd;
+            elements.push(...voiceElements);
+            measureIndexOf.push(...voiceElements.map(() => measureIndex));
+          });
+          openAtStart.forEach((isOpen, measureIndex) => {
+            if (isOpen) {
+              carryIn[measureIndex].add(voiceNumber);
+            }
+          });
+          const { missingCancels } = resolveFlutterPassages(
+            elements.map(flutterEntryOf),
+            false
+          );
+          for (const i of missingCancels) {
+            const element = elements[i];
+            if (this.#warnedFlutterCancels.has(element)) {
+              continue;
+            }
+            this.#warnedFlutterCancels.add(element);
+            const staff = staves[measureIndexOf[i]];
+            const number =
+              staff.closest(MUSIC_MEASURE)?.getAttribute('number') ??
+              `${measureIndexOf[i] + 1}`;
+            console.warn(
+              `[music-composition] ${missingFlutterCancelWarning(
+                `measure ${number}`
+              )}`
+            );
+          }
+        }
+        staves.forEach((staff, measureIndex) => {
+          if ('flutterCarryIn' in staff) {
+            staff.flutterCarryIn = carryIn[measureIndex];
+          }
+        });
+      }
     }
 
     // Continues a trill line whose tie chain runs past its measure: the
@@ -1300,12 +2347,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
               startX: lineStartX,
               endX: lineEndX,
               bottomY: y,
+              double: span.double,
             });
             if (line) {
               overlay.appendChild(line);
             }
             if (segment.stopAtLocalIndex !== null) {
-              overlay.appendChild(createTrillNotchSvg(lineEndX, y));
+              overlay.appendChild(
+                createTrillNotchSvg(lineEndX, y, span.double)
+              );
             }
           }
         }
@@ -1954,6 +3004,11 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       }
       for (const [staff, mode] of starts) {
         staff.startRepeat = mode;
+      }
+      for (const measure of measures) {
+        (
+          measure as HTMLElement & { refreshGroupBarlines?: () => void }
+        ).refreshGroupBarlines?.();
       }
     }
 

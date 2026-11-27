@@ -3,6 +3,7 @@ import { html } from 'lit';
 import '../index';
 import {
   ARTICULATIONS,
+  BREATH_MARKS,
   DURATIONS,
   NOTEHEADS,
   STRESSES,
@@ -122,6 +123,26 @@ export const WithTremolo: Story = {
       <music-note
         duration=${args.duration}
         tremolo=${args.tremolo}
+      ></music-note>
+    </div>
+  `,
+};
+
+/** A breath mark just after a note used without a staff. */
+export const WithBreathMark: Story = {
+  args: {
+    duration: 'quarter',
+    breathMark: 'tick',
+  },
+  argTypes: {
+    duration: { control: 'select', options: DURATIONS },
+    breathMark: { control: 'radio', options: BREATH_MARKS },
+  },
+  render: (args) => html`
+    <div style="padding: 40px">
+      <music-note
+        duration=${args.duration}
+        breath-mark=${args.breathMark}
       ></music-note>
     </div>
   `,

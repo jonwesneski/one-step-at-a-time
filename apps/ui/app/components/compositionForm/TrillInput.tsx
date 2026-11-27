@@ -1,6 +1,6 @@
 import { Button, Checkbox, Select } from '@/design-system';
 import type {
-  AccidentalType,
+  ConventionalAccidentalType,
   Note,
   Octave,
   TrillContinuationMode,
@@ -96,7 +96,7 @@ export function TrillInput({ entry }: { entry: NoteEntry | ChordEntry }) {
       </label>
 
       {!trill.note && (
-        <OptionalSelect<AccidentalType>
+        <OptionalSelect<ConventionalAccidentalType>
           label="Trilling note's accidental"
           options={ACCIDENTAL_TYPES}
           value={trill.accidental}

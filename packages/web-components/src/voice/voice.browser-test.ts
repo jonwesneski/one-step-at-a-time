@@ -545,7 +545,7 @@ test.describe('multi-voice staff', () => {
 
     // Neither the trill sign nor the line overlaps voice 1's notehead/stem;
     // they're checked separately since two code paths draw them
-    // (#trillLineLiftClearingOtherVoices).
+    // (#trillLineLift).
     for (const noteRect of result.voice1NoteRects) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- checked above
       expect(rectsOverlap(result.signRect!, noteRect)).toBe(false);
@@ -1053,5 +1053,118 @@ test.describe('multi-voice staff', () => {
         )
       ).toBe(0);
     });
+  });
+});
+
+test.describe('a tie on a staff of two voices', () => {
+  test('moves to its voice’s side when a second voice is there, and back', async ({
+    page,
+  }) => {
+    const half = (pitch: string, attrs = '') =>
+      `<music-note note="${pitch}" octave="4" duration="half" ${attrs}></music-note>`;
+    await render(
+      page,
+      `<music-staff clef="treble" time="4/4">
+        <music-voice>${half('G', 'tie="start"')}${half(
+        'G',
+        'tie="end"'
+      )}</music-voice>
+        <music-voice id="lower">${half('D')}${half('C')}</music-voice>
+      </music-staff>`
+    );
+    // Whether the tie's middle is above its ends.
+    const curvesUp = () =>
+      page.evaluate(() => {
+        const path = document
+          .querySelector('music-staff')
+          ?.shadowRoot?.querySelector<SVGPathElement>('.connector path');
+        if (!path) {
+          throw new Error('no tie');
+        }
+        const at = (t: number) =>
+          path.getPointAtLength(path.getTotalLength() * t).y;
+        return at(0.5) < at(0);
+      });
+    expect(await curvesUp()).toBe(true);
+
+    await page.evaluate(() => document.getElementById('lower')?.remove());
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    // Alone, G4's stem points up and the tie goes below.
+    expect(await curvesUp()).toBe(false);
+
+    await page.evaluate((lower) => {
+      document
+        .querySelector('music-staff')
+        ?.insertAdjacentHTML('beforeend', lower);
+    }, `<music-voice>${half('D')}${half('C')}</music-voice>`);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    expect(await curvesUp()).toBe(true);
+  });
+});
+
+test.describe('cue-sized voice', () => {
+  test("toggling a voice's size re-lays its notes, and back", async ({
+    page,
+  }) => {
+    await render(
+      page,
+      `<music-staff clef="treble" time="2/4">
+        <music-voice>
+          <music-note note="C" octave="5" duration="eighth"></music-note>
+          <music-note note="D" octave="5" duration="eighth"></music-note>
+          <music-note note="E" octave="5" duration="quarter"></music-note>
+        </music-voice>
+        <music-voice>
+          <music-note note="E" octave="4" duration="half"></music-note>
+        </music-voice>
+      </music-staff>`
+    );
+    const measure = () =>
+      page.evaluate(() => {
+        const notes = Array.from(
+          document.querySelectorAll('music-voice:first-child music-note')
+        );
+        const staff = document.querySelector('music-staff');
+        const beam = staff?.shadowRoot
+          ?.querySelector('.beam')
+          ?.getBoundingClientRect();
+        return {
+          heads: notes.map(
+            (note) =>
+              note.shadowRoot?.querySelector('.head')?.getBoundingClientRect()
+                .height ?? 0
+          ),
+          stem:
+            notes[2].shadowRoot?.querySelector('.stem')?.getBoundingClientRect()
+              .height ?? 0,
+          beam: beam?.height ?? 0,
+        };
+      });
+    const setSize = async (size: string | null) => {
+      await page.evaluate((value) => {
+        const voice = document.querySelector('music-voice');
+        if (value === null) {
+          voice?.removeAttribute('size');
+        } else {
+          voice?.setAttribute('size', value);
+        }
+      }, size);
+      await waitForRedrawCycle(page);
+    };
+
+    const full = await measure();
+    await setSize('cue');
+    const cue = await measure();
+    cue.heads.forEach((height, i) =>
+      expect(height).toBeLessThan(full.heads[i])
+    );
+    expect(cue.stem).toBeLessThan(full.stem);
+    expect(cue.beam).toBeGreaterThan(0);
+    expect(cue.beam).toBeLessThan(full.beam);
+
+    await setSize(null);
+    expect(await measure()).toEqual(full);
   });
 });

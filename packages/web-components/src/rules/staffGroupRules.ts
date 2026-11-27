@@ -8,7 +8,8 @@ export type StaffGroupEntry = {
 export type StaffGroupSpan = {
   // Index of the first staff in the span within the measure's staff children.
   index: number;
-  // Number of consecutive staves the connector joins (>= 2).
+  // Number of consecutive staves the connector joins: one for a bracket around
+  // one instrument, otherwise at least two.
   count: number;
   group: StaffGroupType;
 };
@@ -18,6 +19,22 @@ export type StaffGroupResolution = {
   warnings: string[];
 };
 
+/**
+ * The gaps, as upper and lower staff index, that barlines run through: between
+ * the staves of a group, but not between two vocal staves, where lyrics stand.
+ */
+export function connectedBarlineGaps(
+  groups: readonly StaffGroupSpan[],
+  isVocal: readonly boolean[]
+): [number, number][] {
+  return groups.flatMap(({ index, count }) =>
+    Array.from({ length: count - 1 }, (_, i): [number, number] => [
+      index + i,
+      index + i + 1,
+    ]).filter(([upper, lower]) => !(isVocal[upper] && isVocal[lower]))
+  );
+}
+
 // Resolves which staves should be joined by a brace/bracket connector.
 //
 // group="grand" always pairs positionally with the immediate next sibling
@@ -25,9 +42,11 @@ export type StaffGroupResolution = {
 // next sibling, or if that sibling also declares its own group (ambiguous;
 // the sibling's own turn is still evaluated separately so one bad pairing
 // doesn't cascade). group="bracket" either shares a groupId across a
-// contiguous run (a run of 1 is a warning; the same groupId reappearing in a
-// second non-contiguous run is a warning for that second run), or with no
-// groupId falls back to the same positional pairing as group="grand".
+// contiguous run (the same groupId reappearing in a second non-contiguous run
+// is a warning for that second run), or with no groupId pairs positionally
+// like group="grand". A bracket that joins no other staff (a run of one, no
+// next sibling, or a next sibling with its own group) encloses its staff
+// alone; a brace always joins two staves of one instrument.
 export function resolveStaffGroups(
   entries: StaffGroupEntry[]
 ): StaffGroupResolution {
@@ -59,10 +78,6 @@ export function resolveStaffGroups(
         warnings.push(
           `staff with group="bracket" group-id="${groupId}" reappears in a separate, non-contiguous run; skipping connector`
         );
-      } else if (count < 2) {
-        warnings.push(
-          `staff with group="bracket" group-id="${groupId}" matched only one staff; a bracket needs at least 2, skipping connector`
-        );
       } else {
         groups.push({ index: i, count, group: 'bracket' });
       }
@@ -74,6 +89,15 @@ export function resolveStaffGroups(
 
     // Positional pairing: `group="grand"`, or `group="bracket"` with no
     // `groupId`.
+    if (
+      group === 'bracket' &&
+      (i + 1 >= entries.length || entries[i + 1].group)
+    ) {
+      groups.push({ index: i, count: 1, group });
+      i++;
+      continue;
+    }
+
     if (i + 1 >= entries.length) {
       warnings.push(
         `staff with group="${group}" has no next sibling to pair with; skipping connector`

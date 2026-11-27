@@ -1,13 +1,18 @@
 import type {
   AccidentalType,
   BaseDurationType,
+  ConventionalAccidentalType,
   VoiceNumber,
 } from '../types/theory';
 import {
-  ACCIDENTAL_SYMBOL_WIDTH,
   AUGMENTATION_DOT_SPACING_GAP_PX,
   UNISON_STEM_CLEARANCE_PX,
 } from '../utils/notationDimensions';
+import {
+  accidentalReach,
+  baseAccidental,
+  quarterToneOf,
+} from './accidentalRules';
 import type { NoteheadGlyph } from './noteheadRules';
 import { isOpenDuration, isStemlessDuration } from './theoryConsts';
 import type { VoiceDirection, VoicePartGeometry } from './voiceRules';
@@ -36,12 +41,16 @@ export type UnisonPartDescriptor = {
   shownAccidental: AccidentalType | null;
   // The glyph drawn for the head; null for the plain oval.
   notehead?: NoteheadGlyph | null;
+  // An unpitched note or tone never shares a head.
+  unpitched?: boolean;
   isChord: boolean;
   // A chord part: one entry per tone, so the tone at the unison is found by
   // staff Y (the fields above are then unused).
   tones?: readonly UnisonTone[];
   // A chord's whole accidental column; replaces the width of one accidental.
   accidentalReachPx?: number;
+  // A cue part's size; a cue and a full-size part never share a head.
+  scale?: number;
 };
 
 export type UnisonPartInput = UnisonPartDescriptor & {
@@ -59,7 +68,9 @@ export type UnisonPartInput = UnisonPartDescriptor & {
 
 const accidentalReachOf = (part: UnisonPartInput): number =>
   part.accidentalReachPx ??
-  (part.shownAccidental ? ACCIDENTAL_SYMBOL_WIDTH[part.shownAccidental] : 0);
+  (part.shownAccidental
+    ? (part.scale ?? 1) * accidentalReach(part.shownAccidental)
+    : 0);
 
 const hasAccidentalShown = (part: UnisonPartInput): boolean =>
   accidentalReachOf(part) > 0;
@@ -93,7 +104,13 @@ export function canShareNotehead(
   a: UnisonPartInput,
   b: UnisonPartInput
 ): boolean {
-  if ((a.isChord && b.isChord) || a.direction === b.direction) {
+  if (
+    (a.isChord && b.isChord) ||
+    a.direction === b.direction ||
+    a.unpitched ||
+    b.unpitched ||
+    (a.scale ?? 1) !== (b.scale ?? 1)
+  ) {
     return false;
   }
   const headClass = headClassOf(a.duration);
@@ -185,7 +202,7 @@ export function resolveUnisonPair(
 }
 
 // Ascending chromatic order, flat to sharp; no accidental ranks as natural.
-const ACCIDENTAL_RANK: Record<AccidentalType, number> = {
+const ACCIDENTAL_RANK: Record<ConventionalAccidentalType, number> = {
   'double-flat': -2,
   flat: -1,
   natural: 0,
@@ -193,8 +210,14 @@ const ACCIDENTAL_RANK: Record<AccidentalType, number> = {
   'double-sharp': 2,
 };
 
+/** In semitones, a quarter-tone counting half. */
 export function accidentalChromaticRank(type: AccidentalType | null): number {
-  return type === null ? 0 : ACCIDENTAL_RANK[type];
+  if (type === null) {
+    return 0;
+  }
+  const quarterTone = quarterToneOf(type);
+  const arrow = quarterTone === null ? 0 : quarterTone === 'up' ? 0.5 : -0.5;
+  return ACCIDENTAL_RANK[baseAccidental(type)] + arrow;
 }
 
 export type UnisonPartRef = { voiceNumber: VoiceNumber; localIndex: number };

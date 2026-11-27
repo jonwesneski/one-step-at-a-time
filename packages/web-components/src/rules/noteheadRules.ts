@@ -1,12 +1,23 @@
-import type { DurationType, NoteheadType } from '../types/theory';
+import type {
+  DurationType,
+  NoteheadType,
+  UnpitchedPlacement,
+} from '../types/theory';
+import {
+  STAFF_BOTTOM_LINE_Y,
+  STAFF_TOP_LINE_Y,
+  STAFF_Y_STEP,
+} from '../utils/notationDimensions';
 import {
   durationToBase,
   isOpenDuration,
   isStemlessDuration,
 } from './theoryConsts';
 
-// Drawn outline for a non-`normal` notehead; `normal` keeps the ellipse.
+// Drawn outline of a head; a `normal` one keeps the ellipse, except a
+// semibreve or longer.
 export type NoteheadGlyph =
+  | 'whole'
   | 'x'
   | 'circle-x'
   | 'diamond-black'
@@ -23,11 +34,15 @@ export function resolveNoteheadGlyph(
 ): NoteheadGlyph | null {
   switch (notehead) {
     case 'normal':
-      return null;
+      return isStemlessDuration(duration) ? 'whole' : null;
     case 'x':
       // A cross inside an open oval would obscure the white space, so half
       // and longer durations circle the cross instead.
       return isOpenDuration(duration) ? 'circle-x' : 'x';
+    case 'x-plain':
+      return 'x';
+    case 'none':
+      return null;
     case 'diamond':
       if (isStemlessDuration(duration)) {
         return 'diamond-white-wide';
@@ -64,9 +79,24 @@ export function forcedStemUp(notehead: NoteheadType | null): boolean | null {
   return null;
 }
 
-// A triangle has no defined pitch: no ledger lines, no accidental.
-export const suppressesLedgerLines = isTriangle;
-export const suppressesAccidental = isTriangle;
+export const isHeadless = (notehead: NoteheadType | null): boolean =>
+  notehead === 'none';
+
+// A triangle has no defined pitch and a headless stem no head to mark: no
+// ledger lines, no accidental.
+export const suppressesLedgerLines = (notehead: NoteheadType | null): boolean =>
+  isTriangle(notehead) || isHeadless(notehead);
+export const suppressesAccidental = suppressesLedgerLines;
+
+/** A semibreve or longer has no stem, so without a head nothing is drawn. */
+export function headlessDurationWarning(
+  notehead: NoteheadType,
+  duration: DurationType
+): string | null {
+  return isHeadless(notehead) && isStemlessDuration(duration)
+    ? `notehead="none" with duration="${duration}" draws nothing: a headless note needs a stem.`
+    : null;
+}
 
 export function triangleDurationWarning(
   notehead: NoteheadType,
@@ -84,6 +114,18 @@ export function triangleDurationWarning(
 // every render.
 const withoutTriangle = (notehead: NoteheadType | null): NoteheadType | null =>
   isTriangle(notehead) ? 'normal' : notehead;
+
+// A grace note without a head means nothing either.
+const graceNoteheadOf = (notehead: NoteheadType | null): NoteheadType | null =>
+  isHeadless(notehead) ? 'normal' : withoutTriangle(notehead);
+
+export function graceNoteheadWarning(
+  noteheads: readonly (NoteheadType | null)[]
+): string | null {
+  return noteheads.some(isHeadless)
+    ? 'grace-notehead="none" is not supported: a grace note needs its head; drawing a normal notehead.'
+    : triangleUnsupportedWarning(noteheads, 'a grace note');
+}
 
 export function triangleUnsupportedWarning(
   noteheads: readonly (NoteheadType | null)[],
@@ -109,7 +151,7 @@ export function resolveGraceNoteheads(
 ): NoteheadType[] {
   return Array.from(
     { length: graceCount },
-    (_, i) => withoutTriangle(graceNoteheads[i] ?? null) ?? 'normal'
+    (_, i) => graceNoteheadOf(graceNoteheads[i] ?? null) ?? 'normal'
   );
 }
 
@@ -220,4 +262,48 @@ export function resolveStemTipY({
     : stemExtensionPx + (lowestHeadY - highestHeadY) + flagExtensionPx;
   const length = baseStemLengthPx + extension;
   return stemUp ? lowestHeadY - length : highestHeadY + length;
+}
+
+/**
+ * Where an unpitched sound sits: in the space just above the top line or below
+ * the bottom one, or at its written position.
+ */
+export function resolveUnpitchedStaffY(
+  placement: UnpitchedPlacement,
+  writtenStaffY: number
+): number {
+  switch (placement) {
+    case 'top':
+      return STAFF_TOP_LINE_Y - STAFF_Y_STEP;
+    case 'bottom':
+      return STAFF_BOTTOM_LINE_Y + STAFF_Y_STEP;
+    case 'written':
+      return writtenStaffY;
+  }
+}
+
+/** Warnings for an `unpitched` note, one per attribute that doesn't apply. */
+export function unpitchedWarnings(input: {
+  value: string | null;
+  placement: UnpitchedPlacement | null;
+  notehead: NoteheadType | null;
+  ignored: readonly string[];
+}): string[] {
+  const { value, placement, notehead, ignored } = input;
+  if (value === null) {
+    return [];
+  }
+  if (placement === null) {
+    return [
+      `unpitched="${value}" isn't top, bottom or written; drawing the note at its pitch`,
+    ];
+  }
+  if (isTriangle(notehead)) {
+    return [
+      `unpitched is ignored on notehead="${notehead}", which places itself`,
+    ];
+  }
+  return ignored.map(
+    (name) => `${name} is ignored on an unpitched note, which has no pitch`
+  );
 }

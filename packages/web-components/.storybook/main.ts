@@ -1,6 +1,6 @@
-import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
 import type { StorybookConfig } from '@storybook/web-components-vite';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import { mergeConfig } from 'vite';

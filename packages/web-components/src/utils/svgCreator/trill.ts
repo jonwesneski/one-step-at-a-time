@@ -1,11 +1,16 @@
+import {
+  accidentalArrowOverhangs,
+  accidentalSymbolHeight,
+  accidentalSymbolWidth,
+} from '../../rules/accidentalRules';
 import type { AccidentalType } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
-  ACCIDENTAL_SYMBOL_HEIGHT,
-  ACCIDENTAL_SYMBOL_WIDTH,
+  CUE_SCALE,
   STAFF_LINE_SPACING,
   TRILL_ACCIDENTAL_GAP_PX,
   TRILL_ACCIDENTAL_SCALE,
+  TRILL_DOUBLE_WAVE_HEIGHT_PX,
   TRILL_NOTCH_HEIGHT_PX,
   TRILL_PARENTHESIS_BOW_PX,
   TRILL_PARENTHESIS_NOTE_GAP_PX,
@@ -14,15 +19,15 @@ import {
   TRILL_SIGN_HEIGHT_PX,
   TRILL_WAVE_HEIGHT_PX,
   TRILL_WRITTEN_NOTE_GAP_PX,
-  TRILL_WRITTEN_NOTE_SCALE,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
+import { NOTE_HEAD_RADIUS_PX } from './note';
 import {
-  createNoteSvg,
-  NOTE_HEAD_RADIUS_PX,
-  NOTE_SCALE,
-  noteHeadCenter,
-} from './note';
+  createWrittenNoteSvg,
+  writtenNoteWidthPx,
+  type WrittenNoteProps,
+  type WrittenNoteStyle,
+} from './writtenNote';
 
 // ─── Trill sign ─────────────────────────────────────────────────────────────
 //
@@ -65,13 +70,18 @@ function appendTrillAccidental(
   signTopY: number,
   signWidth: number
 ): void {
-  const width = ACCIDENTAL_SYMBOL_WIDTH[accidental] * TRILL_ACCIDENTAL_SCALE;
-  const height = ACCIDENTAL_SYMBOL_HEIGHT[accidental] * TRILL_ACCIDENTAL_SCALE;
+  const width = accidentalSymbolWidth(accidental) * TRILL_ACCIDENTAL_SCALE;
+  const height = accidentalSymbolHeight(accidental) * TRILL_ACCIDENTAL_SCALE;
+  const arrowBelow =
+    accidentalArrowOverhangs(accidental).below * TRILL_ACCIDENTAL_SCALE;
   const symbol = createAccidentalSvg(accidental);
   symbol.setAttribute('width', `${width}`);
   symbol.setAttribute('height', `${height}`);
   symbol.setAttribute('x', `${leftX + signWidth / 2 - width / 2}`);
-  symbol.setAttribute('y', `${signTopY - TRILL_ACCIDENTAL_GAP_PX - height}`);
+  symbol.setAttribute(
+    'y',
+    `${signTopY - TRILL_ACCIDENTAL_GAP_PX - arrowBelow - height}`
+  );
   symbol.classList.add('trill-accidental');
   group.appendChild(symbol);
 }
@@ -125,15 +135,17 @@ const NOMINAL_TRILL_PITCH_PX = WIGGLE_TRILL_ADVANCE * STAFF_LINE_SPACING;
 const appendTrillTile = (
   parent: SVGGElement,
   translateX: number,
-  pitchPx: number
+  translateY: number,
+  pitchPx: number,
+  waveHeightPx: number
 ): void => {
   const path = document.createElementNS(SVG_NS, 'path');
   path.setAttribute('d', WIGGLE_TRILL_PATH_D);
   path.setAttribute(
     'transform',
-    `translate(${translateX} 0) scale(${pitchPx / WIGGLE_TRILL_ADVANCE} ${
-      TRILL_WAVE_HEIGHT_PX / WIGGLE_TRILL_NATURAL_HEIGHT
-    })`
+    `translate(${translateX} ${translateY}) scale(${
+      pitchPx / WIGGLE_TRILL_ADVANCE
+    } ${waveHeightPx / WIGGLE_TRILL_NATURAL_HEIGHT})`
   );
   path.setAttribute('fill', 'currentColor');
   path.classList.add('trill-wave-tile');
@@ -147,6 +159,8 @@ export type TrillLineProps = {
   endX: number;
   /** Local-space Y at which the line's bottom edge sits — matches the sign's `bottomY`. */
   bottomY: number;
+  /** `trill-line="double"`: two thinner lines spanning the sign's height. */
+  double?: boolean;
 };
 
 /**
@@ -159,23 +173,35 @@ export function createTrillLineSvg({
   startX,
   endX,
   bottomY,
+  double = false,
 }: TrillLineProps): SVGGElement | null {
   const spanWidth = endX - startX;
   if (spanWidth <= 0) {
     return null;
   }
 
+  const waveHeight = double
+    ? TRILL_DOUBLE_WAVE_HEIGHT_PX
+    : TRILL_WAVE_HEIGHT_PX;
+  // The lower line stands on `bottomY`; a double's upper one is level with
+  // the sign's top.
+  const rowTops = double ? [0, waveHeight - TRILL_SIGN_HEIGHT_PX] : [0];
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('trill-line');
+  if (double) {
+    group.classList.add('trill-line-double');
+  }
   group.setAttribute(
     'transform',
-    `translate(${startX} ${bottomY - TRILL_WAVE_HEIGHT_PX})`
+    `translate(${startX} ${bottomY - waveHeight})`
   );
 
   const tileCount = Math.max(1, Math.round(spanWidth / NOMINAL_TRILL_PITCH_PX));
   const pitchPx = spanWidth / tileCount;
-  for (let i = 0; i < tileCount; i++) {
-    appendTrillTile(group, i * pitchPx, pitchPx);
+  for (const rowTop of rowTops) {
+    for (let i = 0; i < tileCount; i++) {
+      appendTrillTile(group, i * pitchPx, rowTop, pitchPx, waveHeight);
+    }
   }
 
   return group;
@@ -209,13 +235,13 @@ export function createTrillContinuationSignSvg({
   const halfHeight = TRILL_SIGN_HEIGHT_PX / 2 + TRILL_PARENTHESIS_OVERSHOOT_PX;
 
   let x = leftX;
-  appendParenthesis(wrapper, x, centerY, halfHeight, 'left');
+  wrapper.appendChild(createTrillParenthesis('left', x, centerY, halfHeight));
   x += TRILL_PARENTHESIS_STROKE_WIDTH + TRILL_PARENTHESIS_NOTE_GAP_PX;
 
   wrapper.appendChild(createTrillSignSvg({ leftX: x, bottomY }));
   x += TRILL_SIGN_WIDTH_PX + TRILL_PARENTHESIS_NOTE_GAP_PX;
 
-  appendParenthesis(wrapper, x, centerY, halfHeight, 'right');
+  wrapper.appendChild(createTrillParenthesis('right', x, centerY, halfHeight));
   x += TRILL_PARENTHESIS_STROKE_WIDTH;
 
   return { element: wrapper, width: x - leftX };
@@ -224,14 +250,18 @@ export function createTrillContinuationSignSvg({
 /** Vertical end-notch marking an explicit `trill-stop` — drawn at the line's cut-off X. */
 export function createTrillNotchSvg(
   x: number,
-  bottomY: number
+  bottomY: number,
+  double = false
 ): SVGLineElement {
   const notch = document.createElementNS(SVG_NS, 'line');
   notch.classList.add('trill-notch');
   notch.setAttribute('x1', `${x}`);
   notch.setAttribute('y1', `${bottomY}`);
   notch.setAttribute('x2', `${x}`);
-  notch.setAttribute('y2', `${bottomY - TRILL_NOTCH_HEIGHT_PX}`);
+  notch.setAttribute(
+    'y2',
+    `${bottomY - (double ? TRILL_SIGN_HEIGHT_PX : TRILL_NOTCH_HEIGHT_PX)}`
+  );
   notch.setAttribute('stroke', 'currentColor');
   notch.setAttribute('stroke-width', '1.4');
   return notch;
@@ -242,13 +272,12 @@ export function createTrillNotchSvg(
 // A small notehead in parentheses after the main notehead, with no stem,
 // flag or slur.
 
-function appendParenthesis(
-  group: SVGGElement,
+function createTrillParenthesis(
+  side: 'left' | 'right',
   x: number,
   centerY: number,
-  halfHeight: number,
-  side: 'left' | 'right'
-): void {
+  halfHeight: number
+): SVGPathElement {
   const bow =
     side === 'left' ? -TRILL_PARENTHESIS_BOW_PX : TRILL_PARENTHESIS_BOW_PX;
   const path = document.createElementNS(SVG_NS, 'path');
@@ -263,114 +292,49 @@ function appendParenthesis(
   path.setAttribute('stroke-width', `${TRILL_PARENTHESIS_STROKE_WIDTH}`);
   path.setAttribute('stroke-linecap', 'round');
   path.classList.add('trill-parenthesis');
-  group.appendChild(path);
+  return path;
 }
 
-// A function, not a constant: note.ts imports this file, so reading
-// NOTE_HEAD_RADIUS_PX at module init hits the circular import.
-const writtenNoteHeadWidthPx = (): number =>
-  2 * NOTE_HEAD_RADIUS_PX * TRILL_WRITTEN_NOTE_SCALE;
+const TRILL_WRITTEN_NOTE_STYLE: WrittenNoteStyle = {
+  classPrefix: 'trill-written',
+  scale: CUE_SCALE,
+  parenthesisWidthPx: TRILL_PARENTHESIS_STROKE_WIDTH,
+  gapPx: TRILL_PARENTHESIS_NOTE_GAP_PX,
+  // Reads NOTE_HEAD_RADIUS_PX when called: note.ts imports this file, so it
+  // isn't set yet at module init.
+  parenthesisHalfHeightPx: (accidental) => {
+    const { above, below } =
+      accidental === null
+        ? { above: 0, below: 0 }
+        : accidentalArrowOverhangs(accidental);
+    return (
+      (NOTE_HEAD_RADIUS_PX * 0.75 + Math.max(above, below)) * CUE_SCALE +
+      TRILL_PARENTHESIS_OVERSHOOT_PX
+    );
+  },
+  createParenthesis: createTrillParenthesis,
+};
 
 /**
- * Rightward footprint (px) of a written trilling notehead, from
- * `createWrittenTrillNoteSvg`'s layout math.
+ * Rightward footprint (px) of a written trilling notehead and the gap before
+ * it.
  */
 export function computeWrittenTrillNoteWidth(
   accidental: AccidentalType | null
 ): number {
-  let width =
+  return (
     TRILL_WRITTEN_NOTE_GAP_PX +
-    2 * (TRILL_PARENTHESIS_STROKE_WIDTH + TRILL_PARENTHESIS_NOTE_GAP_PX) +
-    writtenNoteHeadWidthPx();
-  if (accidental !== null) {
-    width +=
-      ACCIDENTAL_SYMBOL_WIDTH[accidental] * TRILL_WRITTEN_NOTE_SCALE +
-      TRILL_PARENTHESIS_NOTE_GAP_PX;
-  }
-  return width;
+    writtenNoteWidthPx(TRILL_WRITTEN_NOTE_STYLE, accidental)
+  );
 }
-
-export type WrittenTrillNoteProps = {
-  /** Local-space X at which the left parenthesis begins. */
-  leftX: number;
-  /** Local-space Y of the notehead's own vertical center. */
-  centerY: number;
-  /** Accidental drawn immediately left of the notehead, inside the parentheses. */
-  accidental: AccidentalType | null;
-};
-
-export type WrittenTrillNoteResult = {
-  element: SVGGElement;
-  /** Total rendered width (px), left parenthesis to right parenthesis — callers reserve rightward layout footprint off this. */
-  width: number;
-};
 
 /**
  * Builds the written trilling notehead: `(` + optional accidental + a small
  * unstemmed notehead + `)`, laid out left to right starting at `leftX`.
  */
-export function createWrittenTrillNoteSvg({
-  leftX,
-  centerY,
-  accidental,
-}: WrittenTrillNoteProps): WrittenTrillNoteResult {
-  const wrapper = document.createElementNS(SVG_NS, 'g');
-  wrapper.classList.add('trill-written-note');
-
-  const noteHeadWidth = writtenNoteHeadWidthPx();
-  const noteHeadHalfHeight =
-    NOTE_HEAD_RADIUS_PX * 0.75 * TRILL_WRITTEN_NOTE_SCALE;
-  const parenthesisHalfHeight =
-    noteHeadHalfHeight + TRILL_PARENTHESIS_OVERSHOOT_PX;
-
-  let x = leftX;
-  appendParenthesis(wrapper, x, centerY, parenthesisHalfHeight, 'left');
-  x += TRILL_PARENTHESIS_STROKE_WIDTH + TRILL_PARENTHESIS_NOTE_GAP_PX;
-
-  if (accidental !== null) {
-    const width =
-      ACCIDENTAL_SYMBOL_WIDTH[accidental] * TRILL_WRITTEN_NOTE_SCALE;
-    const height =
-      ACCIDENTAL_SYMBOL_HEIGHT[accidental] * TRILL_WRITTEN_NOTE_SCALE;
-    const symbol = createAccidentalSvg(accidental);
-    symbol.setAttribute('width', `${width}`);
-    symbol.setAttribute('height', `${height}`);
-    symbol.setAttribute('x', `${x}`);
-    symbol.setAttribute('y', `${centerY - height / 2}`);
-    symbol.classList.add('trill-written-note-accidental');
-    wrapper.appendChild(symbol);
-    x += width + TRILL_PARENTHESIS_NOTE_GAP_PX;
-  }
-
-  const [noteGroup] = createNoteSvg({
-    duration: 'quarter',
-    stemUp: true,
-    noStem: true,
-    noFlags: true,
-    qualifiedElementName: 'g',
-  });
-  const { cx, cy } = noteHeadCenter(true, 'quarter', true);
-  const xCenter = x + noteHeadWidth / 2;
-  const translateX = xCenter - TRILL_WRITTEN_NOTE_SCALE * cx * NOTE_SCALE;
-  const translateY = centerY - TRILL_WRITTEN_NOTE_SCALE * cy * NOTE_SCALE;
-  noteGroup.setAttribute(
-    'transform',
-    `translate(${translateX} ${translateY}) scale(${TRILL_WRITTEN_NOTE_SCALE})`
-  );
-  noteGroup.classList.remove('note');
-  noteGroup.classList.add('trill-written-notehead');
-  // Not a drag target — this notehead has no independent pitch/octave attrs.
-  noteGroup.querySelector('.head-hit-zone')?.remove();
-  const head = noteGroup.querySelector('.head');
-  if (head) {
-    head.classList.remove('head');
-    head.classList.add('trill-written-head');
-  }
-  wrapper.appendChild(noteGroup);
-  x += noteHeadWidth + TRILL_PARENTHESIS_NOTE_GAP_PX;
-
-  appendParenthesis(wrapper, x, centerY, parenthesisHalfHeight, 'right');
-  x += TRILL_PARENTHESIS_STROKE_WIDTH;
-
-  return { element: wrapper, width: x - leftX };
+export function createWrittenTrillNoteSvg(props: WrittenNoteProps): {
+  element: SVGGElement;
+  width: number;
+} {
+  return createWrittenNoteSvg(TRILL_WRITTEN_NOTE_STYLE, props);
 }

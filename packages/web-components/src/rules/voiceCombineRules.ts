@@ -47,28 +47,51 @@ type Candidate = {
   beatOffset: number;
 };
 
+// An unpitched sound isn't a pitch to merge.
 function hasOnlyNormalNoteheads(element: NoteOrChordElementType): boolean {
   if (isNoteNodeName(element.nodeName)) {
-    return (element as NoteElementType).notehead === 'normal';
+    const note = element as NoteElementType;
+    return note.notehead === 'normal' && (note.unpitched ?? null) === null;
   }
-  return (element as ChordElementType).toneNoteheads.every(
-    (notehead) => notehead === 'normal'
+  const chord = element as ChordElementType;
+  return (
+    chord.toneNoteheads.every((notehead) => notehead === 'normal') &&
+    (chord.toneUnpitched ?? []).every((placement) => placement === null)
   );
 }
 
 // A reminder belongs to one tone, and merged tones dedupe by pitch.
 function hasAccidentalReminder(element: NoteOrChordElementType): boolean {
   return (
-    element.accidentalReminder ||
+    element.accidentalReminder !== null ||
     (isChordNodeName(element.nodeName) &&
-      (element as ChordElementType).toneAccidentalReminders.some(Boolean))
+      (element as ChordElementType).toneAccidentalReminders.some(
+        (reminder) => reminder !== null
+      ))
   );
+}
+
+// Merged tones dedupe by pitch and don't carry an arrow.
+function hasBend(element: NoteOrChordElementType): boolean {
+  return isNoteNodeName(element.nodeName)
+    ? (element.bend ?? null) !== null ||
+        (element.bendTo ?? null) !== null ||
+        ((element as NoteElementType).bendContour ?? null) !== null
+    : (element as ChordElementType).toneBends.some((bend) => bend !== null);
+}
+
+function hasQuarterTone(element: NoteOrChordElementType): boolean {
+  return isNoteNodeName(element.nodeName)
+    ? (element as NoteElementType).quarterTone !== null
+    : (element as ChordElementType).toneQuarterTones.some(
+        (quarterTone) => quarterTone !== null
+      );
 }
 
 /**
  * Combine-eligible only when none of these is set: the synthetic chord
- * doesn't copy them, so they'd vanish (a reminder on a tone
- * included). A non-normal notehead is excluded too,
+ * doesn't copy them, so they'd vanish (a reminder on a tone or a technique
+ * text included). A non-normal notehead or a quarter-tone is excluded too,
  * since merged tones dedupe by pitch.
  */
 function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
@@ -97,13 +120,18 @@ function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
     element.grace === null &&
     element.trillFinish === null &&
     element.glissando === null &&
+    (element.glissandoLabel ?? null) === null &&
+    (element.techniqueText ?? null) === null &&
+    (element.phonemes ?? null) === null &&
+    !hasBend(element) &&
     element.stress === null &&
     !element.dynamicShared &&
-    !hasAccidentalReminder(element)
+    !hasAccidentalReminder(element) &&
+    !hasQuarterTone(element)
   );
 }
 
-// duration/articulation/dynamic/crescendo/decrescendo and the tremolo
+// duration/articulation/dynamic/crescendo/decrescendo, the size and the tremolo
 // attributes must all match — pitch content is deliberately excluded (that's
 // what gets unioned into the combined chord's tone set). Matching tremolos
 // share one set of strokes, numeral and label.
@@ -115,10 +143,16 @@ function combineKey(element: NoteOrChordElementType): string {
     element.crescendo,
     element.decrescendo,
     element.dynamicReminder,
+    element.dynamicText ?? null,
     element.tremolo ?? null,
     element.tremoloTuplet ?? null,
     element.tremoloLabel ?? null,
     element.articulationRepeat ?? false,
+    element.breathMark ?? null,
+    element.swell ?? null,
+    element.dynamicEnd ?? null,
+    element.stemMark ?? null,
+    element.size ?? 'normal',
   ]);
 }
 

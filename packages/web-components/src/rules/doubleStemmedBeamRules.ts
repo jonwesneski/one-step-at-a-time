@@ -21,6 +21,8 @@ export type DoubleStemmedBeamEntry = {
   entryIndex: number;
   beamGroup: string | null;
   nodeName: string;
+  // A cue-sized note or chord: the shared beam is drawn at full size.
+  cue?: boolean;
 };
 
 export type DoubleStemmedBeamResolution = {
@@ -41,9 +43,13 @@ export function resolveDoubleStemmedBeamGroups(
   const warnings: string[] = [];
   const membersById = new Map<string, DoubleStemmedBeamMember[]>();
 
+  const cueGroups = new Set<string>();
   for (const entry of entries) {
     if (entry.beamGroup === null) {
       continue;
+    }
+    if (entry.cue) {
+      cueGroups.add(entry.beamGroup);
     }
     const members = membersById.get(entry.beamGroup) ?? [];
     members.push({
@@ -57,6 +63,12 @@ export function resolveDoubleStemmedBeamGroups(
   const groups: DoubleStemmedBeamGroup[] = [];
 
   for (const [id, unsortedMembers] of membersById) {
+    if (cueGroups.has(id)) {
+      warnings.push(
+        `[doubleStemmedBeamRules] beam-group "${id}" has a cue-sized member; a double-stemmed beam takes full-size notes only, skipping`
+      );
+      continue;
+    }
     const members = [...unsortedMembers].sort(
       (a, b) => a.entryIndex - b.entryIndex || a.staffIndex - b.staffIndex
     );

@@ -39,10 +39,12 @@ const DRUM_SHARED_ATTRIBUTES = [
   'lv-label',
   'tie-style',
   'slur',
+  'slur-style',
   'slur-group',
   'dynamic',
   'dynamic-shared',
   'dynamic-reminder',
+  'swell',
   'crescendo',
   'decrescendo',
   'diminuendo',
@@ -50,19 +52,36 @@ const DRUM_SHARED_ATTRIBUTES = [
   'articulation-repeat',
   'stress',
   'stem-direction',
+  'stem-mark',
+  'sign',
+  'size',
   'beam-group',
   'shared-stem-for',
   'tremolo',
   'tremolo-tuplet',
   'tremolo-label',
+  'technique-text',
+  'technique-text-placement',
+  'technique-text-style',
+  'dynamic-text',
+  'dynamic-end',
 ];
 
 // Attributes <music-note>/<music-chord> have and the drum elements withhold:
 // pitch-dependent ones, plus grace notes, which drums don't support yet.
 const PITCH_ONLY_SHARED_ATTRIBUTES = [
+  'breath-mark',
   'glissando',
   'glissando-hint',
+  'glissando-shape',
+  'glissando-label',
+  'bend',
+  'bend-to',
+  'bend-to-quarter-tone',
+  'bend-contour',
+  'phonemes',
   'accidental-reminder',
+  'quarter-tone',
   'arpeggio',
   'arpeggio-for',
   'arpeggio-hairpin',
@@ -71,6 +90,7 @@ const PITCH_ONLY_SHARED_ATTRIBUTES = [
   'arpeggiate',
   'grace',
   'grace-octave',
+  'grace-quarter-tone',
   'grace-articulation',
   'grace-type',
   'grace-duration',
@@ -81,10 +101,12 @@ const PITCH_ONLY_SHARED_ATTRIBUTES = [
   'trill-line',
   'trill-stop',
   'trill-accidental',
+  'trill-quarter-tone',
   'trill-note',
   'trill-continuation',
   'trill-finish',
   'trill-finish-octave',
+  'trill-finish-quarter-tone',
   'trill-finish-slur',
   'octave-shift',
   'octave-mode',
@@ -102,6 +124,7 @@ export const DRUM_CHORD_ATTRIBUTES: readonly string[] = DRUM_SHARED_ATTRIBUTES;
 export const PITCH_ONLY_NOTE_ATTRIBUTES: readonly string[] = [
   'note',
   'octave',
+  'unpitched',
   ...PITCH_ONLY_SHARED_ATTRIBUTES,
 ];
 export const PITCH_ONLY_CHORD_ATTRIBUTES: readonly string[] = [
@@ -116,3 +139,12 @@ export function unsupportedDrumAttributes(
 ): string[] {
   return authored.filter((name) => pitchOnly.includes(name));
 }
+
+// A drum's position is its instrument, so a drum note always shows a head.
+export const drumAttributeValue = (
+  name: string,
+  value: string | null
+): string | null => (name === 'notehead' && value === 'none' ? null : value);
+
+export const DRUM_HEADLESS_WARNING =
+  'notehead="none" is ignored: a drum is placed by its instrument, so it keeps a head';

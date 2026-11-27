@@ -653,6 +653,405 @@ test.describe(`${MUSIC_STAFF} responsive layout`, () => {
   });
 });
 
+test.describe(`${MUSIC_STAFF} slurs and articulation`, () => {
+  async function readSlurAndMarks(
+    page: Page
+  ): Promise<{ slurStartY: number; marksBottom: number | null }> {
+    return page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const staff = document.querySelector(staffTag);
+        const path = staff?.shadowRoot
+          ?.querySelector('.standalone-connectors-overlay')
+          ?.querySelector('path');
+        if (!path) {
+          throw new Error('slur missing');
+        }
+        const marks = document
+          .querySelector(noteTag)
+          ?.shadowRoot?.querySelector('.articulations');
+        // The curve's first point, in client space.
+        const start = path.getPointAtLength(0);
+        const matrix = path.getScreenCTM();
+        if (matrix === null) {
+          throw new Error('slur not laid out');
+        }
+        return {
+          slurStartY: new DOMPoint(start.x, start.y).matrixTransform(matrix).y,
+          marksBottom: marks ? marks.getBoundingClientRect().bottom : null,
+        };
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+  }
+
+  test('a slur moves outside marks added to its first note', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '600px';
+        const staff = document.createElement(staffTag);
+        // E4 stems up, so the marks and the slur sit below.
+        for (let index = 0; index < 4; index++) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', 'E4');
+          note.setAttribute('duration', 'eighth');
+          if (index === 0) {
+            note.setAttribute('slur', 'start');
+          }
+          if (index === 3) {
+            note.setAttribute('slur', 'end');
+          }
+          staff.appendChild(note);
+        }
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+    const before = await readSlurAndMarks(page);
+    expect(before.marksBottom).toBeNull();
+
+    await page.evaluate((noteTag) => {
+      document
+        .querySelector(noteTag)
+        ?.setAttribute('articulation', 'accent-portato');
+    }, MUSIC_NOTE);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const after = await readSlurAndMarks(page);
+
+    expect(after.marksBottom).not.toBeNull();
+    expect(after.slurStartY).toBeGreaterThan(before.slurStartY);
+    expect(after.slurStartY).toBeGreaterThan(after.marksBottom as number);
+  });
+});
+
+test.describe(`${MUSIC_STAFF} slurs over the notes they span`, () => {
+  test('lowering an inner note deepens the slur past its head, and raising it restores the slur', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '600px';
+        const staff = document.createElement(staffTag);
+        for (let index = 0; index < 4; index++) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', 'A');
+          note.setAttribute('octave', '4');
+          note.setAttribute('duration', 'quarter');
+          if (index === 0) {
+            note.setAttribute('slur', 'start');
+          }
+          if (index === 3) {
+            note.setAttribute('slur', 'end');
+          }
+          staff.appendChild(note);
+        }
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    const read = () =>
+      page.evaluate(
+        ({ staffTag, noteTag }) => {
+          const path = document
+            .querySelector(staffTag)
+            ?.shadowRoot?.querySelector(
+              '.standalone-connectors-overlay path'
+            ) as SVGPathElement | null;
+          const head = document
+            .querySelectorAll(noteTag)[1]
+            .shadowRoot?.querySelector('.head');
+          const matrix = path?.getScreenCTM();
+          if (!path || !head || !matrix) {
+            throw new Error('slur or head missing');
+          }
+          const headRect = head.getBoundingClientRect();
+          const total = path.getTotalLength();
+          const points = Array.from({ length: 201 }, (_, i) => {
+            const { x, y } = path.getPointAtLength((total * i) / 200);
+            return new DOMPoint(x, y).matrixTransform(matrix);
+          });
+          const underHead = points.filter(
+            ({ x }) => x >= headRect.left && x <= headRect.right
+          );
+          return {
+            d: path.getAttribute('d'),
+            gap: Math.min(...underHead.map(({ y }) => y)) - headRect.bottom,
+          };
+        },
+        { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+      );
+    const setInnerNote = async (note: string): Promise<void> => {
+      await page.evaluate(
+        ({ noteTag, value }) =>
+          document.querySelectorAll(noteTag)[1].setAttribute('note', value),
+        { noteTag: MUSIC_NOTE, value: note }
+      );
+      await waitForRedrawCycle(page);
+      await waitForRedrawCycle(page);
+    };
+
+    const before = await read();
+    await setInnerNote('C');
+    const lowered = await read();
+    expect(lowered.d).not.toBe(before.d);
+    expect(lowered.gap).toBeGreaterThan(0);
+
+    await setInnerNote('A');
+    expect((await read()).d).toBe(before.d);
+  });
+});
+
+test.describe(`${MUSIC_STAFF} slurs over mixed stems`, () => {
+  test('a slur moves above when one note inside turns its stem down, and back when it turns up', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '600px';
+        const staff = document.createElement(staffTag);
+        for (let index = 0; index < 4; index++) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', 'F');
+          note.setAttribute('octave', '4');
+          note.setAttribute('duration', 'quarter');
+          if (index === 0) {
+            note.setAttribute('slur', 'start');
+          }
+          if (index === 3) {
+            note.setAttribute('slur', 'end');
+          }
+          staff.appendChild(note);
+        }
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+
+    // The slur's middle against the first note's head.
+    const isAbove = () =>
+      page.evaluate(
+        ({ staffTag, noteTag }) => {
+          const path = document
+            .querySelector(staffTag)
+            ?.shadowRoot?.querySelector(
+              '.standalone-connectors-overlay path'
+            ) as SVGPathElement | null;
+          const head = document
+            .querySelector(noteTag)
+            ?.shadowRoot?.querySelector('.head');
+          const matrix = path?.getScreenCTM();
+          if (!path || !head || !matrix) {
+            throw new Error('slur or head missing');
+          }
+          const { x, y } = path.getPointAtLength(path.getTotalLength() / 2);
+          return (
+            new DOMPoint(x, y).matrixTransform(matrix).y <
+            head.getBoundingClientRect().top
+          );
+        },
+        { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+      );
+    const setInnerNote = async (
+      note: string,
+      octave: string
+    ): Promise<void> => {
+      await page.evaluate(
+        ({ noteTag, value }) => {
+          const inner = document.querySelectorAll(noteTag)[1];
+          inner.setAttribute('note', value.note);
+          inner.setAttribute('octave', value.octave);
+        },
+        { noteTag: MUSIC_NOTE, value: { note, octave } }
+      );
+      await waitForRedrawCycle(page);
+      await waitForRedrawCycle(page);
+    };
+
+    expect(await isAbove()).toBe(false);
+    await setInnerNote('D', '5');
+    expect(await isAbove()).toBe(true);
+    await setInnerNote('F', '4');
+    expect(await isAbove()).toBe(false);
+  });
+});
+
+test.describe(`${MUSIC_STAFF} breath marks`, () => {
+  async function readGap(
+    page: Page
+  ): Promise<{ markCenter: number; leftRight: number; rightLeft: number }> {
+    return page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const mark = document
+          .querySelector(staffTag)
+          ?.shadowRoot?.querySelector('.breath-marks-container .breath-mark');
+        if (!mark) {
+          throw new Error('breath mark missing');
+        }
+        const markRect = mark.getBoundingClientRect();
+        const notes = Array.from(document.querySelectorAll(noteTag));
+        return {
+          markCenter: markRect.left + markRect.width / 2,
+          leftRight: notes[1].getBoundingClientRect().right,
+          rightLeft: notes[2].getBoundingClientRect().left,
+        };
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+  }
+
+  test('a breath mark stays centred in the gap after its note as the staff resizes', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '700px';
+        const staff = document.createElement(staffTag);
+        ['E4', 'F4', 'G4', 'A4'].forEach((pitch, index) => {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', pitch);
+          note.setAttribute('duration', 'quarter');
+          if (index === 1) {
+            note.setAttribute('breath-mark', 'tick');
+          }
+          staff.appendChild(note);
+        });
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+    const wide = await readGap(page);
+
+    await resizeHost(page, 400);
+    await waitForRedrawCycle(page);
+    const narrow = await readGap(page);
+
+    for (const gap of [wide, narrow]) {
+      expect(gap.markCenter).toBeGreaterThan(gap.leftRight);
+      expect(gap.markCenter).toBeLessThan(gap.rightLeft);
+      expect(
+        Math.abs(gap.markCenter - (gap.leftRight + gap.rightLeft) / 2)
+      ).toBeLessThan(1);
+    }
+    expect(narrow.markCenter).toBeLessThan(wide.markCenter);
+  });
+});
+
+test.describe(`${MUSIC_STAFF} swells`, () => {
+  async function readSwells(
+    page: Page
+  ): Promise<
+    { wedges: number; left: number; right: number; gapCenter: number }[]
+  > {
+    return page.evaluate((staffTag) => {
+      const swells = Array.from(
+        document
+          .querySelector(staffTag)
+          ?.shadowRoot?.querySelectorAll('.dynamics-container .swell') ?? []
+      );
+      return swells.map((swell) => {
+        const rect = swell.getBoundingClientRect();
+        const wedges = Array.from(swell.querySelectorAll('.hairpin')).map(
+          (wedge) => wedge.getBoundingClientRect()
+        );
+        return {
+          wedges: wedges.length,
+          left: rect.left,
+          right: rect.right,
+          gapCenter: (wedges[0].right + wedges[wedges.length - 1].left) / 2,
+        };
+      });
+    }, MUSIC_STAFF);
+  }
+
+  test('toggling swell adds and removes its two wedges, which span the note and keep their gap centred as the staff resizes', async ({
+    page,
+  }) => {
+    const positioned = waitForStaffNotesPositioned(page);
+    await page.evaluate(
+      ({ staffTag, noteTag }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.innerHTML = '';
+        host.style.width = '600px';
+        const staff = document.createElement(staffTag);
+        for (const pitch of ['E4', 'G4']) {
+          const note = document.createElement(noteTag);
+          note.setAttribute('note', pitch);
+          note.setAttribute('duration', 'half');
+          staff.appendChild(note);
+        }
+        host.appendChild(staff);
+      },
+      { staffTag: MUSIC_STAFF, noteTag: MUSIC_NOTE }
+    );
+    await positioned;
+    await waitForRedrawCycle(page);
+    expect(await readSwells(page)).toHaveLength(0);
+
+    await page.evaluate((noteTag) => {
+      document.querySelector(noteTag)?.setAttribute('swell', '');
+    }, MUSIC_NOTE);
+    await waitForRedrawCycle(page);
+    const [swell] = await readSwells(page);
+    const notes = await readNoteLefts(page);
+    expect(swell.wedges).toBe(2);
+    expect(swell.left).toBeGreaterThanOrEqual(notes[0] - 1);
+    expect(swell.right).toBeLessThan(notes[1]);
+    expect(swell.gapCenter).toBeCloseTo((swell.left + swell.right) / 2, 0);
+
+    await resizeHost(page, 400);
+    await waitForRedrawCycle(page);
+    const [narrow] = await readSwells(page);
+    const narrowNotes = await readNoteLefts(page);
+    expect(narrow.right - narrow.left).toBeLessThan(swell.right - swell.left);
+    expect(narrow.right).toBeLessThan(narrowNotes[1]);
+    expect(narrow.gapCenter).toBeCloseTo((narrow.left + narrow.right) / 2, 0);
+
+    await page.evaluate((noteTag) => {
+      document.querySelector(noteTag)?.removeAttribute('swell');
+    }, MUSIC_NOTE);
+    await waitForRedrawCycle(page);
+    expect(await readSwells(page)).toHaveLength(0);
+  });
+});
+
 test.describe(`${MUSIC_STAFF} rests`, () => {
   test('rest elements position left-to-right among pitched notes', async ({
     page,
@@ -1750,5 +2149,574 @@ test.describe(`${MUSIC_STAFF} glissando`, () => {
     // just at the line's overall midpoint.
     expect(result.textBottom).toBeLessThan(result.lineYAtTextLeft);
     expect(result.textBottom).toBeLessThan(result.lineYAtTextRight);
+  });
+});
+
+test.describe('glissando room', () => {
+  const build = async (page: Page, notes: string): Promise<void> => {
+    await page.evaluate((html) => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host element missing');
+      }
+      host.style.width = '320px';
+      host.innerHTML = `<music-staff clef="treble">${html}</music-staff>`;
+    }, notes);
+    await waitForRedrawCycle(page);
+  };
+  const setOnNotes = async (
+    page: Page,
+    changes: { index: number; name: string; value: string }[]
+  ): Promise<void> => {
+    await page.evaluate((all) => {
+      const notes = document.querySelectorAll('music-note');
+      for (const { index, name, value } of all) {
+        notes[index].setAttribute(name, value);
+      }
+    }, changes);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+
+  test('an accidental on the end note shortens the line', async ({ page }) => {
+    await build(
+      page,
+      `<music-note note="F" octave="4" duration="half" glissando="start"></music-note>
+       <music-note note="A" octave="4" duration="half" glissando="end"></music-note>`
+    );
+    const lineWidth = () =>
+      page.evaluate(
+        () =>
+          document
+            .querySelector('music-staff')
+            ?.shadowRoot?.querySelector('.glissando path')
+            ?.getBoundingClientRect().width ?? 0
+      );
+    const plain = await lineWidth();
+    expect(plain).toBeGreaterThan(0);
+    await setOnNotes(page, [{ index: 1, name: 'note', value: 'A#' }]);
+    expect(await lineWidth()).toBeLessThan(plain);
+  });
+
+  test('a glissando into an accidental widens a tight gap', async ({
+    page,
+  }) => {
+    // Every second note shows an accidental.
+    await build(
+      page,
+      `<music-note note="F" octave="4" duration="sixteenth"></music-note>
+       <music-note note="F#" octave="4" duration="sixteenth"></music-note>`.repeat(
+        8
+      )
+    );
+    const gap = () =>
+      page.evaluate(() => {
+        const [first, second] = Array.from(
+          document.querySelectorAll('music-note')
+        ).map((note) => note.getBoundingClientRect().left);
+        return second - first;
+      });
+    const plain = await gap();
+    await setOnNotes(page, [
+      { index: 0, name: 'glissando', value: 'start' },
+      { index: 1, name: 'glissando', value: 'end' },
+    ]);
+    expect(await gap()).toBeGreaterThan(plain);
+  });
+});
+
+test.describe('pitch bends', () => {
+  const build = async (
+    page: Page,
+    notes: string,
+    width: number
+  ): Promise<void> => {
+    await page.evaluate(
+      ({ html, hostWidth }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host element missing');
+        }
+        host.style.width = `${hostWidth}px`;
+        host.innerHTML = `<music-staff clef="treble">${html}</music-staff>`;
+      },
+      { html: notes, hostWidth: width }
+    );
+    await waitForRedrawCycle(page);
+  };
+  const measure = (page: Page) =>
+    page.evaluate(() => {
+      const lines = Array.from(
+        document
+          .querySelector('music-staff')
+          ?.shadowRoot?.querySelectorAll('.bend-line') ?? []
+      );
+      const notes = Array.from(document.querySelectorAll('music-note'));
+      return {
+        lineRights: lines.map((line) => line.getBoundingClientRect().right),
+        noteLefts: notes.map((note) => note.getBoundingClientRect().left),
+        headLefts: notes.map(
+          (note) =>
+            note.shadowRoot?.querySelector('.head')?.getBoundingClientRect()
+              .left ?? 0
+        ),
+      };
+    });
+
+  test('setting bend draws its line and makes room for it, and unsetting undoes both', async ({
+    page,
+  }) => {
+    await build(
+      page,
+      `<music-note note="F" octave="4" duration="sixteenth"></music-note>`.repeat(
+        16
+      ),
+      320
+    );
+    const setBend = async (value: string | null) => {
+      await page.evaluate((bend) => {
+        const note = document.querySelector('music-note') as Element & {
+          bend: string | null;
+        };
+        note.bend = bend;
+      }, value);
+      await waitForRedrawCycle(page);
+      return measure(page);
+    };
+    const plain = await setBend(null);
+    expect(plain.lineRights).toHaveLength(0);
+
+    const bent = await setBend('down');
+    expect(bent.lineRights).toHaveLength(1);
+    expect(bent.noteLefts[1] - bent.noteLefts[0]).toBeGreaterThan(
+      plain.noteLefts[1] - plain.noteLefts[0]
+    );
+
+    expect(await setBend(null)).toEqual(plain);
+  });
+
+  test('its line follows the next note as the staff resizes', async ({
+    page,
+  }) => {
+    await build(
+      page,
+      `<music-note note="A" octave="4" duration="half" bend="up"></music-note>
+       <music-note note="A" octave="4" duration="half"></music-note>`,
+      800
+    );
+    const rightAt = async (width: number) => {
+      await page.evaluate((value) => {
+        (
+          document.getElementById('host') as HTMLElement
+        ).style.width = `${value}px`;
+      }, width);
+      await waitForRedrawCycle(page);
+      const { lineRights, headLefts } = await measure(page);
+      expect(lineRights[0]).toBeLessThan(headLefts[1]);
+      return lineRights[0];
+    };
+    const wide = await rightAt(800);
+    expect(await rightAt(400)).toBeLessThan(wide);
+    expect(await rightAt(800)).toBe(wide);
+  });
+});
+
+test.describe('a crowded bar', () => {
+  const layOut = (page: Page, html: string, width: number) =>
+    page.evaluate(
+      ({ markup, hostWidth }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host element missing');
+        }
+        host.style.width = `${hostWidth}px`;
+        host.innerHTML = markup;
+      },
+      { markup: html, hostWidth: width }
+    );
+  const headsAndEnds = (page: Page) =>
+    page.evaluate(() =>
+      Array.from(document.querySelectorAll('music-staff')).map((staff) => ({
+        right: staff.getBoundingClientRect().right,
+        heads: Array.from(staff.querySelectorAll('music-note')).map((note) => {
+          const rect = note.shadowRoot
+            ?.querySelector('.head')
+            ?.getBoundingClientRect();
+          return { left: rect?.left ?? NaN, right: rect?.right ?? NaN };
+        }),
+      }))
+    );
+  const note = (duration: string, attributes = '') =>
+    `<music-note note="A" octave="4" duration="${duration}" ${attributes}></music-note>`;
+  const busyEnd =
+    note('half') + note('quarter') + note('sixteenth', '').repeat(4);
+
+  test('keeps its last notes before the barline, and spreads out again when it widens', async ({
+    page,
+  }) => {
+    await layOut(
+      page,
+      `<music-staff clef="treble" time="4/4">${busyEnd}</music-staff>`,
+      240
+    );
+    await waitForRedrawCycle(page);
+    const [narrow] = await headsAndEnds(page);
+    expect(Math.max(...narrow.heads.map(({ right }) => right))).toBeLessThan(
+      narrow.right
+    );
+    const halfToQuarter = (heads: { left: number }[]) =>
+      (heads[1].left - heads[0].left) / (heads[2].left - heads[1].left);
+    expect(halfToQuarter(narrow.heads)).toBeGreaterThan(1.5);
+
+    await page.evaluate(() => {
+      (document.getElementById('host') as HTMLElement).style.width = '900px';
+    });
+    await waitForRedrawCycle(page);
+    const [wide] = await headsAndEnds(page);
+    expect(halfToQuarter(wide.heads)).toBeCloseTo(2, 1);
+  });
+
+  test('keeps every staff of the measure aligned with the crowded one', async ({
+    page,
+  }) => {
+    await layOut(
+      page,
+      `<music-measure><music-staff clef="treble" time="4/4">${busyEnd}</music-staff>
+       <music-staff clef="treble" time="4/4">${note('half')}${note(
+        'quarter'
+      )}${note('quarter')}</music-staff></music-measure>`,
+      240
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const aligned = async () => {
+      const [busy, sparse] = await headsAndEnds(page);
+      [0, 1, 2].forEach((i) =>
+        expect(sparse.heads[i].left).toBeCloseTo(busy.heads[i].left, 0)
+      );
+      return busy;
+    };
+    const crowded = await aligned();
+    expect(Math.max(...crowded.heads.map(({ right }) => right))).toBeLessThan(
+      crowded.right
+    );
+
+    await page.evaluate(() => {
+      const [staff] = Array.from(document.querySelectorAll('music-staff'));
+      Array.from(staff.querySelectorAll('[duration="sixteenth"]'))
+        .slice(1)
+        .forEach((extra) => extra.remove());
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const relaxed = await aligned();
+    expect(relaxed.heads[2].left).toBeGreaterThan(crowded.heads[2].left);
+  });
+
+  test('a staff with no measure stops shrinking where its notes would overrun, until some are removed', async ({
+    page,
+  }) => {
+    await layOut(
+      page,
+      `<music-staff clef="treble" time="4/4">${busyEnd}</music-staff>`,
+      900
+    );
+    await waitForRedrawCycle(page);
+    await resizeHost(page, 100);
+    await waitForRedrawCycle(page);
+    const [full] = await headsAndEnds(page);
+    expect(Math.max(...full.heads.map(({ right }) => right))).toBeLessThan(
+      full.right
+    );
+
+    await page.evaluate(() => {
+      Array.from(document.querySelectorAll('[duration="sixteenth"]')).forEach(
+        (extra) => extra.remove()
+      );
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const [fewer] = await headsAndEnds(page);
+    expect(fewer.right).toBeLessThan(full.right);
+    expect(Math.max(...fewer.heads.map(({ right }) => right))).toBeLessThan(
+      fewer.right
+    );
+  });
+
+  test('a bar with short last notes takes more of its row instead of squeezing the earlier ones', async ({
+    page,
+  }) => {
+    const shortEnd = note('half') + note('eighth').repeat(4);
+    await layOut(
+      page,
+      `<music-composition time="4/4" clef="treble"><music-measure><music-staff>${shortEnd}</music-staff></music-measure>
+       <music-measure><music-staff>${note(
+         'whole'
+       )}</music-staff></music-measure>
+       <music-measure><music-staff>${note(
+         'whole'
+       )}</music-staff></music-measure></music-composition>`,
+      620
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const [busy] = await headsAndEnds(page);
+    expect(
+      (busy.heads[1].left - busy.heads[0].left) /
+        (busy.heads[2].left - busy.heads[1].left)
+    ).toBeCloseTo(4, 0);
+  });
+
+  test('short notes early on one staff push the same beat on the others, until there is room', async ({
+    page,
+  }) => {
+    const four = note('sixteenth').repeat(4);
+    await layOut(
+      page,
+      `<music-measure><music-staff clef="treble" time="2/4">${four}${note(
+        'quarter'
+      )}</music-staff>
+       <music-staff clef="treble" time="2/4">${note(
+         'quarter'
+       )}${four}</music-staff></music-measure>`,
+      150
+    );
+    const secondBeats = async () => {
+      await waitForRedrawCycle(page);
+      await waitForRedrawCycle(page);
+      const [early, late] = await headsAndEnds(page);
+      expect(late.heads[1].left).toBeCloseTo(early.heads[4].left, 0);
+      expect(late.heads[4].right).toBeLessThan(late.right);
+      return (
+        (late.heads[1].left - late.heads[0].left) /
+        (late.right - late.heads[0].left)
+      );
+    };
+    const narrow = await secondBeats();
+    await resizeHost(page, 700);
+    expect(await secondBeats()).toBeCloseTo(0.5, 1);
+    await resizeHost(page, 150);
+    expect(await secondBeats()).toBeCloseTo(narrow, 2);
+  });
+
+  test('a staff with a width of its own outgrows it, up to its container, before moving notes', async ({
+    page,
+  }) => {
+    await layOut(
+      page,
+      `<music-staff clef="treble" time="4/4" style="width: 250px">${busyEnd}</music-staff>`,
+      900
+    );
+    await waitForRedrawCycle(page);
+    const [roomy] = await headsAndEnds(page);
+    expect(
+      (roomy.heads[1].left - roomy.heads[0].left) /
+        (roomy.heads[2].left - roomy.heads[1].left)
+    ).toBeCloseTo(2, 1);
+
+    await resizeHost(page, 300);
+    const [tight] = await headsAndEnds(page);
+    const hostRight = await page.evaluate(
+      () => document.getElementById('host')?.getBoundingClientRect().right ?? 0
+    );
+    expect(tight.right).toBeLessThanOrEqual(hostRight + 1);
+    expect(Math.max(...tight.heads.map(({ right }) => right))).toBeLessThan(
+      tight.right
+    );
+  });
+
+  test('a bend on a short last note finds room', async ({ page }) => {
+    await layOut(
+      page,
+      `<music-measure><music-staff clef="treble" time="4/4">${note(
+        'half'
+      )}${note('quarter')}${note('sixteenth').repeat(3)}${note(
+        'sixteenth',
+        'bend="down"'
+      )}</music-staff></music-measure>`,
+      320
+    );
+    await waitForRedrawCycle(page);
+    const line = await page.evaluate(() => {
+      const staff = document.querySelector('music-staff');
+      return {
+        right:
+          staff?.shadowRoot
+            ?.querySelector('.bend-line')
+            ?.getBoundingClientRect().right ?? NaN,
+        staffRight: staff?.getBoundingClientRect().right ?? NaN,
+      };
+    });
+    expect(line.right).toBeLessThan(line.staffRight);
+  });
+});
+
+test.describe('glissando labels', () => {
+  test('a label near the end of the bar shifts left as the staff narrows and returns as it widens', async ({
+    page,
+  }) => {
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host element missing');
+      }
+      host.innerHTML = `<music-staff clef="treble">
+        <music-note note="C" octave="5" duration="dotted-half"></music-note>
+        <music-note note="C" octave="5" duration="quarter" glissando-label="bend pitch by a ¼-tone"></music-note>
+      </music-staff>`;
+    });
+    const at = async (width: number) => {
+      await page.evaluate((value) => {
+        (
+          document.getElementById('host') as HTMLElement
+        ).style.width = `${value}px`;
+      }, width);
+      await waitForRedrawCycle(page);
+      return page.evaluate(() => {
+        const staff = document.querySelector('music-staff');
+        const label = staff?.shadowRoot
+          ?.querySelector('.glissando-label')
+          ?.getBoundingClientRect();
+        const head = document
+          .querySelectorAll('music-note')[1]
+          .shadowRoot?.querySelector('.head')
+          ?.getBoundingClientRect();
+        return {
+          fromHead: (label?.left ?? NaN) - (head?.left ?? NaN),
+          overrun:
+            (label?.right ?? NaN) -
+            (staff?.getBoundingClientRect().right ?? NaN),
+        };
+      });
+    };
+    const wide = await at(900);
+    const narrow = await at(300);
+    expect(narrow.fromHead).toBeLessThan(wide.fromHead);
+    expect(narrow.overrun).toBeLessThanOrEqual(0);
+    expect(await at(900)).toEqual(wide);
+  });
+});
+
+test.describe('quarter-tone arrows under a beam', () => {
+  test('the beam rises to clear an arrow and returns without it', async ({
+    page,
+  }) => {
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host element missing');
+      }
+      host.style.width = '600px';
+      host.innerHTML = `<music-staff clef="treble">
+        <music-note note="F" octave="4" duration="sixteenth"></music-note>
+        <music-note note="G" octave="4" duration="sixteenth"></music-note>
+        <music-note note="Ab" octave="4" duration="sixteenth"></music-note>
+        <music-note note="B" octave="4" duration="sixteenth"></music-note>
+      </music-staff>`;
+    });
+    await waitForRedrawCycle(page);
+
+    const overlapAfter = async (quarterTone: 'up' | null) => {
+      await page.evaluate((value) => {
+        const note = document.querySelectorAll('music-note')[2] as Element & {
+          quarterTone: 'up' | null;
+        };
+        note.quarterTone = value;
+      }, quarterTone);
+      await waitForRedrawCycle(page);
+      return page.evaluate(() => {
+        const staff = document.querySelector('music-staff');
+        const beams = Array.from(
+          staff?.shadowRoot?.querySelectorAll('.beams-container .beam') ?? []
+        ).map((beam) => beam.getBoundingClientRect());
+        const arrow = document
+          .querySelectorAll('music-note')[2]
+          .shadowRoot?.querySelector('.accidental-arrow path')
+          ?.getBoundingClientRect();
+        return {
+          beamTop: Math.min(...beams.map((beam) => beam.top)),
+          beamBottom: Math.max(...beams.map((beam) => beam.bottom)),
+          arrowTop: arrow?.top ?? null,
+        };
+      });
+    };
+
+    const plain = await overlapAfter(null);
+    expect(plain.arrowTop).toBeNull();
+
+    const arrowed = await overlapAfter('up');
+    expect(arrowed.beamTop).toBeLessThan(plain.beamTop);
+    expect(arrowed.beamBottom).toBeLessThanOrEqual(arrowed.arrowTop ?? 0);
+
+    const restored = await overlapAfter(null);
+    expect(restored).toEqual(plain);
+  });
+});
+
+test.describe('unpitched notes', () => {
+  test('marking a note unpitched moves it above the stave and drops its accidental, and back', async ({
+    page,
+  }) => {
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host element missing');
+      }
+      host.style.width = '600px';
+      host.innerHTML = `<music-staff clef="treble">
+        <music-note note="F#" octave="4" duration="quarter"></music-note>
+        <music-note note="F" octave="4" duration="quarter"></music-note>
+      </music-staff>`;
+    });
+    await waitForRedrawCycle(page);
+
+    const read = async (unpitched: string | null) => {
+      await page.evaluate((value) => {
+        const note = document.querySelector('music-note');
+        if (value === null) {
+          note?.removeAttribute('unpitched');
+        } else {
+          note?.setAttribute('unpitched', value);
+        }
+      }, unpitched);
+      await waitForRedrawCycle(page);
+      return page.evaluate(() => {
+        const [first, second] = Array.from(
+          document.querySelectorAll('music-note')
+        );
+        const topLine =
+          document
+            .querySelector('music-staff')
+            ?.shadowRoot?.querySelector('.staff-container')
+            ?.getBoundingClientRect().top ?? 0;
+        return {
+          headCenter: (() => {
+            const head = first.shadowRoot
+              ?.querySelector('.head')
+              ?.getBoundingClientRect();
+            return (
+              (head === undefined ? 0 : (head.top + head.bottom) / 2) - topLine
+            );
+          })(),
+          ownAccidental:
+            first.shadowRoot?.querySelector('.accidental') !== null,
+          nextAccidental:
+            second.shadowRoot?.querySelector('.accidental') !== null,
+        };
+      });
+    };
+
+    const pitched = await read(null);
+    expect(pitched.ownAccidental).toBe(true);
+    expect(pitched.nextAccidental).toBe(true);
+
+    const unpitched = await read('top');
+    expect(unpitched.headCenter).toBeLessThan(0);
+    expect(pitched.headCenter).toBeGreaterThan(0);
+    expect(unpitched.ownAccidental).toBe(false);
+    expect(unpitched.nextAccidental).toBe(false);
+
+    const back = await read(null);
+    expect(back).toEqual(pitched);
   });
 });

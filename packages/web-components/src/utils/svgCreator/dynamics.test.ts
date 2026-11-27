@@ -8,6 +8,7 @@ import {
   createAngledHairpinSvg,
   createDynamicMarkingSvg,
   createHairpinSvg,
+  createSwellSvg,
 } from './dynamics';
 
 type Point = { x: number; y: number };
@@ -129,5 +130,32 @@ describe('dynamicTextHalfWidth', () => {
     expect(dynamicTextHalfWidth('f', true) - dynamicTextHalfWidth('f')).toBe(
       DYNAMIC_REMINDER_BRACKET_WIDTH_PX
     );
+  });
+});
+
+describe('createSwellSvg', () => {
+  it('draws each segment as a hairpin, open where the swell carries on', () => {
+    const group = createSwellSvg([
+      {
+        kind: 'crescendo',
+        startX: 0,
+        endX: 45,
+        centerY: 30,
+        openAtStart: false,
+        openAtEnd: false,
+      },
+      {
+        kind: 'decrescendo',
+        startX: 55,
+        endX: 100,
+        centerY: 30,
+        openAtStart: false,
+        openAtEnd: true,
+      },
+    ]);
+    expect(group.classList.contains('swell')).toBe(true);
+    expect(group.querySelectorAll('.hairpin')).toHaveLength(2);
+    const [, , upper] = pathEnds(group);
+    expect(upper[1].y).not.toBe(30);
   });
 });

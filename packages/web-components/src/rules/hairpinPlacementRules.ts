@@ -1,5 +1,5 @@
 import type { NoteOrChordElementType } from '../types/elements';
-import type { DynamicMarking, HairpinKind } from '../types/theory';
+import type { DynamicMarking, HairpinKind, SwellShape } from '../types/theory';
 import {
   DYNAMICS_FONT_SIZE,
   DYNAMICS_TEXT_ASCENT_RATIO,
@@ -17,7 +17,27 @@ import {
   type ObstacleRect,
   segmentIntersectsRect,
 } from './connectorPlacementRules';
-import { dynamicTextHalfWidth, type HairpinEndpoint } from './dynamicsRules';
+import {
+  dynamicTextHalfWidth,
+  dynamicTextTrailingPx,
+  type HairpinEndpoint,
+} from './dynamicsRules';
+
+export type BarSpan = { from: number; to: number };
+
+/** Spans of bars sharing any bar joined into one, in order. */
+export function joinBarSpans(spans: readonly BarSpan[]): BarSpan[] {
+  const joined: BarSpan[] = [];
+  for (const { from, to } of [...spans].sort((a, b) => a.from - b.from)) {
+    const last = joined[joined.length - 1];
+    if (last !== undefined && from <= last.to) {
+      last.to = Math.max(last.to, to);
+    } else {
+      joined.push({ from, to });
+    }
+  }
+  return joined;
+}
 
 export type HairpinPoint = { x: number; y: number };
 
@@ -80,6 +100,11 @@ function hairpinEndSpreads(
 
 export type DynamicsSide = 'above' | 'below';
 
+/** A dynamics row per side, in a staff's local coordinates. */
+export type SharedDynamicsRows = Readonly<
+  Partial<Record<DynamicsSide, number>>
+>;
+
 // 'measure' means the ancestor measure draws it; 'above'/'below' force the
 // staff's own row to that side of the stave.
 export type DynamicsPlacement = DynamicsSide | 'measure';
@@ -107,6 +132,16 @@ export type StaffHairpinDefaults = {
   })[];
   unpairedStarts: (HairpinEndpoint & StaffHairpinPlacement)[];
   orphanEnds: HairpinEndpoint[];
+  // Swells the staff draws, each over its tie chain (viewport px): where it
+  // ends, clear of the next entry and its dynamic or the swell's
+  // `dynamic-end` (`endText`), and where its middle beat is drawn.
+  swells: (StaffHairpinPlacement & {
+    element: NoteOrChordElementType;
+    shape: SwellShape;
+    endClientX: number;
+    midClientX: number;
+    endText: HairpinEndpointText | null;
+  })[];
 };
 
 export type HairpinEndpointText = {
@@ -114,6 +149,8 @@ export type HairpinEndpointText = {
   centerX: number;
   /** A reminder, drawn in brackets. */
   bracketed?: boolean;
+  /** A `dynamic-text` after the marking. */
+  text?: string | null;
 };
 
 // A dynamic's text baseline sits on the hairpin's own centre line, matching
@@ -122,12 +159,13 @@ export function estimateDynamicTextBox(
   marking: DynamicMarking,
   centerX: number,
   baselineY: number,
-  bracketed = false
+  bracketed = false,
+  text: string | null = null
 ): ObstacleRect {
   const halfWidth = dynamicTextHalfWidth(marking, bracketed);
   return {
     left: centerX - halfWidth,
-    right: centerX + halfWidth,
+    right: centerX + halfWidth + dynamicTextTrailingPx(text),
     top: baselineY - DYNAMICS_FONT_SIZE * DYNAMICS_TEXT_ASCENT_RATIO,
     bottom: baselineY + DYNAMICS_FONT_SIZE * DYNAMICS_TEXT_DESCENT_RATIO,
   };
@@ -142,9 +180,11 @@ export function dynamicTextCenterClearOfStems(
   stems: readonly ObstacleRect[],
   gap: { topGapEdgeY: number; bottomGapEdgeY: number },
   awayDirection: -1 | 1,
-  bracketed = false
+  bracketed = false,
+  text: string | null = null
 ): number {
   const halfWidth = dynamicTextHalfWidth(marking, bracketed);
+  const rightReach = halfWidth + dynamicTextTrailingPx(text);
   const gapStems = stems
     .filter(
       (stem) => stem.bottom > gap.topGapEdgeY && stem.top < gap.bottomGapEdgeY
@@ -156,14 +196,14 @@ export function dynamicTextCenterClearOfStems(
   let x = centerX;
   for (let step = 0; step <= gapStems.length; step++) {
     const blocking = gapStems.find(
-      (stem) => x + halfWidth > stem.left && x - halfWidth < stem.right
+      (stem) => x + rightReach > stem.left && x - halfWidth < stem.right
     );
     if (blocking === undefined) {
       return x;
     }
     x =
       awayDirection < 0
-        ? blocking.left - halfWidth
+        ? blocking.left - rightReach
         : blocking.right + halfWidth;
   }
   return x;
@@ -216,7 +256,8 @@ const endpointTextBoxes = (
         startText.marking,
         startText.centerX,
         startY,
-        startText.bracketed
+        startText.bracketed,
+        startText.text ?? null
       )
     );
   }
@@ -226,7 +267,8 @@ const endpointTextBoxes = (
         endText.marking,
         endText.centerX,
         endY,
-        endText.bracketed
+        endText.bracketed,
+        endText.text ?? null
       )
     );
   }

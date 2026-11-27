@@ -101,7 +101,16 @@ export const STAFF_Y_STEP = STAFF_LINE_SPACING / 2; // = 5
  */
 export const MIN_NOTE_WIDTH = STAFF_LINE_SPACING * 2;
 
+/**
+ * Blank (px) kept before the end barline: no beat's share of the bar reaches
+ * into it, and the last entry's ink stops before it. = 0.5 × STAFF_LINE_SPACING
+ */
+export const LAST_ENTRY_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
 // ─── Voices ───────────────────────────────────────────────────────────────────
+
+/** Half the width (px) of a rest's ink, about its box's centre. = 0.5 × STAFF_LINE_SPACING */
+export const REST_HALF_WIDTH_PX = STAFF_LINE_SPACING * 0.5;
 
 /**
  * Vertical displacement (px) applied to a rest's normal duration-keyed Y
@@ -467,10 +476,9 @@ export const SLUR_BEYOND_BEAM_CLEARANCE_PX = STAFF_LINE_SPACING * 1.2;
 export const SLUR_OBSTACLE_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
 
 /**
- * Upper bound of a cross-staff slur's control-point height search, as a
- * fraction of its own real horizontal span — keeps the obstacle search
- * bounded; a slur that can't clear within it falls back to the least-colliding
- * shape.
+ * Upper bound of a cross-staff slur's control heights, as a fraction of its
+ * own real horizontal span; a slur that can't clear everything within it tries
+ * its other side.
  */
 export const SLUR_CONTROL_HEIGHT_MAX_RATIO = 0.6;
 
@@ -480,6 +488,60 @@ export const SLUR_CONTROL_HEIGHT_MAX_RATIO = 0.6;
  * collapsing to its bounding box.
  */
 export const SLUR_BEAM_SLICE_WIDTH_PX = 3;
+
+/**
+ * Offset (px) of a slur's end from its notehead centre, so the arc visibly
+ * leaves the head without touching it.
+ * = 0.9 × STAFF_LINE_SPACING
+ */
+export const SLUR_NOTEHEAD_OFFSET_PX = STAFF_LINE_SPACING * 0.9;
+
+/** How far (px) a tie reaches past its anchors. = half of curve.ts's DEFAULT_BULGE_HEIGHT (0.9 × STAFF_LINE_SPACING) */
+export const TIE_REACH_PX = STAFF_LINE_SPACING * 0.45;
+
+/** Gap (px) between a head, or the stem beside it, and the end of a tie on its voice's side. = 0.3 × STAFF_LINE_SPACING */
+export const TIE_BESIDE_HEAD_GAP_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
+ * Gap (px) between the clef/key/time area and the start of a tie or slur
+ * continued from the previous system.
+ * = 0.4 × STAFF_LINE_SPACING
+ */
+export const CONTINUED_CONNECTOR_LEAD_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Gap (px) a slur keeps from the articulation marks it encloses, at its ends
+ * and over the notes between them.
+ * = 0.4 × STAFF_LINE_SPACING
+ */
+export const SLUR_ARTICULATION_CLEARANCE_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Gap (px) an outer slur keeps from a slur nested inside it, along the arc.
+ * = 0.3 × STAFF_LINE_SPACING
+ */
+export const SLUR_NESTED_CLEARANCE_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
+ * How far (px) beside a stem, and short of its end, a slur's own end sits on
+ * the stem side of a note.
+ * = 0.6 and 0.5 × STAFF_LINE_SPACING
+ */
+export const SLUR_BESIDE_STEM_GAP_PX = STAFF_LINE_SPACING * 0.6;
+export const SLUR_BESIDE_STEM_INSET_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Clearance (px) between a slur and the heads and accidentals it passes.
+ * = 0.3 × STAFF_LINE_SPACING
+ */
+export const SLUR_NOTE_CLEARANCE_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
+ * How much further (px) than usual a slur's symmetric arc bows around what it
+ * spans before a lopsided one takes over.
+ * = 6.6 × STAFF_LINE_SPACING
+ */
+export const SLUR_MAX_EXTRA_BULGE_PX = STAFF_LINE_SPACING * 6.6;
 
 /**
  * Gap (px) kept between content drawn past its host's or row's edge and that
@@ -512,12 +574,11 @@ export const KEY_SIG_SHARP_WIDTH = STAFF_LINE_SPACING;
 export const KEY_SIG_FLAT_WIDTH = STAFF_LINE_SPACING * 0.8;
 
 /**
- * Vertical y-offset (px) applied to flat accidentals in the key signature.
- * Flats render taller than their bounding box, so a negative offset shifts
- * them up to align with the staff lines.
- * = −1.8 × STAFF_LINE_SPACING
+ * Vertical y-offset (px) applied to flat accidentals in the key signature,
+ * which puts the bowl, not the glyph's middle, on the pitch.
+ * = −0.55 × STAFF_LINE_SPACING
  */
-export const KEY_SIG_FLAT_Y_OFFSET = STAFF_LINE_SPACING * -1.8;
+export const KEY_SIG_FLAT_Y_OFFSET = STAFF_LINE_SPACING * -0.55;
 
 /**
  * Y translation (px) applied to the time signature SVG within the describe
@@ -569,6 +630,22 @@ export const MEASURE_MIN_WIDTH_PX = 100;
 export const AVG_LYRIC_CHAR_WIDTH_PX = STAFF_LINE_SPACING * 0.9;
 
 /**
+ * How far (px) above the staff box's bottom edge the first verse's tops stand,
+ * two spaces below the stave.
+ * = STAFF_LINE_SPACING
+ */
+export const LYRICS_WRAPPER_OVERLAP_PX = STAFF_LINE_SPACING;
+
+/** Distance (px) between the lines of two verses. = 1.5 × STAFF_LINE_SPACING */
+export const LYRICS_VERSE_SPACING_PX = STAFF_LINE_SPACING * 1.5;
+
+/** Gap (px) between lyrics and what stands above them. = 0.5 × STAFF_LINE_SPACING */
+export const LYRICS_INK_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Sub-pixel drift (px) that doesn't count as a move of the lyric line. */
+export const LYRICS_ROW_EPSILON_PX = 0.5;
+
+/**
  * Minimum pixel gap between the left edge of the staff's notes area and the
  * first notehead. Guards against accidentals bleeding into the left barline
  * in non-first measures where describeEndX ≈ 0.
@@ -603,13 +680,16 @@ export const LEADING_NOTE_GAP_PX = STAFF_LINE_SPACING;
 
 // ─── Accidental symbol dimensions ────────────────────────────────────────────
 
-import { AccidentalType } from '../types/theory';
+import type { ConventionalAccidentalType, QuarterTone } from '../types/theory';
 
 /**
  * Rendered pixel width of each accidental symbol type.
  * Used for collision detection and column layout when stacking accidentals on chords.
  */
-export const ACCIDENTAL_SYMBOL_WIDTH: Record<AccidentalType, number> = {
+export const ACCIDENTAL_SYMBOL_WIDTH: Record<
+  ConventionalAccidentalType,
+  number
+> = {
   'double-flat': 18,
   flat: 10,
   natural: 10,
@@ -627,6 +707,59 @@ export const ACCIDENTAL_NOTE_GAP = -7;
  * = 0.35 × STAFF_LINE_SPACING
  */
 export const ACCIDENTAL_REMINDER_PAREN_WIDTH_PX = STAFF_LINE_SPACING * 0.35;
+
+/** How far (px) a quarter-tone arrow reaches past its stroke. = 0.75 × STAFF_LINE_SPACING */
+export const ACCIDENTAL_ARROW_OVERSHOOT_PX = STAFF_LINE_SPACING * 0.75;
+
+/** Width (px) of a quarter-tone arrow's head. = 0.85 × STAFF_LINE_SPACING */
+export const ACCIDENTAL_ARROW_HEAD_WIDTH_PX = STAFF_LINE_SPACING * 0.85;
+
+/** Height (px) of a quarter-tone arrow's head. = 0.6 × STAFF_LINE_SPACING */
+export const ACCIDENTAL_ARROW_HEAD_HEIGHT_PX = STAFF_LINE_SPACING * 0.6;
+
+/** Stroke width (px) of a quarter-tone arrow's head. = 0.13 × STAFF_LINE_SPACING */
+export const ACCIDENTAL_ARROW_HEAD_STROKE_PX = STAFF_LINE_SPACING * 0.13;
+
+/** Clearance (px) a beam keeps from a quarter-tone arrow's tip. = 0.2 × STAFF_LINE_SPACING */
+export const ACCIDENTAL_ARROW_BEAM_GAP_PX = STAFF_LINE_SPACING * 0.2;
+
+/** Gap (px) between a quarter-tone arrow and a reminder's parenthesis. = 0.15 × STAFF_LINE_SPACING */
+export const ACCIDENTAL_ARROW_PAREN_GAP_PX = STAFF_LINE_SPACING * 0.15;
+
+/**
+ * The stroke each accidental's arrow extends, in px of its glyph: the stroke's
+ * x, the end the arrow grows from, its width, and for a glyph with no stroke
+ * how far inside that end (px) the shaft starts. A glyph scaled into a taller
+ * or narrower box than its viewBox is centred, so its left edge is inset.
+ */
+export const ACCIDENTAL_ARROW_STROKES: Record<
+  ConventionalAccidentalType,
+  Record<
+    QuarterTone,
+    { x: number; endY: number; width: number; startInset?: number }
+  >
+> = {
+  flat: {
+    up: { x: 0.83, endY: 0, width: 2 },
+    down: { x: 0.83, endY: 25, width: 2 },
+  },
+  'double-flat': {
+    up: { x: 1.5, endY: 0, width: 2 },
+    down: { x: 1.5, endY: 25, width: 2 },
+  },
+  natural: {
+    up: { x: 2.5, endY: 0, width: 1.67 },
+    down: { x: 7.5, endY: 25, width: 1.67 },
+  },
+  sharp: {
+    up: { x: 7, endY: 0, width: 1.5 },
+    down: { x: 3, endY: 30, width: 1.5 },
+  },
+  'double-sharp': {
+    up: { x: 5, endY: 0, width: 1.5, startInset: 3.5 },
+    down: { x: 5, endY: 10, width: 1.5, startInset: 3.5 },
+  },
+};
 
 // ─── Dynamics ─────────────────────────────────────────────────────────────────
 
@@ -682,12 +815,77 @@ export const DYNAMIC_REMINDER_BRACKET_WIDTH_PX = DYNAMICS_FONT_SIZE * 0.35;
 export const HAIRPIN_DYNAMIC_GAP_PX = 4;
 
 /**
+ * Gap (px) between two hairpins that meet on one note (a crescendo into a
+ * diminuendo): each stops short of the note's centre by half of it.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const HAIRPIN_JOINT_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Shortest gap (px) between the two open ends of a `< >` swell; a longer swell
+ * leaves a sixth of its length (SWELL_MID_GAP_SHARE).
+ * = 1 × STAFF_LINE_SPACING
+ */
+export const SWELL_MID_GAP_PX = STAFF_LINE_SPACING;
+
+/**
+ * Share of a swell's length left open between its wedges (figures: 10–25%).
+ * = 1/6
+ */
+export const SWELL_MID_GAP_SHARE = 1 / 6;
+
+/**
+ * Gap (px) from a `dynamic-end`'s right edge to the next entry's ink, or to
+ * the next entry's own dynamic.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const DYNAMIC_END_NEXT_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Gap (px) from a `dynamic-end`'s right edge to the barline.
+ * = 1.5 × STAFF_LINE_SPACING
+ */
+export const DYNAMIC_END_BARLINE_GAP_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * How far (px) a hairpin's axis on a dynamics row sits above the row's
+ * baseline, level with the middle of the letters standing on it.
+ * = 0.3 × DYNAMICS_FONT_SIZE
+ */
+export const HAIRPIN_AXIS_RISE_PX = DYNAMICS_FONT_SIZE * 0.3;
+
+/**
+ * Shortest wedge (px) a swell draws; shorter reads as a mark, not a hairpin.
+ * = 1.5 × STAFF_LINE_SPACING
+ */
+export const SWELL_MIN_WEDGE_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Room (px) a swell needs from its note's start: two shortest wedges and the
+ * gap between them.
+ * = 2 × SWELL_MIN_WEDGE_PX + SWELL_MID_GAP_PX
+ */
+export const SWELL_MIN_SPAN_PX = 2 * SWELL_MIN_WEDGE_PX + SWELL_MID_GAP_PX;
+
+/**
  * Share of DYNAMICS_FONT_SIZE a dynamic glyph reaches above / below its
  * baseline, for estimating its box. Bold italic dynamics have tall ascenders
  * and almost no descent.
  */
 export const DYNAMICS_TEXT_ASCENT_RATIO = 0.75;
 export const DYNAMICS_TEXT_DESCENT_RATIO = 0.25;
+
+/** Gap (px) between a row of dynamics and the notes it clears. = 1 × STAFF_LINE_SPACING */
+export const DYNAMICS_ROW_INK_GAP_PX = STAFF_LINE_SPACING;
+
+/**
+ * Gap (px) between a row of dynamics and the slurs, ties and brackets it clears.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const DYNAMICS_ROW_CURVE_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Sub-pixel drift (px) that doesn't count as a change of dynamics row. */
+export const DYNAMICS_ROW_EPSILON_PX = 0.5;
 
 /**
  * Shallowest slant (radians) an angled hairpin may take — 10°, enough to read
@@ -744,6 +942,18 @@ export const TUPLET_NUMERAL_GAP_PX = STAFF_LINE_SPACING * 2.5;
 /** Vertical offset (px) between nesting levels of tuplet brackets. */
 export const TUPLET_BRACKET_LEVEL_OFFSET_PX = STAFF_LINE_SPACING * 0.8;
 
+/** A tuplet's note value (`5=♩`) is drawn at 0.7 of a note's size. */
+export const TUPLET_NOTE_VALUE_SCALE = 0.7;
+
+/** Gap (px) between a tuplet label's `=` and its note value. */
+export const TUPLET_NOTE_VALUE_GAP_PX = STAFF_LINE_SPACING * 0.2;
+
+/**
+ * Padding (px) either side of a tuplet label in its bracket's gap, which
+ * widens past TUPLET_NUMERAL_GAP_PX to fit it.
+ */
+export const TUPLET_LABEL_PADDING_PX = STAFF_LINE_SPACING * 0.3;
+
 /** Font size (px) for the tuplet numeral. */
 export const TUPLET_NUMERAL_FONT_SIZE = STAFF_LINE_SPACING * 1.2;
 
@@ -760,13 +970,46 @@ export const TUPLET_STAFF_CLEARANCE_PX = STAFF_LINE_SPACING * 0.6;
  * Rendered pixel height of each accidental symbol type.
  * Used to compute vertical clearance when stacking accidentals on chords.
  */
-export const ACCIDENTAL_SYMBOL_HEIGHT: Record<AccidentalType, number> = {
+export const ACCIDENTAL_SYMBOL_HEIGHT: Record<
+  ConventionalAccidentalType,
+  number
+> = {
   'double-sharp': 10,
   sharp: 30,
-  natural: 30,
+  natural: 25,
   flat: 25,
   'double-flat': 25,
 };
+
+/**
+ * Where each accidental's pitch falls, as a fraction of its height from the
+ * top: a flat's is the centre of its bowl, the others' their own middle.
+ */
+export const ACCIDENTAL_PITCH_RATIO: Record<
+  ConventionalAccidentalType,
+  number
+> = {
+  'double-sharp': 0.5,
+  sharp: 0.5,
+  natural: 0.5,
+  flat: 0.75,
+  'double-flat': 0.75,
+};
+
+/**
+ * How much higher (px) a natural's left stroke ends than its right one, in
+ * the column a flat's stem rises into.
+ */
+export const NATURAL_LEFT_STROKE_INSET_PX = STAFF_LINE_SPACING / 3;
+
+// ─── Cue size ─────────────────────────────────────────────────────────────────
+
+/**
+ * Size of a cue note (`size="cue"`) against a full-size one: its head, stem,
+ * tails, beams, dots, accidentals and marks. A written trilling note and a
+ * bend's target are drawn at it too.
+ */
+export const CUE_SCALE = 0.75;
 
 // ─── Grace notes ──────────────────────────────────────────────────────────────
 
@@ -840,6 +1083,15 @@ export const GRACE_SLASH_STROKE_WIDTH = 1.1;
  * space shows above it, per standard engraving practice.
  */
 export const GRACE_SLASH_TIP_INSET_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Gap (px) between a grace head and the accidental of the grace note after it. = 0.3 × STAFF_LINE_SPACING */
+export const GRACE_ACCIDENTAL_LEAD_GAP_PX = STAFF_LINE_SPACING * 0.3;
+
+/** Clearance (px) an ornament's slur keeps from the heads and accidentals it passes. = 0.2 × STAFF_LINE_SPACING */
+export const ORNAMENT_SLUR_CLEARANCE_PX = STAFF_LINE_SPACING * 0.2;
+
+/** Bulge height (px) past which an ornament's slur lifts off its notes instead. = 3 × STAFF_LINE_SPACING */
+export const ORNAMENT_SLUR_MAX_BULGE_PX = STAFF_LINE_SPACING * 3;
 
 // ─── Clef changes ─────────────────────────────────────────────────────────────
 
@@ -1271,6 +1523,12 @@ export const TRILL_ABOVE_STAFF_GAP_PX = STAFF_LINE_SPACING * 0.6;
 /** Rendered peak-to-peak vertical height (px) of the wavy line. */
 export const TRILL_WAVE_HEIGHT_PX = STAFF_LINE_SPACING * 0.9;
 
+/**
+ * Wave height (px) of each line of a double trill; the two span the sign's
+ * height, the upper level with its top. = 0.55 × STAFF_LINE_SPACING
+ */
+export const TRILL_DOUBLE_WAVE_HEIGHT_PX = STAFF_LINE_SPACING * 0.55;
+
 /** Gap (px) between the sign's right edge and the wavy line's start. */
 export const TRILL_SIGN_LINE_GAP_PX = STAFF_LINE_SPACING * 0.3;
 
@@ -1289,14 +1547,6 @@ export const TRILL_ACCIDENTAL_SCALE = 0.7;
 
 /** Gap (px) between the trilling-note accidental's bottom edge and the sign's top edge. */
 export const TRILL_ACCIDENTAL_GAP_PX = STAFF_LINE_SPACING * 0.2;
-
-/**
- * Scale applied to a written trilling notehead (`trill-note`) — a cue-note
- * size (¾ scale), matching GRACE_SCALE's own note on cue-note sizing but
- * slightly larger than a grace note, since it stands alone rather than
- * grouped in a run.
- */
-export const TRILL_WRITTEN_NOTE_SCALE = 0.75;
 
 /** Gap (px) between the anchor notehead's right edge and the written trilling notehead's left parenthesis. */
 export const TRILL_WRITTEN_NOTE_GAP_PX = STAFF_LINE_SPACING * 0.5;
@@ -1520,6 +1770,27 @@ export const TREMOLO_TAIL_ROOM_PX = STAFF_LINE_SPACING * 1.5;
  */
 export const TREMOLO_STROKE_END_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
 
+/** Height and width (px) of a stem's `cross`. = 0.9 × STAFF_LINE_SPACING */
+export const STEM_CROSS_SIZE_PX = STAFF_LINE_SPACING * 0.9;
+
+/** Width (px) of a stem's multiphonic `M`. = 2.4 × STAFF_LINE_SPACING */
+export const STEM_MULTIPHONIC_WIDTH_PX = STAFF_LINE_SPACING * 2.4;
+
+/** Height (px) of a stem's multiphonic `M`. = 1.3 × STAFF_LINE_SPACING */
+export const STEM_MULTIPHONIC_HEIGHT_PX = STAFF_LINE_SPACING * 1.3;
+
+/** Stroke width (px) of a stem cross's arms. = 0.1 × STAFF_LINE_SPACING */
+export const STEM_CROSS_STROKE_WIDTH_PX = STAFF_LINE_SPACING * 0.1;
+
+/** How far (px) in from a plain stem's end a cross is centred. = 1 × STAFF_LINE_SPACING */
+export const STEM_CROSS_END_INSET_PX = STAFF_LINE_SPACING;
+
+/** Least gap (px) between a stem cross and its notehead. = 0.5 × STAFF_LINE_SPACING */
+export const STEM_CROSS_HEAD_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Gap (px) between a stem cross and the tremolo stroke beyond it. = 0.3 × STAFF_LINE_SPACING */
+export const STEM_CROSS_STROKE_GAP_PX = STAFF_LINE_SPACING * 0.3;
+
 /**
  * Length (px) of plain stem left past the outermost stroke.
  * = 0.5 × STAFF_LINE_SPACING
@@ -1533,33 +1804,106 @@ export const TREMOLO_STEM_OVERSHOOT_PX = STAFF_LINE_SPACING * 0.5;
  */
 export const TREMOLO_NUMERAL_GAP_PX = STAFF_LINE_SPACING * 0.4;
 
-/** Font size (px) of the `trem.` / `non trem.` labels. */
-export const TREMOLO_LABEL_FONT_SIZE_PX = STAFF_LINE_SPACING * 1.1;
+/** Font size (px) of the technique labels above the stave: `trem.`, `flz.`, `quasi gliss.`, … */
+export const TECHNIQUE_LABEL_FONT_SIZE_PX = STAFF_LINE_SPACING * 1.1;
 
 /**
  * Estimated width (px) of one label character, for stacking labels that
  * would overlap; the usual estimate-don't-measure ratio (× 0.55).
- * = TREMOLO_LABEL_FONT_SIZE_PX × 0.55
+ * = TECHNIQUE_LABEL_FONT_SIZE_PX × 0.55
  */
-export const TREMOLO_LABEL_CHAR_WIDTH_PX = TREMOLO_LABEL_FONT_SIZE_PX * 0.55;
+export const TECHNIQUE_LABEL_CHAR_WIDTH_PX =
+  TECHNIQUE_LABEL_FONT_SIZE_PX * 0.55;
+
+/** Baseline to baseline (px) in a label of several lines. = 1.1 × TECHNIQUE_LABEL_FONT_SIZE_PX */
+export const TECHNIQUE_LABEL_LINE_HEIGHT_PX =
+  TECHNIQUE_LABEL_FONT_SIZE_PX * 1.1;
 
 /**
- * Gap (px) between a `trem.` / `non trem.` label's baseline and whatever it
+ * Gap (px) between a technique label's baseline and whatever it
  * sits above: the stave, its note, a tuplet bracket, a trill or another label.
  * = 0.5 × STAFF_LINE_SPACING
  */
-export const TREMOLO_LABEL_GAP_PX = STAFF_LINE_SPACING * 0.5;
-
-// ─── Dotted ties ──────────────────────────────────────────────────────────────
+export const TECHNIQUE_LABEL_GAP_PX = STAFF_LINE_SPACING * 0.5;
 
 /**
- * Dash length (px) of a dotted tie.
+ * Gap (px) a run-on technique text leaves before the next technique text of
+ * its staff. = 1 sp
+ */
+export const TECHNIQUE_TEXT_NEXT_GAP_PX = STAFF_LINE_SPACING;
+
+/**
+ * Clearance (px) of technique text below the stave: from the stave and the
+ * ink under it, and from its own entry's stem, tail or ledger lines it ends
+ * before. = 1 sp
+ */
+export const TECHNIQUE_TEXT_BELOW_GAP_PX = STAFF_LINE_SPACING;
+
+/** Font size (px) of a `dynamic-text`: the technique label size. = 1.1 sp */
+export const DYNAMIC_TEXT_FONT_SIZE_PX = STAFF_LINE_SPACING * 1.1;
+
+/** Gap (px) between a dynamic's letters and its `dynamic-text`. = 0.3 sp */
+export const DYNAMIC_TEXT_GAP_PX = STAFF_LINE_SPACING * 0.3;
+
+/**
+ * Gap (px) before a `dynamic-text` opening with a comma or bracket, which
+ * carries its own space. = 0.1 sp
+ */
+export const DYNAMIC_TEXT_PUNCTUATION_GAP_PX = STAFF_LINE_SPACING * 0.1;
+
+// ─── Breath marks ─────────────────────────────────────────────────────────────
+
+/**
+ * Drawn height (px) of a ✓ breath mark: about 1½ spaces, as engraved over a
+ * woodwind phrase.
+ * = 1.5 × STAFF_LINE_SPACING
+ */
+export const BREATH_MARK_TICK_HEIGHT_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Drawn height (px) of a comma breath mark, its glyph's own size.
+ * = 1 × STAFF_LINE_SPACING
+ */
+export const BREATH_MARK_COMMA_HEIGHT_PX = STAFF_LINE_SPACING;
+
+/**
+ * Gap (px) between a breath mark's bottom and the top stave line; the mark
+ * sits just above the stave.
+ * = 0.25 × STAFF_LINE_SPACING
+ */
+export const BREATH_MARK_STAFF_GAP_PX = STAFF_LINE_SPACING * 0.25;
+
+/**
+ * Gap (px) a breath mark keeps above ink beneath it: a high note, a beam
+ * across the gap, a label or a bracket.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const BREATH_MARK_INK_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Room (px) kept on each side of a breath mark in the gap after its note,
+ * part of the width the entry reserves to its right.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const BREATH_MARK_SIDE_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Gap (px) between a standalone note's right edge (head, dots or tail) and its
+ * breath mark.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const BREATH_MARK_STANDALONE_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+// ─── Dotted ties and slurs ────────────────────────────────────────────────────
+
+/**
+ * Dash length (px) of a dotted tie or slur.
  * = 0.3 × STAFF_LINE_SPACING
  */
 export const TIE_DASH_PX = STAFF_LINE_SPACING * 0.3;
 
 /**
- * Gap (px) between a dotted tie's dashes.
+ * Gap (px) between a dotted tie's or slur's dashes.
  * = 0.3 × STAFF_LINE_SPACING
  */
 export const TIE_DASH_GAP_PX = STAFF_LINE_SPACING * 0.3;
@@ -1593,3 +1937,166 @@ export const TREMOLO_BEAM_MIN_LENGTH_PX = STAFF_LINE_SPACING;
  * = 7 × STAFF_Y_STEP
  */
 export const TREMOLO_BETWEEN_MIN_INTERVAL_PX = 7 * STAFF_Y_STEP;
+
+// ─── Glissandos ───────────────────────────────────────────────────────────────
+
+/** Gap (px) between a glissando line and the ink at each end. = 0.5 × STAFF_LINE_SPACING */
+export const GLISSANDO_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/** The gap a line too short for GLISSANDO_GAP_PX closes to. = 0.2 × STAFF_LINE_SPACING */
+export const GLISSANDO_MIN_GAP_PX = STAFF_LINE_SPACING * 0.2;
+
+/** Line length (px) a glissando's start reserves room for. = 2 × STAFF_LINE_SPACING */
+export const GLISSANDO_MIN_LENGTH_PX = STAFF_LINE_SPACING * 2;
+
+/** Shortest line (px) worth drawing. = 1 × STAFF_LINE_SPACING */
+export const GLISSANDO_MIN_DRAWN_PX = STAFF_LINE_SPACING;
+
+/** Stroke width (px) of a glissando line. = STAFF_LINE_THICKNESS_PX */
+export const GLISSANDO_LINE_THICKNESS_PX = STAFF_LINE_THICKNESS_PX;
+
+/** How far (px) a sloped line keeps off the stave line its head is on. = 0.2 × STAFF_LINE_SPACING */
+export const GLISSANDO_OFF_LINE_PX = STAFF_LINE_SPACING * 0.2;
+
+/** How far (px) a level line or a wave moves off that line, into the space. = 0.5 × STAFF_LINE_SPACING */
+export const GLISSANDO_LEVEL_LIFT_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Width and depth (px) of a glissando's dip. = 4 and 0.4 × STAFF_LINE_SPACING */
+export const GLISSANDO_DIP_WIDTH_PX = STAFF_LINE_SPACING * 4;
+export const GLISSANDO_DIP_DEPTH_PX = STAFF_LINE_SPACING * 0.4;
+
+/** Wavelength and amplitude (px) of a wavy glissando. = 2.65 and 0.435 × STAFF_LINE_SPACING */
+export const GLISSANDO_WAVELENGTH_PX = STAFF_LINE_SPACING * 2.65;
+export const GLISSANDO_WAVE_AMPLITUDE_PX = STAFF_LINE_SPACING * 0.435;
+
+/** Vertical clearance (px) a glissando line keeps from its notes' other ink. = 0.1 × STAFF_LINE_SPACING */
+export const GLISSANDO_INK_CLEARANCE_PX = STAFF_LINE_SPACING * 0.1;
+
+/** How far (px) a free straight bend moves, up to 5 spaces long. = 0.7 × STAFF_LINE_SPACING */
+export const BEND_FREE_TRAVEL_PX = STAFF_LINE_SPACING * 0.7;
+
+/** The slope a longer one keeps, and the most (px) it moves. = 0.7 / 5 and 2 × STAFF_LINE_SPACING */
+export const BEND_FREE_SLOPE = 0.14;
+export const BEND_FREE_MAX_TRAVEL_PX = STAFF_LINE_SPACING * 2;
+
+/** Tilt (px) of a bend toward a pitch on its own staff position. = 0.25 × STAFF_LINE_SPACING */
+export const BEND_SAME_POSITION_TILT_PX = STAFF_LINE_SPACING * 0.25;
+
+/** Room (px) a bend leaves before a barline when it can. = 1.5 × STAFF_LINE_SPACING */
+export const BEND_BARLINE_GAP_PX = STAFF_LINE_SPACING * 1.5;
+
+/** Length (px) of a standalone note's bend. = 5 × STAFF_LINE_SPACING */
+export const BEND_STANDALONE_LENGTH_PX = STAFF_LINE_SPACING * 5;
+
+/**
+ * Length (px) a `bend-contour` reserves per pitch, beyond the shortest bend.
+ * = 1.2 × STAFF_LINE_SPACING
+ */
+export const BEND_CONTOUR_POINT_PX = STAFF_LINE_SPACING * 1.2;
+
+/**
+ * Stroke width (px) of a `bend-contour`: a stave line's weight.
+ * = STAFF_LINE_THICKNESS_PX
+ */
+export const BEND_CONTOUR_THICKNESS_PX = STAFF_LINE_THICKNESS_PX;
+
+/** Width (px) of each parenthesis around a bend's target. = 0.6 × STAFF_LINE_SPACING */
+export const BEND_TARGET_PARENTHESIS_WIDTH_PX = STAFF_LINE_SPACING * 0.6;
+
+/** Half-height (px) of those parentheses. = 1 × STAFF_LINE_SPACING */
+export const BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX = STAFF_LINE_SPACING;
+
+/** Gap (px) between the parentheses, the accidental and the head they enclose. = 0.15 × STAFF_LINE_SPACING */
+export const BEND_TARGET_GAP_PX = STAFF_LINE_SPACING * 0.15;
+
+/** How far (px) a bend target's ledger lines reach past its head. = 0.3 × STAFF_LINE_SPACING */
+export const BEND_TARGET_LEDGER_OVERHANG_PX = STAFF_LINE_SPACING * 0.3;
+
+// ─── Phonemes ──────────────────────────────────────────────────────────────────
+
+/** Font size (px) of phonemes: upright serif at the label size. */
+export const PHONEME_FONT_SIZE_PX = TECHNIQUE_LABEL_FONT_SIZE_PX;
+
+/**
+ * Share of PHONEME_FONT_SIZE_PX a bracket reaches above / below the baseline.
+ */
+export const PHONEME_ASCENT_RATIO = 0.75;
+export const PHONEME_DESCENT_RATIO = 0.25;
+
+/** Share of PHONEME_FONT_SIZE_PX of the x-height, where arrows sit halfway. */
+export const PHONEME_X_HEIGHT_RATIO = 0.45;
+
+/**
+ * Gap (px) from the ink above a phoneme row to its brackets' tops.
+ * = 0.8 × STAFF_LINE_SPACING
+ */
+export const PHONEME_INK_GAP_PX = STAFF_LINE_SPACING * 0.8;
+
+/**
+ * Least gap (px) from the bottom stave line to a phoneme row's brackets.
+ * = 1.5 × STAFF_LINE_SPACING
+ */
+export const PHONEME_STAFF_GAP_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Gap (px) between two voices' phoneme rows.
+ * = 0.4 × STAFF_LINE_SPACING
+ */
+export const PHONEME_ROW_GAP_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Gap (px) between two phonemes with no arrow between them, brackets
+ * included.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const PHONEME_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Gap (px) from the last phoneme of a note to the next entry's ink, or to the
+ * barline.
+ * = 0.5 / 1.5 × STAFF_LINE_SPACING
+ */
+export const PHONEME_SPAN_END_GAP_PX = STAFF_LINE_SPACING * 0.5;
+export const PHONEME_BARLINE_GAP_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Gap (px) between an arrow and the phonemes it joins.
+ * = 0.6 × STAFF_LINE_SPACING
+ */
+export const PHONEME_ARROW_GAP_PX = STAFF_LINE_SPACING * 0.6;
+
+/**
+ * An arrow's open head: its length and its height (px).
+ * = 1.6 × / 0.7 × STAFF_LINE_SPACING
+ */
+export const PHONEME_ARROW_HEAD_LENGTH_PX = STAFF_LINE_SPACING * 1.6;
+export const PHONEME_ARROW_HEAD_HEIGHT_PX = STAFF_LINE_SPACING * 0.7;
+
+/**
+ * Shortest arrow (px) drawn at all; shorter, it is left out.
+ * = 0.8 × STAFF_LINE_SPACING
+ */
+export const PHONEME_ARROW_MIN_PX = STAFF_LINE_SPACING * 0.8;
+
+// ─── Signs above notes ──────────────────────────────────────────────────────
+
+/** Diameter (px) of a sign's circle (open, filled or half). = 0.6 × STAFF_LINE_SPACING */
+export const SIGN_CIRCLE_DIAMETER_PX = STAFF_LINE_SPACING * 0.6;
+
+/** Height and width (px) of a sign's plus or cross. = 0.9 × STAFF_LINE_SPACING */
+export const SIGN_CROSS_SIZE_PX = STAFF_LINE_SPACING * 0.9;
+
+/** Stroke width (px) of a sign's plus or cross. = 0.1 × STAFF_LINE_SPACING */
+export const SIGN_CROSS_STROKE_WIDTH_PX = STAFF_LINE_SPACING * 0.1;
+
+/** Stroke width (px) of an open or half circle. = STAFF_LINE_THICKNESS_PX */
+export const SIGN_CIRCLE_STROKE_WIDTH_PX = STAFF_LINE_THICKNESS_PX;
+
+/** Gap (px) between stacked signs, and between a sign and the ink under it. = 0.25 × STAFF_LINE_SPACING */
+export const SIGN_GAP_PX = STAFF_LINE_SPACING * 0.25;
+
+/** Least gap (px) between a sign, or an articulation moved up with one, and the stave's top line. = 0.5 × STAFF_LINE_SPACING */
+export const SIGN_STAFF_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Signs of neighbouring notes closer in height than this (px) line up level. = 0.5 × STAFF_LINE_SPACING */
+export const SIGN_LEVEL_TOLERANCE_PX = STAFF_LINE_SPACING * 0.5;

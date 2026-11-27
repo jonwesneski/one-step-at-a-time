@@ -6,6 +6,9 @@ import {
   STAFF_BOTTOM_LINE_Y,
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
+  STEM_CROSS_END_INSET_PX,
+  STEM_CROSS_SIZE_PX,
+  STEM_MULTIPHONIC_HEIGHT_PX,
   TREMOLO_BEAM_MAX_LENGTH_PX,
   TREMOLO_BEAM_MIN_LENGTH_PX,
   TREMOLO_BEAM_STEM_GAP_PX,
@@ -25,6 +28,7 @@ import {
   beamedTremoloMinimumStemPx,
   canPlaceTremoloBetween,
   drawnTremoloTuplet,
+  flutterLabelConsistencyWarning,
   MAX_ARTICULATION_REPEATS,
   repetitionCount,
   resolveBetweenTremoloBeams,
@@ -34,6 +38,7 @@ import {
   STAFF_BAND,
   stemEndingFor,
   stemlessTremoloReachPx,
+  stemMarkHalfHeightPx,
   TREMOLO_NUMERAL_EXTENT_PX,
   tremoloBeamCounts,
   tremoloConsistencyWarnings,
@@ -498,6 +503,8 @@ describe('tremoloConsistencyWarnings', () => {
     articulationRepeat: true,
     articulation: 'staccato' as const,
     duration: 'quarter' as const,
+    label: null,
+    inTremoloGroup: false,
   };
 
   it('checks only what the changed attribute affects', () => {
@@ -527,6 +534,57 @@ describe('tremoloConsistencyWarnings', () => {
     expect(
       tremoloConsistencyWarnings({ ...input, changed: null })
     ).toHaveLength(2);
+  });
+
+  it('checks a flutter label when the label or the tremolo changes', () => {
+    const flutter = {
+      ...input,
+      articulationRepeat: false,
+      label: 'flz' as const,
+    };
+    expect(
+      tremoloConsistencyWarnings({ ...flutter, changed: 'tremolo-label' })
+    ).toEqual([expect.stringContaining('single-note tremolo')]);
+    expect(
+      tremoloConsistencyWarnings({ ...flutter, changed: 'tremolo' })
+    ).toHaveLength(2);
+    expect(
+      tremoloConsistencyWarnings({ ...flutter, changed: 'duration' })
+    ).toHaveLength(0);
+  });
+});
+
+describe('flutterLabelConsistencyWarning', () => {
+  it('needs a single-note tremolo under a flutter label', () => {
+    for (const label of ['flz', 'flt', 'frull'] as const) {
+      expect(flutterLabelConsistencyWarning(label, null, false)).toContain(
+        'single-note tremolo'
+      );
+      expect(
+        flutterLabelConsistencyWarning(label, 'unmeasured', false)
+      ).toBeNull();
+    }
+  });
+
+  it('warns about a flutter label on a <music-tremolo> member', () => {
+    expect(flutterLabelConsistencyWarning('flz', 3, true)).toContain(
+      'single-note tremolo'
+    );
+  });
+
+  it('warns about an ordinary label on a tremolo note', () => {
+    for (const label of ['ord', 'nat', 'norm'] as const) {
+      expect(
+        flutterLabelConsistencyWarning(label, 'unmeasured', false)
+      ).toContain('remove the tremolo');
+      expect(flutterLabelConsistencyWarning(label, null, false)).toBeNull();
+    }
+  });
+
+  it('leaves trem. and non trem. to the tremolo rules', () => {
+    expect(flutterLabelConsistencyWarning('trem', null, false)).toBeNull();
+    expect(flutterLabelConsistencyWarning('non-trem', 2, false)).toBeNull();
+    expect(flutterLabelConsistencyWarning(null, null, false)).toBeNull();
   });
 });
 
@@ -630,6 +688,21 @@ describe('resolveTremoloGroupLayout', () => {
       total,
     });
 
+  it("steps a cue group's beams at ¾", () => {
+    const full = pair(1, 3);
+    const cue = resolveTremoloGroupLayout({
+      members: [
+        { stemX: 0, nearestHeadY: F4 },
+        { stemX: 50, nearestHeadY: F4 },
+      ],
+      stemUp: true,
+      attached: 1,
+      total: 3,
+      scale: 0.75,
+    });
+    expect(cue.levelOffset).toBeCloseTo(0.75 * full.levelOffset);
+  });
+
   it('draws every beam, detached ones stopping short of both stems', () => {
     const { beams } = pair(0, 3);
     expect(beams).toHaveLength(3);
@@ -707,5 +780,169 @@ describe('tremoloDetachedSpan', () => {
     const { x1, x2 } = tremoloDetachedSpan([0, 4]);
     expect(x1).toBeGreaterThanOrEqual(0);
     expect(x2).toBeLessThanOrEqual(4);
+  });
+});
+
+describe('a stem cross', () => {
+  const cross = (
+    input: Partial<Parameters<typeof resolveStrokePlacement>[0]> = {}
+  ) =>
+    resolveStrokePlacement({
+      headY: E4,
+      stemUp: true,
+      strokeCount: 0,
+      staff: STAFF_BAND,
+      stemLengthPx: BASE_STEM_LENGTH_PX,
+      ending: { kind: 'plain' },
+      canLengthenStem: true,
+      stemMark: 'cross',
+      ...input,
+    });
+
+  it('stands a space in from a plain stem’s end, without lengthening it', () => {
+    const placement = cross();
+    expect(placement.centerYs).toEqual([]);
+    expect(placement.markCenterY).toBeCloseTo(
+      E4 - BASE_STEM_LENGTH_PX + STEM_CROSS_END_INSET_PX
+    );
+    expect(placement.stemFloorPx).toBeCloseTo(BASE_STEM_LENGTH_PX);
+  });
+
+  it('keeps clear of a tail’s root and the beams', () => {
+    const plain = cross().markCenterY ?? 0;
+    const tailed = cross({ ending: { kind: 'tail', flagCount: 1 } });
+    const beamed = cross({ ending: { kind: 'beam', beamCount: 2 } });
+    expect(tailed.markCenterY).toBeGreaterThan(plain);
+    expect(beamed.markCenterY).toBeGreaterThan(plain);
+    expect(E4 - BASE_STEM_LENGTH_PX + TREMOLO_TAIL_ROOM_PX).toBeLessThanOrEqual(
+      (tailed.markCenterY ?? 0) - STEM_CROSS_SIZE_PX / 2
+    );
+  });
+
+  it('lengthens a stem too short for it, or stays on one already drawn', () => {
+    const short = 15;
+    const lengthened = cross({ stemLengthPx: short });
+    expect(lengthened.stemFloorPx).toBeGreaterThan(short);
+    expect(E4 - (lengthened.markCenterY ?? 0)).toBeGreaterThan(
+      STEM_CROSS_SIZE_PX
+    );
+    const drawn = cross({ stemLengthPx: short, canLengthenStem: false });
+    expect(E4 - (drawn.markCenterY ?? 0)).toBeLessThan(short);
+  });
+
+  it('goes between tremolo strokes and the head', () => {
+    const placement = cross({ strokeCount: 2, headY: C5, stemUp: false });
+    const [first] = placement.centerYs;
+    expect(placement.markCenterY).toBeGreaterThan(C5);
+    expect(placement.markCenterY).toBeLessThan(first - HALF_HEIGHT);
+    expect(
+      first -
+        HALF_HEIGHT -
+        ((placement.markCenterY ?? 0) + STEM_CROSS_SIZE_PX / 2)
+    ).toBeGreaterThan(0);
+  });
+
+  it('takes a stemless head’s notional stem side and counts as its ink', () => {
+    const placement = cross({ stemLengthPx: null, stemUp: false, headY: C5 });
+    expect(placement.markCenterY).toBeGreaterThan(C5);
+    expect(
+      stemlessTremoloReachPx({
+        tremolo: null,
+        stemMark: 'cross',
+        tuplet: null,
+        duration: 'whole',
+        headY: C5,
+        stemUp: false,
+      })
+    ).toBeCloseTo((placement.markCenterY ?? 0) - C5 + STEM_CROSS_SIZE_PX / 2);
+  });
+
+  it('makes a beamed or unbeamed stem long enough', () => {
+    expect(
+      unbeamedTremoloStemExtensionPx({
+        tremolo: null,
+        stemMark: 'cross',
+        duration: 'sixteenth',
+        headYs: [E4],
+        stemUp: true,
+        staff: STAFF_BAND,
+        stemExtensionPx: 0,
+      })
+    ).toBeGreaterThan(0);
+    expect(
+      beamedTremoloMinimumStemPx({
+        tremolo: null,
+        stemMark: 'cross',
+        duration: 'sixteenth',
+        nearestHeadY: E4,
+        stemUp: true,
+      })
+    ).toBeGreaterThan(0);
+    expect(
+      beamedTremoloMinimumStemPx({
+        tremolo: null,
+        duration: 'sixteenth',
+        nearestHeadY: E4,
+        stemUp: true,
+      })
+    ).toBeUndefined();
+  });
+});
+
+describe('a multiphonic M through the stem', () => {
+  const placed = (
+    stemMark: 'cross' | 'multiphonic',
+    input: Partial<Parameters<typeof resolveStrokePlacement>[0]> = {}
+  ) =>
+    resolveStrokePlacement({
+      headY: E4,
+      stemUp: true,
+      strokeCount: 0,
+      staff: STAFF_BAND,
+      stemLengthPx: BASE_STEM_LENGTH_PX,
+      ending: { kind: 'plain' },
+      canLengthenStem: true,
+      stemMark,
+      ...input,
+    });
+
+  it('leaves as much plain stem past it as the cross does', () => {
+    const extra =
+      stemMarkHalfHeightPx('multiphonic') - stemMarkHalfHeightPx('cross');
+    expect(placed('multiphonic').markCenterY).toBeCloseTo(
+      (placed('cross').markCenterY ?? 0) + extra
+    );
+    expect(placed('multiphonic').stemFloorPx).toBeCloseTo(BASE_STEM_LENGTH_PX);
+  });
+
+  it('keeps its taller ink clear of the head, lengthening a short stem further', () => {
+    const half = stemMarkHalfHeightPx('multiphonic');
+    expect(half).toBeCloseTo(STEM_MULTIPHONIC_HEIGHT_PX / 2);
+    const multiphonic = placed('multiphonic', { stemLengthPx: 15 });
+    const cross = placed('cross', { stemLengthPx: 15 });
+    expect(multiphonic.stemFloorPx).toBeGreaterThan(cross.stemFloorPx);
+    expect(E4 - (multiphonic.markCenterY ?? 0) - half).toBeGreaterThan(0);
+  });
+
+  it('counts as a stemless head’s ink by its own height', () => {
+    expect(
+      stemlessTremoloReachPx({
+        tremolo: null,
+        stemMark: 'multiphonic',
+        tuplet: null,
+        duration: 'whole',
+        headY: C5,
+        stemUp: false,
+      })
+    ).toBeGreaterThan(
+      stemlessTremoloReachPx({
+        tremolo: null,
+        stemMark: 'cross',
+        tuplet: null,
+        duration: 'whole',
+        headY: C5,
+        stemUp: false,
+      })
+    );
   });
 });

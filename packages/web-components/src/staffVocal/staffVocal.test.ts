@@ -15,7 +15,7 @@ import {
   MUSIC_VOICE,
   STAFF_EVENTS,
 } from '../utils/consts';
-import { MIN_NOTE_WIDTH } from '../utils/notationDimensions';
+import { MIN_NOTE_WIDTH, STAFF_TOP_LINE_Y } from '../utils/notationDimensions';
 import {
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
@@ -194,6 +194,56 @@ describe(MUSIC_STAFF_VOCAL, () => {
     const el = document.createElement(MUSIC_STAFF_VOCAL) as any;
     document.body.appendChild(el);
     expect(el.voice).toBe('soprano');
+  });
+});
+
+describe(`${MUSIC_STAFF_VOCAL} dynamics`, () => {
+  it('go above the stave, clear of the lyrics', () => {
+    const staff = makeStaff();
+    const note = document.createElement(MUSIC_NOTE);
+    note.setAttribute('note', 'C');
+    note.setAttribute('octave', '5');
+    note.setAttribute('dynamic', 'p');
+    const slot = staff.shadowRoot!.querySelector('slot')!;
+    slot.assignedElements = () => [note];
+    slot.dispatchEvent(new Event('slotchange'));
+    const marking = staff.shadowRoot!.querySelector('.dynamic-marking');
+    expect(Number(marking?.getAttribute('y'))).toBeLessThan(STAFF_TOP_LINE_Y);
+  });
+});
+
+describe(`${MUSIC_STAFF_VOCAL} tuplets`, () => {
+  const bracketTop = (markup: string): number => {
+    const staff = makeStaff();
+    staff.innerHTML = markup;
+    const slot = staff.shadowRoot!.querySelector('slot')!;
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    const [line] = Array.from(
+      staff.shadowRoot!.querySelectorAll('.tuplets-container line')
+    );
+    return Number(line.getAttribute('y1'));
+  };
+  const note = `<${MUSIC_NOTE} note="D" octave="5" duration="quarter"></${MUSIC_NOTE}>`;
+  const tuplet = (attrs = '') =>
+    `<${MUSIC_TUPLET} ${attrs}>${note.repeat(3)}</${MUSIC_TUPLET}>`;
+
+  it('keep their bracket above the stave, clear of the lyrics', () => {
+    expect(bracketTop(tuplet())).toBeLessThan(STAFF_TOP_LINE_Y);
+  });
+
+  it('follow an authored placement', () => {
+    expect(bracketTop(tuplet('placement="below"'))).toBeGreaterThan(
+      STAFF_TOP_LINE_Y
+    );
+  });
+
+  it('of a lower voice stay below', () => {
+    expect(
+      bracketTop(
+        `<${MUSIC_VOICE}>${note}</${MUSIC_VOICE}><${MUSIC_VOICE}>${tuplet()}</${MUSIC_VOICE}>`
+      )
+    ).toBeGreaterThan(STAFF_TOP_LINE_Y);
   });
 });
 
@@ -648,6 +698,28 @@ describe('lyric alignment', () => {
       </music-staff-vocal>`;
     const lyrics = document.querySelector(MUSIC_LYRICS)!;
     expect(placedSyllables(lyrics)).toEqual(['one', 'two']);
+  });
+
+  it('gives the words to the first of several voices', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    document.body.innerHTML = `
+      <music-staff-vocal voice="soprano">
+        <music-voice>
+          <music-note note="E" octave="5" duration="half"></music-note>
+          <music-note note="D" octave="5" duration="half"></music-note>
+        </music-voice>
+        <music-voice>
+          <music-note note="A" octave="4" duration="quarter"></music-note>
+          <music-note note="G" octave="4" duration="quarter"></music-note>
+          <music-note note="A" octave="4" duration="half"></music-note>
+        </music-voice>
+        <${MUSIC_LYRICS}>one two three</${MUSIC_LYRICS}>
+      </music-staff-vocal>`;
+    expect(placedSyllables(document.querySelector(MUSIC_LYRICS)!)).toEqual([
+      'one',
+      'two',
+    ]);
+    warn.mockRestore();
   });
 
   it('carries a syllable over a tie continuation', () => {

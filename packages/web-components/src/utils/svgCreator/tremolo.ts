@@ -1,15 +1,14 @@
 import type { TremoloBeamSegment } from '../../rules/tremoloRules';
-import type { TremoloLabel } from '../../types/theory';
+import { parseTupletRatio, tupletDisplay } from '../../rules/tupletRules';
+import type { TupletRatio } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
   BEAM_THICKNESS_PX,
-  TREMOLO_LABEL_CHAR_WIDTH_PX,
-  TREMOLO_LABEL_FONT_SIZE_PX,
   TREMOLO_STROKE_RISE_PX,
   TREMOLO_STROKE_THICKNESS_PX,
   TREMOLO_STROKE_WIDTH_PX,
 } from '../notationDimensions';
-import { createTupletNumeralText } from './tuplet';
+import { createTupletLabel } from './tuplet';
 
 /**
  * Tremolo strokes centred on `centerX` (the stem, or a stemless head's
@@ -19,14 +18,15 @@ import { createTupletNumeralText } from './tuplet';
  */
 export function createTremoloStrokes(
   centerX: number,
-  centerYs: readonly number[]
+  centerYs: readonly number[],
+  scale = 1
 ): SVGGElement {
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('tremolo-strokes');
-  const left = centerX - TREMOLO_STROKE_WIDTH_PX / 2;
-  const right = centerX + TREMOLO_STROKE_WIDTH_PX / 2;
-  const halfThickness = TREMOLO_STROKE_THICKNESS_PX / 2;
-  const halfRise = TREMOLO_STROKE_RISE_PX / 2;
+  const left = centerX - (scale * TREMOLO_STROKE_WIDTH_PX) / 2;
+  const right = centerX + (scale * TREMOLO_STROKE_WIDTH_PX) / 2;
+  const halfThickness = (scale * TREMOLO_STROKE_THICKNESS_PX) / 2;
+  const halfRise = (scale * TREMOLO_STROKE_RISE_PX) / 2;
   for (const centerY of centerYs) {
     const leftMiddle = centerY + halfRise;
     const rightMiddle = centerY - halfRise;
@@ -54,46 +54,26 @@ export function createTremoloNumeral(
   x: number,
   centerY: number,
   value: number
-): SVGTextElement {
-  return createTupletNumeralText(x, centerY, `${value}`, 'tremolo-numeral');
-}
-
-const TREMOLO_LABEL_TEXT: Record<TremoloLabel, string> = {
-  trem: 'trem.',
-  'non-trem': 'non trem.',
-};
-
-/** Estimated drawn width (px) of a `trem.` / `non trem.` label. */
-export function tremoloLabelWidthPx(label: TremoloLabel): number {
-  return TREMOLO_LABEL_TEXT[label].length * TREMOLO_LABEL_CHAR_WIDTH_PX;
-}
-
-/** A `trem.` / `non trem.` label starting at leftX on baselineY. */
-export function createTremoloLabel(
-  leftX: number,
-  baselineY: number,
-  label: TremoloLabel
-): SVGTextElement {
-  const text = document.createElementNS(SVG_NS, 'text');
-  text.classList.add('tremolo-label');
-  text.setAttribute('x', `${leftX}`);
-  text.setAttribute('y', `${baselineY}`);
-  text.setAttribute('text-anchor', 'start');
-  text.setAttribute('font-family', 'serif');
-  text.setAttribute('font-size', `${TREMOLO_LABEL_FONT_SIZE_PX}`);
-  text.setAttribute('fill', 'currentColor');
-  text.textContent = TREMOLO_LABEL_TEXT[label];
-  return text;
+): SVGElement {
+  return createTupletLabel(
+    x,
+    centerY,
+    tupletDisplay(parseTupletRatio(`${value}` as TupletRatio), null),
+    'tremolo-numeral'
+  );
 }
 
 /** `points` for a tremolo beam whose top edge runs along `segment`. */
-export function tremoloBeamPoints(segment: TremoloBeamSegment): string {
+export function tremoloBeamPoints(
+  segment: TremoloBeamSegment,
+  thickness = BEAM_THICKNESS_PX
+): string {
   const { x1, x2, top1, top2 } = segment;
   return [
     [x1, top1],
     [x2, top2],
-    [x2, top2 + BEAM_THICKNESS_PX],
-    [x1, top1 + BEAM_THICKNESS_PX],
+    [x2, top2 + thickness],
+    [x1, top1 + thickness],
   ]
     .map(([x, y]) => `${x},${y}`)
     .join(' ');

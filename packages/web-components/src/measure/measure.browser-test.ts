@@ -257,18 +257,42 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
   test('basis scales linearly with note count — delta = noteCount × (strut + slack)', async ({
     page,
   }) => {
-    await buildMeasureWithNotes(page, 'eighth', ONE_NOTE);
+    await buildMeasureWithNotes(page, 'quarter', ONE_NOTE);
     await waitForRedrawCycle(page);
     const flex1 = await readMeasureFlex(page);
 
-    await buildMeasureWithNotes(page, 'eighth', EIGHT_NOTES);
+    await buildMeasureWithNotes(page, 'quarter', FOUR_NOTES);
     await waitForRedrawCycle(page);
-    const flex8 = await readMeasureFlex(page);
+    const flex4 = await readMeasureFlex(page);
 
-    expect(flex8.basis - flex1.basis).toBeCloseTo(
-      7 * entryNatural('eighth'),
+    expect(flex4.basis - flex1.basis).toBeCloseTo(
+      3 * entryNatural('quarter'),
       0
     );
+  });
+
+  test('a bar whose last notes are shorter than the rest — basis widens so they keep their places', async ({
+    page,
+  }) => {
+    await buildMeasureWithNotes(page, 'eighth', EIGHT_NOTES);
+    await waitForRedrawCycle(page);
+    const evenly = await readMeasureFlex(page);
+    const natural =
+      (await readDescribeEndX(page)) +
+      LEADING_NOTE_GAP +
+      8 * entryNatural('eighth');
+    expect(evenly.basis).toBeLessThan(natural + MIN_NOTE_WIDTH);
+
+    await page.evaluate((noteTag) => {
+      const notes = Array.from(document.querySelectorAll(noteTag));
+      notes[0].setAttribute('duration', 'half' satisfies DurationType);
+      notes.slice(1, 4).forEach((note) => note.remove());
+      notes[7].setAttribute('duration', 'sixteenth' satisfies DurationType);
+      notes[7].after(notes[7].cloneNode());
+    }, MUSIC_NOTE);
+    await waitForRedrawCycle(page);
+    const shortEnd = await readMeasureFlex(page);
+    expect(shortEnd.basis).toBeGreaterThan(evenly.basis + MIN_NOTE_WIDTH);
   });
 
   test('16 hundredtwentyeighth notes — basis exceeds old 300px cap (regression)', async ({
@@ -281,14 +305,13 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
     const describeEndX = await readDescribeEndX(page);
 
     expect(flex.basis).toBeGreaterThan(300);
-    expect(
-      Math.abs(
-        flex.basis -
-          (describeEndX +
-            LEADING_NOTE_GAP +
-            16 * entryNatural('hundredtwentyeighth'))
-      )
-    ).toBeLessThanOrEqual(1);
+    // The last note's head and the gap after it take more than its strut.
+    const strut =
+      describeEndX +
+      LEADING_NOTE_GAP +
+      16 * entryNatural('hundredtwentyeighth');
+    expect(flex.basis).toBeGreaterThanOrEqual(Math.floor(strut));
+    expect(flex.basis).toBeLessThan(strut + MIN_NOTE_WIDTH);
   });
 
   test('notes do not bleed — the staff is wide enough for 15 hundredtwentyeighth notes', async ({
@@ -387,12 +410,12 @@ test.describe(`${MUSIC_MEASURE} min-width layout`, () => {
       describeEndX + LEADING_NOTE_GAP + 16 * MIN_NOTE_WIDTH;
 
     expect(naturalFor16Sixteenths).toBeGreaterThan(naturalFor1Whole);
-    expect(Math.abs(flex.basis - naturalFor16Sixteenths)).toBeLessThanOrEqual(
-      1
+    expect(flex.basis).toBeGreaterThanOrEqual(
+      Math.floor(naturalFor16Sixteenths)
     );
-    expect(
-      Math.abs(minWidth - Math.max(strutFor16Notes, MEASURE_MIN_WIDTH))
-    ).toBeLessThanOrEqual(1);
+    expect(flex.basis).toBeLessThan(naturalFor16Sixteenths + MIN_NOTE_WIDTH);
+    expect(minWidth).toBeGreaterThanOrEqual(Math.floor(strutFor16Notes));
+    expect(minWidth).toBeLessThan(strutFor16Notes + MIN_NOTE_WIDTH);
     expect(flex.basis).toBeGreaterThan(naturalFor1Whole);
   });
 
@@ -619,6 +642,17 @@ test.describe(`${MUSIC_MEASURE} group connectors`, () => {
     const glyphs = await readGroupConnectorGlyphs(page);
     expect(glyphs).toHaveLength(1);
     expect(glyphs[0].className).toContain('bracket');
+  });
+
+  test('a bracket before a grouped staff encloses its staff alone', async ({
+    page,
+  }) => {
+    await buildMeasureWithStaves(page, [null, 'bracket', 'grand', null]);
+    const glyphs = await readGroupConnectorGlyphs(page);
+    expect(glyphs.map((glyph) => glyph.className)).toEqual([
+      expect.stringContaining('bracket'),
+      expect.stringContaining('brace'),
+    ]);
   });
 
   test('two independent grand-staff pairs in one measure render two brace glyphs', async ({
@@ -6745,5 +6779,191 @@ test.describe(`${MUSIC_MEASURE} mid-bar clef changes across staves`, () => {
     unlinkedAgain.forEach((left, i) => {
       expect(Math.abs(left - unlinked[i])).toBeLessThan(0.5);
     });
+  });
+});
+
+test.describe(`${MUSIC_MEASURE} swells and hairpins on the same note`, () => {
+  // Two staves; `top` and `bottom` are each staff's notes.
+  async function render(
+    page: Page,
+    top: string,
+    bottom: string
+  ): Promise<void> {
+    await page.goto('./');
+    await page.evaluate(
+      ([topNotes, bottomNotes]) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.style.width = '700px';
+        host.innerHTML = `<music-measure time="4/4">
+          <music-staff clef="treble" group="grand">${topNotes}</music-staff>
+          <music-staff clef="bass">${bottomNotes}</music-staff>
+        </music-measure>`;
+      },
+      [top, bottom]
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  const half = (id: string, octave: number, extra = '') =>
+    `<music-note id="${id}" note="C" octave="${octave}" duration="half" ${extra}></music-note>`;
+
+  const sharedHairpins = (page: Page) =>
+    page.evaluate(
+      () =>
+        document
+          .querySelector('music-measure')
+          ?.shadowRoot?.querySelectorAll('.shared-dynamics-overlay .hairpin')
+          .length
+    );
+
+  const measureSwells = (page: Page) =>
+    page.evaluate(() =>
+      Array.from(document.querySelectorAll('music-staff')).map(
+        (staff) =>
+          (
+            staff as unknown as {
+              hairpinDefaultsForMeasure(): { swells: unknown[] };
+            }
+          ).hairpinDefaultsForMeasure().swells.length
+      )
+    );
+
+  async function setAttributes(
+    page: Page,
+    id: string,
+    attributes: Record<string, string | null>
+  ): Promise<void> {
+    await page.evaluate(
+      ([elementId, values]) => {
+        const element = document.getElementById(elementId);
+        for (const [name, value] of Object.entries(values)) {
+          if (value === null) {
+            element?.removeAttribute(name);
+          } else {
+            element?.setAttribute(name, value);
+          }
+        }
+      },
+      [id, attributes] as const
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  }
+
+  test('a shared hairpin wins over a swell on its notes, which draws once the hairpin goes', async ({
+    page,
+  }) => {
+    await render(
+      page,
+      half('a', 5, 'dynamic-shared crescendo="start"') +
+        half('b', 5, 'dynamic-shared crescendo="end"'),
+      half('c', 3) + half('d', 3)
+    );
+    expect(await sharedHairpins(page)).toBe(1);
+
+    await setAttributes(page, 'a', { swell: '' });
+    expect(await sharedHairpins(page)).toBe(1);
+
+    await setAttributes(page, 'b', { crescendo: null });
+    await setAttributes(page, 'a', { crescendo: null });
+    expect(await sharedHairpins(page)).toBe(2);
+  });
+
+  test('a shared hairpin ending on the other staff wins over a swell on either end', async ({
+    page,
+  }) => {
+    await render(
+      page,
+      half('a', 5, 'dynamic-shared crescendo="start"') + half('b', 5),
+      half('c', 3) + half('d', 3, 'dynamic-shared crescendo="end"')
+    );
+    expect(await sharedHairpins(page)).toBe(1);
+
+    await setAttributes(page, 'a', { swell: '' });
+    await setAttributes(page, 'd', { swell: '' });
+    expect(await sharedHairpins(page)).toBe(1);
+  });
+
+  test('a staff hands the measure no swell a hairpin of its own starts, ends or runs over', async ({
+    page,
+  }) => {
+    await render(
+      page,
+      half('a', 5, 'crescendo="start"') + half('b', 5, 'crescendo="end"'),
+      half('c', 3) + half('d', 3)
+    );
+    await setAttributes(page, 'a', { swell: '' });
+    await setAttributes(page, 'b', { swell: '' });
+    await setAttributes(page, 'c', { swell: '' });
+    expect(await measureSwells(page)).toEqual([0, 1]);
+
+    await setAttributes(page, 'b', { crescendo: null });
+    await setAttributes(page, 'a', { crescendo: null });
+    expect(await measureSwells(page)).toEqual([2, 1]);
+  });
+});
+
+test.describe('barlines of a group', () => {
+  test('keep filling the gap between its staves as it grows', async ({
+    page,
+  }) => {
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.style.width = '600px';
+      host.innerHTML = `<music-measure>
+        <music-staff clef="treble" time="4/4" group="grand">
+          <music-note note="C" octave="5" duration="whole"></music-note>
+        </music-staff>
+        <music-staff clef="bass" time="4/4">
+          <music-note id="lower" note="C" octave="3" duration="whole"></music-note>
+        </music-staff>
+      </music-measure>`;
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const read = () =>
+      page.evaluate(() => {
+        const measure = document.querySelector('music-measure');
+        const line = measure?.shadowRoot
+          ?.querySelector('.group-barline')
+          ?.getBoundingClientRect();
+        const staves = Array.from(
+          document.querySelectorAll('music-staff'),
+          (staff) =>
+            staff.shadowRoot
+              ?.querySelector('.staff-container')
+              ?.getBoundingClientRect()
+        );
+        if (!line || !staves[0] || !staves[1]) {
+          throw new Error('missing line or staff');
+        }
+        return {
+          gap: staves[1].top - staves[0].bottom,
+          above: line.top - staves[0].bottom,
+          below: staves[1].top - line.bottom,
+        };
+      });
+    const before = await read();
+    expect(before.above).toBeCloseTo(0, 0);
+    expect(before.below).toBeCloseTo(0, 0);
+
+    await page.evaluate(() => {
+      document
+        .getElementById('lower')
+        ?.setAttribute('glissando-label', 'a|b|c|d|e|f');
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const after = await read();
+    expect(after.above).toBeCloseTo(0, 0);
+    expect(after.below).toBeCloseTo(0, 0);
+    expect(after.gap).toBeGreaterThan(before.gap);
   });
 });

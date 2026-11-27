@@ -1,14 +1,18 @@
 import type { ConnectorRole, TieValue } from '../types/elements';
 import type {
-  AccidentalType,
+  AccidentalReminder,
   ArpeggioType,
   ArticulationType,
   BarlineType,
+  BendShape,
+  BreathMark,
   ClefType,
+  ConventionalAccidentalType,
   DurationType,
   DynamicMarking,
   EndingNumbering,
   GlissandoHint,
+  GlissandoShape,
   GraceDuration,
   GraceSlur,
   GraceType,
@@ -17,15 +21,22 @@ import type {
   MeasureEndBarline,
   MeasureNumberDisplay,
   Note,
+  NoteSize,
   NoteheadType,
   Octave,
   OctaveContinuationMode,
   OctaveDisplayMode,
   OctaveShiftAmount,
+  QuarterTone,
   RestStaffSide,
+  SlurStyle,
   StaffGroupType,
   StemDirection,
+  StemMark,
   StressType,
+  SwellShape,
+  TextPlacement,
+  TextStyle,
   TieStyle,
   TimeSignature,
   TremoloBeamAttach,
@@ -36,31 +47,45 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  TupletBracket,
+  UnpitchedPlacement,
 } from '../types/theory';
 import {
+  ACCIDENTAL_REMINDERS,
   ACCIDENTAL_TYPES,
   ARPEGGIOS,
   ARTICULATIONS,
   BARLINE_TYPES,
+  BEND_SHAPES,
+  BREATH_MARKS,
   CLEFS,
   DURATIONS,
   DYNAMICS,
   ENDING_NUMBERINGS,
   GLISSANDO_HINTS,
+  GLISSANDO_SHAPES,
   GRACE_DURATIONS,
   GRACE_SLURS,
   GRACE_TYPES,
   MEASURE_END_BARLINES,
   MEASURE_NUMBER_DISPLAYS,
+  MUSIC_VOICE,
   NOTEHEADS,
+  NOTE_SIZES,
+  OCTAVES,
   OCTAVE_CONTINUATION_MODES,
   OCTAVE_DISPLAY_MODES,
   OCTAVE_SHIFT_AMOUNTS,
-  OCTAVES,
+  QUARTER_TONES,
   REST_STAFF_SIDES,
+  SLUR_STYLES,
   STAFF_GROUPS,
   STEM_DIRECTIONS,
+  STEM_MARKS,
   STRESSES,
+  SWELL_SHAPES,
+  TEXT_PLACEMENTS,
+  TEXT_STYLES,
   TIE_STYLES,
   TIMES,
   TREMOLO_BEAM_ATTACHES,
@@ -71,9 +96,12 @@ import {
   TRILL_CONTINUATION_MODES,
   TRILL_FINISH_SLURS,
   TRILL_LINE_MODES,
+  TUPLET_BRACKETS,
+  UNPITCHED_PLACEMENTS,
 } from './consts';
 
 const VALID_ACCIDENTAL_TYPES = new Set<string>(ACCIDENTAL_TYPES);
+const VALID_QUARTER_TONES = new Set<string>(QUARTER_TONES);
 const VALID_DURATIONS = new Set<string>(DURATIONS);
 const VALID_TIMES = new Set<string>(TIMES);
 const VALID_DYNAMICS = new Set<string>(DYNAMICS);
@@ -98,7 +126,9 @@ const VALID_REST_STAFF_SIDES = new Set<string>(REST_STAFF_SIDES);
 const VALID_STEM_DIRECTIONS = new Set<string>(STEM_DIRECTIONS);
 const VALID_TREMOLO_VALUES = new Set<string>(TREMOLO_VALUES.map(String));
 const VALID_TREMOLO_LABELS = new Set<string>(TREMOLO_LABELS);
+const VALID_BREATH_MARKS = new Set<string>(BREATH_MARKS);
 const VALID_TIE_STYLES = new Set<string>(TIE_STYLES);
+const VALID_SLUR_STYLES = new Set<string>(SLUR_STYLES);
 const VALID_TREMOLO_STROKE_COUNTS = new Set<string>(
   TREMOLO_STROKE_COUNTS.map(String)
 );
@@ -108,12 +138,14 @@ const VALID_OCTAVE_CONTINUATION_MODES = new Set<string>(
   OCTAVE_CONTINUATION_MODES
 );
 const VALID_GLISSANDO_HINTS = new Set<string>(GLISSANDO_HINTS);
+const VALID_BEND_SHAPES = new Set<string>(BEND_SHAPES);
+const VALID_GLISSANDO_SHAPES = new Set<string>(GLISSANDO_SHAPES);
 const VALID_MEASURE_NUMBER_DISPLAYS = new Set<string>(MEASURE_NUMBER_DISPLAYS);
 const VALID_BARLINE_TYPES = new Set<string>(BARLINE_TYPES);
 const VALID_MEASURE_END_BARLINES = new Set<string>(MEASURE_END_BARLINES);
 
 // Letter A–G, optional accidental suffix — e.g. 'F#', no octave.
-const GRACE_NOTE_PATTERN = /^[A-G](##|bb|#|b)?$/;
+const NOTE_NAME_PATTERN = /^[A-G](##|bb|#|b)?$/;
 
 export const parseDuration = (value: string | null): DurationType | null =>
   value !== null && VALID_DURATIONS.has(value) ? (value as DurationType) : null;
@@ -157,7 +189,12 @@ export const parseHairpinKind = (value: string | null): HairpinKind | null => {
 
 // `tie` accepts `start` / `end` plus `laissez-vibrer` (alias `lv`).
 export const parseTieValue = (value: string | null): TieValue | null => {
-  if (value === 'start' || value === 'end' || value === 'laissez-vibrer') {
+  if (
+    value === 'start' ||
+    value === 'continue' ||
+    value === 'end' ||
+    value === 'laissez-vibrer'
+  ) {
     return value;
   }
   if (value === 'lv') {
@@ -199,6 +236,18 @@ export const parseStaffGroup = (
   }
   return null;
 };
+
+export const parseGlissandoShape = (value: string | null): GlissandoShape =>
+  value !== null && VALID_GLISSANDO_SHAPES.has(value)
+    ? (value as GlissandoShape)
+    : 'straight';
+
+export const parseBendShape = (value: string | null): BendShape | null =>
+  value !== null && VALID_BEND_SHAPES.has(value) ? (value as BendShape) : null;
+
+/** One pitch name: a letter with an optional accidental. */
+export const parseNote = (value: string | null): Note | null =>
+  value !== null && NOTE_NAME_PATTERN.test(value) ? (value as Note) : null;
 
 export const parseGlissandoHint = (
   value: string | null
@@ -277,9 +326,16 @@ export const parseArpeggio = (value: string | null): ArpeggioType | null => {
 
 export const parseAccidentalType = (
   value: string | null
-): AccidentalType | null => {
+): ConventionalAccidentalType | null => {
   if (value !== null && VALID_ACCIDENTAL_TYPES.has(value)) {
-    return value as AccidentalType;
+    return value as ConventionalAccidentalType;
+  }
+  return null;
+};
+
+export const parseQuarterTone = (value: string | null): QuarterTone | null => {
+  if (value !== null && VALID_QUARTER_TONES.has(value)) {
+    return value as QuarterTone;
   }
   return null;
 };
@@ -369,6 +425,92 @@ export const parseTremoloTuplet = (value: string | null): number | null => {
   return Number.isSafeInteger(parsed) && parsed >= 2 ? parsed : null;
 };
 
+const VALID_UNPITCHED_PLACEMENTS = new Set<string>(UNPITCHED_PLACEMENTS);
+
+/** A bare attribute is `written`; null for an unknown value. */
+export const parseUnpitched = (
+  value: string | null
+): UnpitchedPlacement | null =>
+  value === ''
+    ? 'written'
+    : value !== null && VALID_UNPITCHED_PLACEMENTS.has(value)
+    ? (value as UnpitchedPlacement)
+    : null;
+
+export const parseNoteSize = (value: string | null): NoteSize | null =>
+  value !== null && (NOTE_SIZES as string[]).includes(value)
+    ? (value as NoteSize)
+    : null;
+
+export const parseTupletBracket = (
+  value: string | null
+): TupletBracket | null =>
+  value !== null && (TUPLET_BRACKETS as string[]).includes(value)
+    ? (value as TupletBracket)
+    : null;
+
+/** An element's own `size`, else its closest `<music-voice>`'s. */
+export const resolveNoteSize = (
+  own: string | null,
+  element: Element
+): NoteSize =>
+  parseNoteSize(own) ??
+  parseNoteSize(element.closest(MUSIC_VOICE)?.getAttribute('size') ?? null) ??
+  'normal';
+
+export const parseStemMark = (value: string | null): StemMark | null =>
+  value !== null && (STEM_MARKS as string[]).includes(value)
+    ? (value as StemMark)
+    : null;
+
+/**
+ * A bare attribute is `bracketed`; so is an unknown value, which the element
+ * warns about (`isAccidentalReminder`).
+ */
+export const parseAccidentalReminder = (
+  value: string | null
+): AccidentalReminder | null =>
+  value === null
+    ? null
+    : (ACCIDENTAL_REMINDERS as string[]).includes(value)
+    ? (value as AccidentalReminder)
+    : 'bracketed';
+
+export const isAccidentalReminder = (value: string | null): boolean =>
+  value === null ||
+  value === '' ||
+  (ACCIDENTAL_REMINDERS as string[]).includes(value);
+
+export const parseTextPlacement = (
+  value: string | null
+): TextPlacement | null =>
+  value !== null && (TEXT_PLACEMENTS as string[]).includes(value)
+    ? (value as TextPlacement)
+    : null;
+
+export const parseTextStyle = (value: string | null): TextStyle | null =>
+  value !== null && (TEXT_STYLES as string[]).includes(value)
+    ? (value as TextStyle)
+    : null;
+
+// A bare `swell` is `both`.
+export const parseSwellShape = (value: string | null): SwellShape | null => {
+  if (value === null) {
+    return null;
+  }
+  if (value === '') {
+    return 'both';
+  }
+  return (SWELL_SHAPES as string[]).includes(value)
+    ? (value as SwellShape)
+    : null;
+};
+
+export const parseBreathMark = (value: string | null): BreathMark | null =>
+  value !== null && VALID_BREATH_MARKS.has(value)
+    ? (value as BreathMark)
+    : null;
+
 export const parseTremoloLabel = (value: string | null): TremoloLabel | null =>
   value !== null && VALID_TREMOLO_LABELS.has(value)
     ? (value as TremoloLabel)
@@ -399,6 +541,12 @@ export const parseTremoloBeamPosition = (
 // Defaults to a solid tie.
 export const parseTieStyle = (value: string | null): TieStyle =>
   value !== null && VALID_TIE_STYLES.has(value) ? (value as TieStyle) : 'solid';
+
+// Defaults to a solid slur.
+export const parseSlurStyle = (value: string | null): SlurStyle =>
+  value !== null && VALID_SLUR_STYLES.has(value)
+    ? (value as SlurStyle)
+    : 'solid';
 
 export const parseOctaveContinuationMode = (
   value: string | null
@@ -447,7 +595,7 @@ export const parseGraceNotes = (value: string | null): Note[] | null => {
     return null;
   }
   for (const token of tokens) {
-    if (!GRACE_NOTE_PATTERN.test(token)) {
+    if (!NOTE_NAME_PATTERN.test(token)) {
       console.warn(
         `invalid grace note "${token}" — expected letter A-G with an optional accidental (e.g. "F#")`
       );
@@ -501,6 +649,17 @@ export const parseGraceNoteheads = (
   return tokens.map((token) =>
     VALID_NOTEHEADS.has(token) ? (token as NoteheadType) : null
   );
+};
+
+// Parses a comma-separated quarter-tone list (e.g. "up,,down"), one slot per
+// grace note; an empty or invalid slot is an ordinary pitch.
+export const parseGraceQuarterTones = (
+  value: string | null
+): (QuarterTone | null)[] | null => {
+  if (value === null) {
+    return null;
+  }
+  return value.split(',').map((token) => parseQuarterTone(token.trim()));
 };
 
 // Setter body for the array-valued grace properties, which accept a

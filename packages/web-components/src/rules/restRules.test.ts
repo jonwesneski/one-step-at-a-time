@@ -4,7 +4,11 @@ import {
   hookCountMap,
   QUARTER_SY_PX,
 } from '../utils/svgCreator/rest';
-import { restToYCoordinate } from './restRules';
+import {
+  beamOverWarning,
+  restShiftClearOfBeam,
+  restToYCoordinate,
+} from './restRules';
 
 // element.style.top positions a rest's box-top, not its glyph, so the
 // cross-staff branch subtracts the same per-duration offset computeTopY does.
@@ -70,5 +74,54 @@ describe('restToYCoordinate', () => {
       });
       expect(boxTop + SIXTEENTH_OFFSET).toBe(55);
     });
+  });
+});
+
+describe('beamOverWarning', () => {
+  it('accepts a rest shorter than a crotchet outside a beam-group', () => {
+    expect(beamOverWarning('eighth', null)).toBeNull();
+    expect(beamOverWarning('dotted-sixteenth', null)).toBeNull();
+  });
+
+  it('explains a crotchet or longer and a cross-staff beam-group rest', () => {
+    expect(beamOverWarning('quarter', null)).toMatch(/shorter than a crotchet/);
+    expect(beamOverWarning('eighth', 'g1')).toMatch(/beam-group/);
+  });
+});
+
+describe('restShiftClearOfBeam', () => {
+  it('leaves a rest already clear where it is', () => {
+    expect(
+      restShiftClearOfBeam({
+        inkTop: 60,
+        inkBottom: 80,
+        beamTop: 20,
+        beamBottom: 25,
+        beamAbove: true,
+      })
+    ).toBe(0);
+  });
+
+  it('moves a rest away from the beam by whole spaces until clear', () => {
+    // Beam above: the rest's top must sit 15 below the beam's bottom at 50.
+    expect(
+      restShiftClearOfBeam({
+        inkTop: 55,
+        inkBottom: 80,
+        beamTop: 45,
+        beamBottom: 50,
+        beamAbove: true,
+      })
+    ).toBe(10);
+    // Beam below: its bottom must sit 15 above the beam's top at 70.
+    expect(
+      restShiftClearOfBeam({
+        inkTop: 40,
+        inkBottom: 66,
+        beamTop: 70,
+        beamBottom: 75,
+        beamAbove: false,
+      })
+    ).toBe(-20);
   });
 });

@@ -1,4 +1,14 @@
-import { parseEnding, parseEndingNumbering } from './parsers';
+import {
+  isAccidentalReminder,
+  parseAccidentalReminder,
+  parseAccidentalType,
+  parseEnding,
+  parseEndingNumbering,
+  parseGraceQuarterTones,
+  parseQuarterTone,
+  parseStemMark,
+  parseUnpitched,
+} from './parsers';
 
 describe('parseEnding', () => {
   it('reads comma-separated passes, sorted and de-duplicated', () => {
@@ -23,5 +33,48 @@ describe('parseEndingNumbering', () => {
     expect(parseEndingNumbering('consecutive')).toBe('consecutive');
     expect(parseEndingNumbering('letters')).toBeNull();
     expect(parseEndingNumbering(null)).toBeNull();
+  });
+});
+
+describe('quarter-tones', () => {
+  it('reads up and down only', () => {
+    expect(parseQuarterTone('up')).toBe('up');
+    expect(parseQuarterTone('down')).toBe('down');
+    expect(parseQuarterTone('sharp')).toBeNull();
+    expect(parseQuarterTone(null)).toBeNull();
+  });
+
+  it('reads one slot per grace note', () => {
+    expect(parseGraceQuarterTones('up,,down')).toEqual(['up', null, 'down']);
+    expect(parseGraceQuarterTones(' up , x')).toEqual(['up', null]);
+    expect(parseGraceQuarterTones(null)).toBeNull();
+  });
+
+  it('keeps arrows out of an authored accidental', () => {
+    expect(parseAccidentalType('sharp')).toBe('sharp');
+    expect(parseAccidentalType('sharp-up')).toBeNull();
+  });
+});
+
+describe('special-technique attributes', () => {
+  it('read a bare unpitched as written and drop an unknown one', () => {
+    expect(parseUnpitched('')).toBe('written');
+    expect(parseUnpitched('top')).toBe('top');
+    expect(parseUnpitched('high')).toBeNull();
+    expect(parseUnpitched(null)).toBeNull();
+  });
+
+  it('read a bare or unknown accidental-reminder as bracketed, flagging the unknown', () => {
+    expect(parseAccidentalReminder('')).toBe('bracketed');
+    expect(parseAccidentalReminder('plain')).toBe('plain');
+    expect(parseAccidentalReminder('yes')).toBe('bracketed');
+    expect(parseAccidentalReminder(null)).toBeNull();
+    expect(isAccidentalReminder('plain')).toBe(true);
+    expect(isAccidentalReminder('yes')).toBe(false);
+  });
+
+  it('read cross as the only stem mark', () => {
+    expect(parseStemMark('cross')).toBe('cross');
+    expect(parseStemMark('slash')).toBeNull();
   });
 });

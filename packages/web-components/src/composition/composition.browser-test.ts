@@ -1697,7 +1697,7 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
     await waitForRedrawCycle(page);
 
     const crossRow = await page.evaluate(
-      ({ compositionTag }) => {
+      ({ compositionTag, noteTag, staffTag }) => {
         const composition = document.querySelector(compositionTag);
         if (composition === null || composition.shadowRoot === null) {
           throw new Error('composition not ready');
@@ -1725,13 +1725,32 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
           };
         };
 
+        const wrapper = composition.shadowRoot.querySelector(
+          '.composition-wrapper'
+        );
+        const endNote = composition.querySelectorAll(noteTag)[4];
+        const endDescribe = endNote
+          .closest(staffTag)
+          ?.shadowRoot?.querySelector('.describe-container');
+        if (wrapper === null || !endDescribe) {
+          throw new Error('wrapper or end staff missing');
+        }
+        const wrapperLeft = wrapper.getBoundingClientRect().left;
+
         return {
           pathCount: paths.length,
           first: parseSegment(paths[0]?.getAttribute('d') ?? ''),
           second: parseSegment(paths[1]?.getAttribute('d') ?? ''),
+          endDescribeRight:
+            endDescribe.getBoundingClientRect().right - wrapperLeft,
+          endNoteLeft: endNote.getBoundingClientRect().left - wrapperLeft,
         };
       },
-      { compositionTag: MUSIC_COMPOSITION }
+      {
+        compositionTag: MUSIC_COMPOSITION,
+        noteTag: MUSIC_NOTE,
+        staffTag: MUSIC_STAFF,
+      }
     );
 
     // Cross-row produces two path segments
@@ -1740,9 +1759,10 @@ test.describe(`${MUSIC_COMPOSITION} responsive layout`, () => {
     // First segment: runs from the start-note anchor to the row-right edge
     expect(crossRow.first.toX).toBeGreaterThan(crossRow.first.fromX);
 
-    // Second segment: starts at the row-left edge (notes area start, after the
-    // clef — typically ~40-80px from the left)
-    expect(crossRow.second.fromX).toBeLessThan(100);
+    // Second segment: starts after its own row's clef, not the first row's
+    // clef and time signature, and before the end note
+    expect(crossRow.second.fromX).toBeGreaterThan(crossRow.endDescribeRight);
+    expect(crossRow.second.fromX).toBeLessThan(crossRow.endNoteLeft);
 
     // Both segments arc above (cy < fromY) — C5 is stem-down
     expect(crossRow.first.cy).toBeLessThan(crossRow.first.fromY);
@@ -3420,26 +3440,55 @@ test.describe(`${MUSIC_COMPOSITION} row spacing for connectors`, () => {
     ]);
   });
 
+  test('each slur keeps its shape as the composition resizes', async ({
+    page,
+  }) => {
+    await buildChainedHandCrossing(page);
+    await page.evaluate((compositionTag) => {
+      document.querySelector(compositionTag)?.setAttribute('max-width', 'none');
+    }, MUSIC_COMPOSITION);
+    // Each arc's top, from the top of its measure.
+    const arcTops = async (width: number): Promise<number[]> => {
+      await resizeHost(page, width);
+      await waitForRedrawCycle(page);
+      const { pathTops, measureTops } = await readLayout(page);
+      return pathTops.map((top) => top - measureTops[0]);
+    };
+    let previous = await arcTops(700);
+    for (let width = 730; width <= 1180; width += 30) {
+      const current = await arcTops(width);
+      current.forEach((top, i) =>
+        expect(Math.abs(top - previous[i])).toBeLessThan(8)
+      );
+      previous = current;
+    }
+  });
+
   test('dropping the tallest slur shrinks the margin instead of keeping the old value', async ({
     page,
   }) => {
     await buildChainedHandCrossing(page);
+    // Without G5 the phrase is F2 to D5, which climbs over the treble rests,
+    // then D5 down to C3, which stays below its first note.
+    const dropFromPhrase = (staffIndex: number) =>
+      page.evaluate((index) => {
+        document
+          .querySelectorAll('music-staff')
+          [index].querySelector('music-note[slur-group]')
+          ?.removeAttribute('slur-group');
+      }, staffIndex);
+    await dropFromPhrase(2);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
     const before = await readLayout(page);
+    expect(before.pathTops).toHaveLength(2);
 
-    // F2 starts the first segment (F2 to D5), the arc that climbs over the
-    // treble rests; D5 to C3 to G5 remain.
-    await page.evaluate(() => {
-      const firstBass = document
-        .querySelectorAll('music-measure')[0]
-        .querySelectorAll('music-staff')[1]
-        .querySelector('music-note[slur-group]');
-      firstBass?.removeAttribute('slur-group');
-    });
+    await dropFromPhrase(1);
     await waitForRedrawCycle(page);
     await waitForRedrawCycle(page);
     const after = await readLayout(page);
 
-    expect(after.pathTops).toHaveLength(2);
+    expect(after.pathTops).toHaveLength(1);
     expect(marginTopPx(after.margins[0])).toBeLessThan(
       marginTopPx(before.margins[0])
     );
@@ -4250,5 +4299,688 @@ test.describe(`${MUSIC_COMPOSITION} octave continuation over a double-stemmed be
       }
     }
     expect(gap).toBeGreaterThanOrEqual(OCTAVE_SIGN_BEAM_CLEARANCE_PX - 0.5);
+  });
+});
+
+test.describe('a page as wide as its music', () => {
+  const measure = `
+    <music-measure><music-staff clef="treble">
+      <music-note note="C" octave="5" duration="quarter"></music-note>
+      <music-note note="D" octave="5" duration="quarter"></music-note>
+    </music-staff></music-measure>`;
+  const cases = [
+    [
+      'a composition with a narrow last bar',
+      `<music-composition time="2/4">${measure.repeat(5)}</music-composition>`,
+    ],
+    ['a standalone measure', measure],
+    [
+      'a standalone staff',
+      `<music-staff clef="treble" time="2/4">
+        <music-note note="C" octave="5" duration="half"></music-note>
+      </music-staff>`,
+    ],
+  ];
+  for (const [name, markup] of cases) {
+    test(`never scrolls sideways as ${name} resizes`, async ({ page }) => {
+      await page.evaluate((html) => {
+        document.getElementById('host')!.innerHTML = html;
+      }, markup);
+      for (const width of [900, 700, 500, 300]) {
+        await resizeHost(page, width);
+        await waitForRedrawCycle(page);
+        const past = await page.evaluate(() => {
+          const host = document.getElementById('host')!;
+          return host.scrollWidth - host.clientWidth;
+        });
+        expect(past, `at ${width}px`).toBe(0);
+      }
+    });
+  }
+});
+
+test.describe('a glissando over a system break', () => {
+  test('becomes two lines of one slope when its bars wrap, and one again when they fit', async ({
+    page,
+  }) => {
+    await page.evaluate(() => {
+      const host = document.getElementById('host');
+      if (host === null) {
+        throw new Error('host missing');
+      }
+      host.style.width = '900px';
+      host.innerHTML = `<music-composition time="4/4">
+        <music-measure><music-staff clef="treble">
+          <music-note note="C" octave="4" duration="half"></music-note>
+          <music-note note="E" octave="4" duration="half" glissando="start"></music-note>
+        </music-staff></music-measure>
+        <music-measure><music-staff clef="treble">
+          <music-note note="F" octave="5" duration="half" glissando="end"></music-note>
+          <music-note note="C" octave="5" duration="half"></music-note>
+        </music-staff></music-measure>
+      </music-composition>`;
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+
+    const readSlopes = () =>
+      page.evaluate(() =>
+        Array.from(
+          document
+            .querySelector('music-composition')
+            ?.shadowRoot?.querySelectorAll('.glissando path') ?? []
+        ).map((path) => {
+          const [x1, y1, x2, y2] = (path.getAttribute('d') ?? '')
+            .match(/-?\d+(\.\d+)?/g)!
+            .map(Number);
+          return (y2 - y1) / (x2 - x1);
+        })
+      );
+
+    expect(await readSlopes()).toHaveLength(1);
+    await resizeHost(page, 320);
+    const [first, second, ...rest] = await readSlopes();
+    expect(rest).toHaveLength(0);
+    expect(first).toBeLessThan(0);
+    expect(second).toBeCloseTo(first, 3);
+    await resizeHost(page, 900);
+    expect(await readSlopes()).toHaveLength(1);
+  });
+});
+
+test.describe('rows level across a system', () => {
+  const setHost = async (page: Page, width: number, html: string) => {
+    await page.evaluate(
+      ({ hostWidth, markup }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.style.width = `${hostWidth}px`;
+        host.innerHTML = markup;
+      },
+      { hostWidth: width, markup: html }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const setOctave = async (page: Page, id: string, octave: number) => {
+    await page.evaluate(
+      ({ noteId, value }) => {
+        document.getElementById(noteId)?.setAttribute('octave', `${value}`);
+      },
+      { noteId: id, value: octave }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const note = (attrs: string) =>
+    `<music-note duration="half" ${attrs}></music-note>`;
+
+  test('a hairpin over barlines and the markings at its ends move together past a low note between them', async ({
+    page,
+  }) => {
+    const bar = (content: string) =>
+      `<music-measure><music-staff clef="treble">${content}</music-staff></music-measure>`;
+    await setHost(
+      page,
+      900,
+      `<music-composition time="4/4">${bar(
+        note('note="C" octave="5" dynamic="p" crescendo="start"') +
+          note('note="C" octave="5"')
+      )}${bar(
+        note('note="A" octave="4" id="middle"') + note('note="C" octave="5"')
+      )}${bar(
+        note('note="C" octave="5" dynamic="f" crescendo="end" id="end"') +
+          note('note="C" octave="5"')
+      )}</music-composition>`
+    );
+    const read = () =>
+      page.evaluate(() => {
+        const composition = document.querySelector('music-composition');
+        const [first, , last] = Array.from(
+          document.querySelectorAll('music-staff')
+        );
+        const line = (staff: Element) =>
+          staff.shadowRoot
+            ?.querySelector('.staff-container')
+            ?.getBoundingClientRect().bottom ?? 0;
+        const marking = (staff: Element) =>
+          (staff.shadowRoot
+            ?.querySelector('.dynamic-marking')
+            ?.getBoundingClientRect().bottom ?? 0) - line(staff);
+        const hairpin = composition?.shadowRoot
+          ?.querySelector('.connectors-overlay .hairpin')
+          ?.getBoundingClientRect();
+        return {
+          p: marking(first),
+          f: marking(last),
+          hairpin:
+            hairpin === undefined
+              ? null
+              : (hairpin.top + hairpin.bottom) / 2 - line(first),
+        };
+      });
+    const before = await read();
+
+    await setOctave(page, 'middle', 3);
+    const low = await read();
+    const moved = low.p - before.p;
+    expect(moved).toBeGreaterThan(5);
+    expect(low.f - before.f).toBeCloseTo(moved, 0);
+    expect((low.hairpin ?? 0) - (before.hairpin ?? 0)).toBeCloseTo(moved, 0);
+
+    // With no hairpin joining them, each bar keeps its own row.
+    await page.evaluate(() =>
+      document.getElementById('end')?.removeAttribute('crescendo')
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    expect((await read()).p).toBeCloseTo(before.p, 0);
+  });
+
+  test('lyrics drop past a low second voice in any bar, all on one line, and return', async ({
+    page,
+  }) => {
+    const bar = (content: string, lyrics: string) =>
+      `<music-measure><music-staff-vocal>${content}<music-lyrics>${lyrics}</music-lyrics></music-staff-vocal></music-measure>`;
+    await setHost(
+      page,
+      900,
+      `<music-composition time="4/4">${bar(
+        note('note="C" octave="5"') + note('note="C" octave="5"'),
+        'one two'
+      )}${bar(
+        `<music-voice>${note('note="C" octave="5"')}${note(
+          'note="D" octave="5"'
+        )}</music-voice><music-voice><music-note note="A" octave="4" duration="whole" id="low"></music-note></music-voice>`,
+        'three four'
+      )}</music-composition>`
+    );
+    const read = () =>
+      page.evaluate(() => {
+        const staves = Array.from(
+          document.querySelectorAll('music-staff-vocal')
+        );
+        const lineBottom = staves.map(
+          (staff) =>
+            staff.shadowRoot
+              ?.querySelector('.staff-container')
+              ?.getBoundingClientRect().bottom ?? 0
+        );
+        const textTops = staves.map(
+          (staff, i) =>
+            (staff
+              .querySelector('music-lyrics')
+              ?.shadowRoot?.querySelector('text')
+              ?.getBoundingClientRect().top ?? 0) - lineBottom[i]
+        );
+        const head = document
+          .getElementById('low')
+          ?.shadowRoot?.querySelector('.head')
+          ?.getBoundingClientRect();
+        return {
+          textTops,
+          headBottom: (head?.bottom ?? 0) - lineBottom[1],
+        };
+      });
+    const before = await read();
+    expect(before.textTops[0]).toBeCloseTo(before.textTops[1], 0);
+
+    await setOctave(page, 'low', 3);
+    const low = await read();
+    expect(low.textTops[0]).toBeGreaterThan(before.textTops[0]);
+    expect(low.textTops[0]).toBeCloseTo(low.textTops[1], 0);
+    expect(low.textTops[1]).toBeGreaterThan(low.headBottom);
+
+    await setOctave(page, 'low', 4);
+    const back = await read();
+    expect(back.textTops[0]).toBeCloseTo(before.textTops[0], 0);
+    expect(back.textTops[1]).toBeCloseTo(before.textTops[1], 0);
+  });
+});
+
+test.describe('technique text over a row', () => {
+  const setHost = async (page: Page, width: number, html: string) => {
+    await page.evaluate(
+      ({ hostWidth, markup }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.style.width = `${hostWidth}px`;
+        host.innerHTML = markup;
+      },
+      { hostWidth: width, markup: html }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const setWidth = async (page: Page, width: number) => {
+    await page.evaluate((hostWidth) => {
+      const host = document.getElementById('host');
+      if (host !== null) {
+        host.style.width = `${hostWidth}px`;
+      }
+    }, width);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const bar = (content: string) =>
+    `<music-measure><music-staff clef="treble">${content}</music-staff></music-measure>`;
+  const quarter = (attrs = '') =>
+    `<music-note note="C" octave="5" duration="quarter" ${attrs}></music-note>`;
+  const readText = (page: Page) =>
+    page.evaluate(() => {
+      const staves = Array.from(document.querySelectorAll('music-staff'));
+      const text = staves
+        .map((staff) => staff.shadowRoot?.querySelector('.technique-text'))
+        .find((found) => found !== null && found !== undefined);
+      const rect = text?.getBoundingClientRect();
+      const owner = staves.find((staff) =>
+        staff.shadowRoot?.contains(text ?? null)
+      );
+      const head = document
+        .getElementById('labelled')
+        ?.shadowRoot?.querySelector('.head')
+        ?.getBoundingClientRect();
+      const high = document
+        .getElementById('next')
+        ?.shadowRoot?.querySelector('.head')
+        ?.getBoundingClientRect();
+      return {
+        left: rect?.left ?? 0,
+        right: rect?.right ?? 0,
+        bottom: rect?.bottom ?? 0,
+        lines: text?.querySelectorAll('tspan').length || 1,
+        headLeft: head?.left ?? 0,
+        nextHeadTop: high?.top ?? 0,
+        ownStaffRight: owner?.getBoundingClientRect().right ?? 0,
+      };
+    });
+
+  test('shifts left at the row end, then wraps, as the composition narrows, and returns', async ({
+    page,
+  }) => {
+    await setHost(
+      page,
+      900,
+      `<music-composition time="4/4">${bar(
+        quarter() +
+          quarter() +
+          quarter() +
+          quarter(
+            'id="labelled" technique-text="blow air through the instrument fingering the given pitches"'
+          )
+      )}</music-composition>`
+    );
+    const wide = await readText(page);
+    expect(wide.lines).toBe(1);
+    expect(wide.left).toBeLessThan(wide.headLeft);
+
+    await setWidth(page, 260);
+    const narrow = await readText(page);
+    expect(narrow.lines).toBeGreaterThan(1);
+
+    await setWidth(page, 900);
+    const back = await readText(page);
+    expect(back.lines).toBe(1);
+    expect(back.left).toBeCloseTo(wide.left, 0);
+  });
+
+  test('a run-on text rises over a high note added in the next bar', async ({
+    page,
+  }) => {
+    await setHost(
+      page,
+      700,
+      `<music-composition time="4/4">${bar(
+        `<music-note note="C" octave="5" duration="whole" id="labelled" technique-text="${'a long instruction '
+          .repeat(5)
+          .trim()}"></music-note>`
+      )}${bar(
+        `<music-note note="C" octave="5" duration="half" id="next"></music-note>${quarter()}${quarter()}`
+      )}</music-composition>`
+    );
+    const before = await readText(page);
+    expect(before.right).toBeGreaterThan(before.ownStaffRight);
+
+    await page.evaluate(() =>
+      document.getElementById('next')?.setAttribute('octave', '6')
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const high = await readText(page);
+    expect(high.bottom).toBeLessThan(before.bottom);
+    expect(high.bottom).toBeLessThanOrEqual(high.nextHeadTop);
+
+    await page.evaluate(() =>
+      document.getElementById('next')?.setAttribute('octave', '5')
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    expect((await readText(page)).bottom).toBeCloseTo(before.bottom, 0);
+  });
+
+  test('stays in its own row when the bars wrap onto two', async ({ page }) => {
+    await setHost(
+      page,
+      700,
+      `<music-composition time="4/4">${bar(
+        `<music-note note="C" octave="5" duration="whole" id="labelled" technique-text="${'a long instruction '
+          .repeat(3)
+          .trim()}"></music-note>`
+      )}${bar(quarter().repeat(4))}${bar(
+        quarter().repeat(4)
+      )}</music-composition>`
+    );
+    const oneRow = await readText(page);
+    expect(oneRow.right).toBeGreaterThan(oneRow.ownStaffRight);
+
+    await setWidth(page, 240);
+    const wrapped = await readText(page);
+    expect(wrapped.right).toBeLessThanOrEqual(wrapped.ownStaffRight + 1);
+
+    await setWidth(page, 700);
+    expect((await readText(page)).right).toBeCloseTo(oneRow.right, 0);
+  });
+});
+
+test.describe('swell over a tie chain', () => {
+  const setHost = async (page: Page, width: number, html: string) => {
+    await page.evaluate(
+      ({ hostWidth, markup }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.style.width = `${hostWidth}px`;
+        host.innerHTML = markup;
+      },
+      { hostWidth: width, markup: html }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const setWidth = async (page: Page, width: number) => {
+    await page.evaluate((hostWidth) => {
+      const host = document.getElementById('host');
+      if (host !== null) {
+        host.style.width = `${hostWidth}px`;
+      }
+    }, width);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const bar = (content: string) =>
+    `<music-measure><music-staff clef="treble">${content}</music-staff></music-measure>`;
+  const whole = (attrs = '') =>
+    `<music-note note="E" octave="4" duration="whole" ${attrs}></music-note>`;
+  const chain = `<music-composition time="4/4">${
+    bar(whole('id="first" tie="start" swell')) +
+    bar(whole('id="middle" tie="continue"')) +
+    bar(whole('id="last" tie="end"')) +
+    bar(whole())
+  }</music-composition>`;
+  // The swell's wedges over the barlines, and the rows they stand in.
+  const readSwell = (page: Page) =>
+    page.evaluate(() => {
+      const overlay = document
+        .querySelector('music-composition')
+        ?.shadowRoot?.querySelector('.connectors-overlay');
+      const wedges = Array.from(
+        overlay?.querySelectorAll('.swell .hairpin') ?? [],
+        (wedge) => wedge.getBoundingClientRect()
+      );
+      const staffSwells = Array.from(
+        document.querySelectorAll('music-staff')
+      ).flatMap((staff) =>
+        Array.from(
+          staff.shadowRoot?.querySelectorAll('.dynamics-container .swell') ?? []
+        )
+      );
+      return {
+        wedges: wedges.map(({ left, right }) => ({ left, right })),
+        rows: new Set(wedges.map(({ top }) => Math.round(top))).size,
+        staffSwells: staffSwells.length,
+      };
+    });
+
+  test('becomes two rows of wedges when its bars wrap, and one again when they fit', async ({
+    page,
+  }) => {
+    await setHost(page, 1000, chain);
+    const wide = await readSwell(page);
+    expect(wide.wedges).toHaveLength(2);
+    expect(wide.rows).toBe(1);
+
+    await setWidth(page, 420);
+    const narrow = await readSwell(page);
+    expect(narrow.rows).toBeGreaterThan(1);
+    expect(narrow.wedges.length).toBeGreaterThan(2);
+
+    await setWidth(page, 1000);
+    expect(await readSwell(page)).toEqual(wide);
+  });
+
+  test('keeps its gap at the middle beat as the width changes', async ({
+    page,
+  }) => {
+    const twoBars = `<music-composition time="4/4">${
+      bar(whole('tie="start" swell')) + bar(whole('id="second" tie="end"'))
+    }</music-composition>`;
+    const gapAgainstMiddleBeat = async () => {
+      const { wedges } = await readSwell(page);
+      const second = await page.evaluate(
+        () =>
+          document.getElementById('second')?.getBoundingClientRect().left ?? 0
+      );
+      return (wedges[0].right + wedges[1].left) / 2 - second;
+    };
+    await setHost(page, 1000, twoBars);
+    const wide = await gapAgainstMiddleBeat();
+    await setWidth(page, 700);
+    const narrower = await gapAgainstMiddleBeat();
+    expect(Math.abs(narrower - wide)).toBeLessThan(2);
+  });
+
+  test('shrinks to its own note when the tie is removed', async ({ page }) => {
+    await setHost(page, 1000, chain);
+    expect((await readSwell(page)).wedges).toHaveLength(2);
+
+    await page.evaluate(() => {
+      document.getElementById('first')?.removeAttribute('tie');
+      document.getElementById('middle')?.removeAttribute('tie');
+      document.getElementById('last')?.removeAttribute('tie');
+    });
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const untied = await readSwell(page);
+    expect(untied.wedges).toHaveLength(0);
+    expect(untied.staffSwells).toBe(1);
+  });
+});
+
+test.describe('bend contour', () => {
+  const setHost = async (page: Page, width: number, html: string) => {
+    await page.evaluate(
+      ({ hostWidth, markup }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.style.width = `${hostWidth}px`;
+        host.innerHTML = markup;
+      },
+      { hostWidth: width, markup: html }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const setWidth = async (page: Page, width: number) => {
+    await page.evaluate((hostWidth) => {
+      const host = document.getElementById('host');
+      if (host !== null) {
+        host.style.width = `${hostWidth}px`;
+      }
+    }, width);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const markup = `<music-composition time="3/4"><music-measure><music-staff clef="treble">
+    <music-note note="A" octave="4" duration="dotted-half" bend-contour="G5,B4,D6,E5"></music-note>
+  </music-staff></music-measure></music-composition>`;
+  // The contour's knots: where each cubic ends, client px.
+  const readKnots = (page: Page) =>
+    page.evaluate(() => {
+      const path = document
+        .querySelector('music-staff')
+        ?.shadowRoot?.querySelector<SVGPathElement>('.bend-contour');
+      if (!path) {
+        return [];
+      }
+      const matrix = path.getScreenCTM();
+      const numbers = (path.getAttribute('d') ?? '')
+        .replace(/[MC]/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .map(Number);
+      const points: { x: number; y: number }[] = [];
+      // M x y, then 6 numbers per cubic, its end last.
+      points.push({ x: numbers[0], y: numbers[1] });
+      for (let i = 2; i + 5 < numbers.length; i += 6) {
+        points.push({ x: numbers[i + 4], y: numbers[i + 5] });
+      }
+      return points.map(({ x, y }) => ({
+        x: (matrix?.a ?? 1) * x + (matrix?.e ?? 0),
+        y: (matrix?.d ?? 1) * y + (matrix?.f ?? 0),
+      }));
+    });
+
+  test('keeps its pitches and spreads as the bar widens', async ({ page }) => {
+    await setHost(page, 500, markup);
+    const narrow = await readKnots(page);
+    expect(narrow).toHaveLength(5);
+    await setWidth(page, 900);
+    const wide = await readKnots(page);
+    expect(wide.map(({ y }) => y)).toEqual(narrow.map(({ y }) => y));
+    const spread = (points: { x: number }[]) =>
+      points[points.length - 1].x - points[0].x;
+    expect(spread(wide)).toBeGreaterThan(spread(narrow) + 100);
+  });
+
+  test('moves its points with the clef', async ({ page }) => {
+    await setHost(page, 700, markup);
+    const treble = await readKnots(page);
+    await page.evaluate(() =>
+      document.querySelector('music-staff')?.setAttribute('clef', 'bass')
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    const bass = await readKnots(page);
+    expect(bass).toHaveLength(treble.length);
+    // Each pitch stands where the new clef puts it.
+    for (let i = 1; i < bass.length; i++) {
+      expect(bass[i].y).not.toBeCloseTo(treble[i].y, 0);
+    }
+  });
+});
+
+test.describe('phonemes over a barline', () => {
+  const setHost = async (page: Page, width: number, html: string) => {
+    await page.evaluate(
+      ({ hostWidth, markup }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.style.width = `${hostWidth}px`;
+        host.innerHTML = markup;
+      },
+      { hostWidth: width, markup: html }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const setWidth = async (page: Page, width: number) => {
+    await page.evaluate((hostWidth) => {
+      const host = document.getElementById('host');
+      if (host !== null) {
+        host.style.width = `${hostWidth}px`;
+      }
+    }, width);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const markup = `<music-composition time="4/4">
+    <music-measure><music-staff clef="bass">
+      <music-note note="E" octave="2" duration="whole" tie="start" phonemes="oo>ah>"></music-note>
+    </music-staff></music-measure>
+    <music-measure><music-staff clef="bass">
+      <music-note note="E" octave="2" duration="whole" tie="end" phonemes="oo"></music-note>
+    </music-staff></music-measure>
+  </music-composition>`;
+  const read = (page: Page) =>
+    page.evaluate(() => {
+      const staves = Array.from(document.querySelectorAll('music-staff'));
+      const phonemes = staves.flatMap((staff) =>
+        Array.from(
+          staff.shadowRoot?.querySelectorAll('.phonemes-container .phoneme') ??
+            [],
+          (text) => {
+            const rect = text.getBoundingClientRect();
+            return (rect.left + rect.right) / 2;
+          }
+        )
+      );
+      const overlay = document
+        .querySelector('music-composition')
+        ?.shadowRoot?.querySelector('.connectors-overlay');
+      const arrows = Array.from(
+        overlay?.querySelectorAll('.phoneme-arrow') ?? [],
+        (arrow) => {
+          const rect = arrow.getBoundingClientRect();
+          return { left: rect.left, right: rect.right, top: rect.top };
+        }
+      );
+      const barline = staves[0].getBoundingClientRect().right;
+      return { phonemes, arrows, barline };
+    });
+
+  test('crosses the barline, and splits when the bars wrap', async ({
+    page,
+  }) => {
+    await setHost(page, 900, markup);
+    const wide = await read(page);
+    expect(wide.arrows).toHaveLength(1);
+    expect(wide.arrows[0].left).toBeLessThan(wide.barline);
+    expect(wide.arrows[0].right).toBeGreaterThan(wide.barline);
+
+    await setWidth(page, 300);
+    const wrapped = await read(page);
+    expect(wrapped.arrows).toHaveLength(2);
+    expect(wrapped.arrows[1].top).toBeGreaterThan(wrapped.arrows[0].top);
+
+    await setWidth(page, 900);
+    expect((await read(page)).arrows).toHaveLength(1);
+  });
+
+  test('keeps the middle phoneme halfway as the width changes', async ({
+    page,
+  }) => {
+    const halfway = async () => {
+      const [first, middle, last] = (await read(page)).phonemes;
+      return (middle - first) / (last - first);
+    };
+    await setHost(page, 600, markup);
+    expect(await halfway()).toBeCloseTo(0.5, 1);
+    await setWidth(page, 1000);
+    expect(await halfway()).toBeCloseTo(0.5, 1);
   });
 });

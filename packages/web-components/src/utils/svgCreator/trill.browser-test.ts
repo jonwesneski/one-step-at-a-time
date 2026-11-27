@@ -194,6 +194,36 @@ test('redraws the line when trill is toggled after the initial render', async ({
   expect(await trillLineRects(page)).toHaveLength(1);
 });
 
+test('switching trill-line to double draws a second line over the first, and back', async ({
+  page,
+}) => {
+  await render(
+    page,
+    `<music-staff clef="treble" time="4/4">
+       <music-note note="E" octave="4" duration="half" trill></music-note>
+       <music-note note="D" octave="5" duration="half"></music-note>
+     </music-staff>`
+  );
+  const single = await trillLineRects(page);
+  expect(single).toHaveLength(1);
+
+  const setLine = (mode: string) =>
+    page.evaluate((value) => {
+      document.querySelector('music-note')?.setAttribute('trill-line', value);
+    }, mode);
+  await setLine('double');
+  await waitForRedrawCycle(page);
+  const [double] = await trillLineRects(page);
+  expect(double.top).toBeLessThan(single[0].top);
+  expect(double.bottom).toBeCloseTo(single[0].bottom, 0);
+  expect(double.width).toBeCloseTo(single[0].width, 0);
+
+  await setLine('auto');
+  await waitForRedrawCycle(page);
+  const [back] = await trillLineRects(page);
+  expect(back.top).toBeCloseTo(single[0].top, 0);
+});
+
 test('adding a tie after the initial render extends the trill line to the newly tied note', async ({
   page,
 }) => {

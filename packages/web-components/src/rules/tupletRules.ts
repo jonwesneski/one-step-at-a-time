@@ -4,7 +4,7 @@ import {
   NoteElementType,
   TupletElementType,
 } from '../types/elements';
-import { TupletPlacement, TupletRatio } from '../types/theory';
+import { DurationType, TupletPlacement, TupletRatio } from '../types/theory';
 import {
   isNoteNodeName,
   MUSIC_REST_NODE,
@@ -16,21 +16,33 @@ import {
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
   TUPLET_HOOK_LENGTH_PX,
+  TUPLET_LABEL_PADDING_PX,
+  TUPLET_NOTE_VALUE_GAP_PX,
+  TUPLET_NOTE_VALUE_SCALE,
   TUPLET_NUMERAL_BEAM_GAP_PX,
   TUPLET_NUMERAL_FONT_SIZE,
+  TUPLET_NUMERAL_GAP_PX,
   TUPLET_STAFF_CLEARANCE_PX,
 } from '../utils/notationDimensions';
+import { parseDuration } from '../utils/parsers';
 import {
   NOTE_HEAD_CX_STEM_DOWN_PX,
   NOTE_HEAD_CX_STEM_UP_PX,
   NOTE_HEAD_RADIUS_PX,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
+  NOTE_SCALE,
   NOTE_STEM_TIP_Y_OFFSET,
   NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
   NOTE_SVG_WIDTH,
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
+  noteAugmentationDotLayout,
+  noteHeadGeometry,
+  stemTipPosition,
+  upTailInk,
 } from '../utils/svgCreator/note';
+import { estimateTextWidthPx } from './techniqueTextRules';
+import { durationToBase, isStemlessDuration } from './theoryConsts';
 
 export type ParsedTupletRatio = {
   actual: number;
@@ -102,6 +114,140 @@ export function parseTupletRatio(ratioString: TupletRatio): ParsedTupletRatio {
       ? defaultNormalCount(actual)
       : parseInt(match[2], 10);
   return { actual, normal, displayString: ratioString };
+}
+
+/** A tuplet's `note-value`: any value from a double-whole to a sixty-fourth. */
+export function parseTupletNoteValue(
+  value: string | null
+): DurationType | null {
+  const duration = parseDuration(value);
+  return duration === null || durationToBase[duration] === 'hundredtwentyeighth'
+    ? null
+    : duration;
+}
+
+/**
+ * A tuplet label: the numeral, and with a note value `=` and an upright note
+ * at TUPLET_NOTE_VALUE_SCALE, stem up. Horizontal values run from the label's
+ * left edge; vertical ones from its centre line (the bracket line), +down.
+ */
+export type TupletDisplay = {
+  numeral: string;
+  noteValue: DurationType | null;
+  /** The numeral's width, with its `=` when there is a note value. */
+  textWidth: number;
+  width: number;
+  /** How far the label reaches above and below its centre line. */
+  ascent: number;
+  descent: number;
+  /** Where the note's box goes; its head is centred on the centre line. */
+  noteBoxX: number;
+  noteBoxY: number;
+};
+
+// A stem-up note's ink in its own box (px, full size).
+function noteValueInk(duration: DurationType): {
+  headLeft: number;
+  headCenterY: number;
+  right: number;
+  top: number;
+  bottom: number;
+} {
+  const head = noteHeadGeometry(true, duration, false, 'normal');
+  const headCenterY = head.cy * NOTE_SCALE;
+  const headHalfHeight = head.halfHeight * NOTE_SCALE;
+  const tail = upTailInk({
+    duration,
+    stemUp: true,
+    noFlags: false,
+    noStem: false,
+    stemExtension: 0,
+    tailRoomStemExtension: 0,
+  });
+  const dots = noteAugmentationDotLayout({
+    duration,
+    stemUp: true,
+    noFlags: false,
+    noStem: false,
+    notehead: 'normal',
+    stemExtension: 0,
+    staffY: null,
+  });
+  return {
+    headLeft: (head.cx - head.halfWidth) * NOTE_SCALE,
+    headCenterY,
+    right: Math.max(
+      (head.cx + head.halfWidth) * NOTE_SCALE,
+      tail?.rightX ?? -Infinity,
+      dots?.rightEdgeX ?? -Infinity
+    ),
+    top: isStemlessDuration(duration)
+      ? headCenterY - headHalfHeight
+      : stemTipPosition(true, duration, false, 0).y * NOTE_SCALE,
+    bottom: headCenterY + headHalfHeight,
+  };
+}
+
+/** How a tuplet's ratio is shown, and how much room that takes. */
+export function tupletDisplay(
+  ratio: ParsedTupletRatio,
+  noteValue: DurationType | null
+): TupletDisplay {
+  const numeral = ratio.displayString;
+  const half = TUPLET_NUMERAL_FONT_SIZE / 2;
+  const numeralWidth = estimateTextWidthPx(numeral, TUPLET_NUMERAL_FONT_SIZE);
+  if (noteValue === null) {
+    return {
+      numeral,
+      noteValue,
+      textWidth: numeralWidth,
+      width: numeralWidth,
+      ascent: half,
+      descent: half,
+      noteBoxX: 0,
+      noteBoxY: 0,
+    };
+  }
+  const textWidth =
+    numeralWidth + estimateTextWidthPx('=', TUPLET_NUMERAL_FONT_SIZE);
+  const ink = noteValueInk(noteValue);
+  const scale = TUPLET_NOTE_VALUE_SCALE;
+  const noteLeft = textWidth + TUPLET_NOTE_VALUE_GAP_PX;
+  return {
+    numeral,
+    noteValue,
+    textWidth,
+    width: noteLeft + scale * (ink.right - ink.headLeft),
+    ascent: Math.max(half, scale * (ink.headCenterY - ink.top)),
+    descent: Math.max(half, scale * (ink.bottom - ink.headCenterY)),
+    noteBoxX: noteLeft - scale * ink.headLeft,
+    noteBoxY: -scale * ink.headCenterY,
+  };
+}
+
+/** A tuplet group's display, from its ratio and its element's note value. */
+export function tupletDisplayOf(
+  group: Pick<TupletGroup, 'element' | 'parsedRatio'>
+): TupletDisplay {
+  return tupletDisplay(group.parsedRatio, group.element.noteValue ?? null);
+}
+
+/** How far a label reaches toward (`near`) and away from its notes. */
+export function tupletLabelExtents(
+  display: TupletDisplay,
+  above: boolean
+): { near: number; far: number } {
+  return above
+    ? { near: display.descent, far: display.ascent }
+    : { near: display.ascent, far: display.descent };
+}
+
+/** The gap a bracket leaves for its label. */
+export function tupletLabelGapPx(display: TupletDisplay): number {
+  return Math.max(
+    TUPLET_NUMERAL_GAP_PX,
+    display.width + 2 * TUPLET_LABEL_PADDING_PX
+  );
 }
 
 export function resolveInnermostTuplet(
@@ -350,11 +496,16 @@ export function computeTupletBracketGeometry(
     sideOverride
   );
 
+  const display = tupletDisplayOf(group);
+  const label = tupletLabelExtents(display, stemUp);
+  const forcedBracket = group.element.bracket === 'always';
+
   // Omit bracket when all notes are beamed and no rests are present, and this
   // group has no inner (child) tuplet groups that need an enclosing bracket.
   // A side forced onto the noteheads has no beam to sit beside, so it keeps
   // its bracket.
   const omitBracket =
+    !forcedBracket &&
     !hasInnerGroups &&
     group.indices.every((i) => beamedIndices.has(i)) &&
     group.indices.every((i) => elements[i].nodeName !== MUSIC_REST_NODE) &&
@@ -444,13 +595,39 @@ export function computeTupletBracketGeometry(
     );
   };
 
+  // A bracket forced onto a beamed group runs along the beam.
+  const beamEdgeAt = (i: number) => beamStackEdgeYForIndex(i, stemUp);
+  const alongBeam =
+    forcedBracket &&
+    nonRestIndices.length >= 2 &&
+    nonRestIndices.every(
+      (i) =>
+        beamedIndices.has(i) &&
+        stemDirections[i] === stemUp &&
+        beamEdgeAt(i) !== null
+    );
+  if (alongBeam) {
+    const first = nonRestIndices[0];
+    const last = nonRestIndices[nonRestIndices.length - 1];
+    const run =
+      (noteXPositions.get(last) ?? 0) - (noteXPositions.get(first) ?? 0);
+    angle =
+      run > 0
+        ? ((beamEdgeAt(last) as number) - (beamEdgeAt(first) as number)) / run
+        : 0;
+  }
+
   // Push baseY past the extreme stem tip (or notehead) so the bracket clears
-  // notes far outside the staff; only ever moves it outward.
+  // notes far outside the staff; only ever moves it outward. A label reaching
+  // toward the notes past the hooks keeps its own gap.
   const nonRestIndicesForClamping = group.indices.filter(
     (i) => elements[i].nodeName !== MUSIC_REST_NODE
   );
   if (nonRestIndicesForClamping.length > 0) {
-    const gap = TUPLET_STAFF_CLEARANCE_PX + TUPLET_HOOK_LENGTH_PX;
+    const gap = Math.max(
+      TUPLET_STAFF_CLEARANCE_PX + TUPLET_HOOK_LENGTH_PX,
+      label.near + TUPLET_NUMERAL_BEAM_GAP_PX
+    );
 
     const extremeStemTipY = nonRestIndicesForClamping.reduce(
       (worst, i) => {
@@ -484,7 +661,23 @@ export function computeTupletBracketGeometry(
       stemUp ? Infinity : -Infinity
     );
 
-    if (isFinite(extremeStemTipY)) {
+    if (alongBeam) {
+      // Each tip, carried back along the bracket's slope to its start.
+      const required = nonRestIndicesForClamping.map((i) => {
+        const tip = beamTipYForIndex(i) ?? baseY;
+        const x = (noteXPositions.get(i) ?? startX) + NOTE_SVG_WIDTH / 2;
+        const atStart = tip - (x - startX) * angle;
+        return stemUp ? atStart - gap : atStart + gap;
+      });
+      // Nowhere nearer the stave than an unbeamed bracket.
+      const rise = (endX - startX) * angle;
+      const staffAtStart = stemUp
+        ? baseY - Math.max(0, rise)
+        : baseY - Math.min(0, rise);
+      baseY = stemUp
+        ? Math.min(staffAtStart, ...required)
+        : Math.max(staffAtStart, ...required);
+    } else if (isFinite(extremeStemTipY)) {
       const requiredBaseY = stemUp
         ? extremeStemTipY - gap
         : extremeStemTipY + gap;
@@ -532,9 +725,7 @@ export function computeTupletBracketGeometry(
     // stack toward the noteheads, away from the numeral, so clearing one beam
     // thickness plus the gap positions the numeral just outside the stack.
     const numeralOffset =
-      TUPLET_NUMERAL_FONT_SIZE / 2 +
-      TUPLET_NUMERAL_BEAM_GAP_PX +
-      BEAM_THICKNESS_PX;
+      label.near + TUPLET_NUMERAL_BEAM_GAP_PX + BEAM_THICKNESS_PX;
     numeralY = stemUp
       ? beamYAtNumeralX - numeralOffset
       : beamYAtNumeralX + numeralOffset;

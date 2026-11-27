@@ -5,20 +5,23 @@ import type {
 } from '../types/elements';
 import type {
   AccidentalType,
+  ConventionalAccidentalType,
   DurationType,
   Mode,
   Note,
   NoteLetter,
   Octave,
+  QuarterTone,
 } from '../types/theory';
 import { isChordNodeName, isNoteNodeName } from '../utils/consts';
 import {
   getKeySignatureAccidentals,
-  parseAccidentalSuffix,
-  suffixToType,
+  pitchAccidental,
+  withQuarterTone,
 } from './accidentalRules';
 import { LETTER_ORDER } from './graceRules';
 import { durationToFlagCountMap } from './theoryConsts';
+import { tiesOn } from './tieRules';
 
 type TrillCapableElement = NoteElementType | ChordElementType;
 
@@ -38,6 +41,8 @@ export type TrillLineSpan = {
   lastTiedIndex: number;
   /** Whether a wavy line (or end-notch) should be drawn at all — false only when `trill-line="none"` explicitly suppresses it (sign only). */
   hasLine: boolean;
+  /** `trill-line="double"`: two lines after the one sign. */
+  double: boolean;
   /**
    * Index the wavy line runs up to (exclusive) — the next element in the
    * stream after `lastTiedIndex`, whose own left edge (or accidental) the
@@ -86,7 +91,7 @@ const walkTieChain = (
   let stopped = source?.trillStop ?? false;
 
   while (!stopped) {
-    if (source === null || source.tie !== 'start') {
+    if (source === null || !tiesOn(source.tie)) {
       break;
     }
     const nextIndex = index + 1;
@@ -123,6 +128,7 @@ function buildTrillSpan(
     startIndex,
     lastTiedIndex,
     hasLine,
+    double: source.trillLine === 'double',
     endBeforeIndex,
     stopped,
     writtenNoteAnchorIndex,
@@ -278,15 +284,17 @@ const octaveAbove = (
  * key with F# in its signature implies an upper neighbor of G, not G#, since
  * G is unaltered by that signature. `accidentalOverride` (`trill-accidental`)
  * replaces only the accidental; `noteOverride` (`trill-note`) replaces the
- * whole pitch and wins over it.
+ * whole pitch and wins over it. `quarterTone` then applies to whichever of
+ * the three gave the pitch.
  */
 export function resolveTrillPitch(
   note: Note,
   octave: Octave,
   keySig: Note,
   mode: Mode,
-  accidentalOverride: AccidentalType | null,
-  noteOverride: Note | null = null
+  accidentalOverride: ConventionalAccidentalType | null,
+  noteOverride: Note | null = null,
+  quarterTone: QuarterTone | null = null
 ): ResolvedTrillPitch {
   const mainLetter = note[0] as NoteLetter;
 
@@ -294,7 +302,7 @@ export function resolveTrillPitch(
     const letter = noteOverride[0] as NoteLetter;
     return {
       letter,
-      accidental: suffixToType(parseAccidentalSuffix(noteOverride)),
+      accidental: pitchAccidental(noteOverride, quarterTone),
       written: true,
       octave: octaveAbove(mainLetter, octave, letter),
     };
@@ -306,7 +314,7 @@ export function resolveTrillPitch(
   if (accidentalOverride !== null) {
     return {
       letter,
-      accidental: accidentalOverride,
+      accidental: withQuarterTone(accidentalOverride, quarterTone),
       written: false,
       octave: null,
     };
@@ -315,7 +323,10 @@ export function resolveTrillPitch(
   const keySignatureAccidentals = getKeySignatureAccidentals(keySig, mode);
   return {
     letter,
-    accidental: keySignatureAccidentals.get(letter) ?? null,
+    accidental: withQuarterTone(
+      keySignatureAccidentals.get(letter) ?? null,
+      quarterTone
+    ),
     written: false,
     octave: null,
   };

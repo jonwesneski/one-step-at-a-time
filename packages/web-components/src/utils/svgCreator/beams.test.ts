@@ -4,13 +4,18 @@
 
 import '../../index';
 import { makeChord, makeNote } from '../../test-fixtures/unitHelpers';
-import type { ChordElementType, StaffElementType } from '../../types/elements';
+import type {
+  ChordElementType,
+  NoteChordOrRestElementType,
+  StaffElementType,
+} from '../../types/elements';
 import type { DurationType, Note } from '../../types/theory';
 import {
   COMMON_ATTRIBUTES,
   MUSIC_CHORD,
   MUSIC_CLEF,
   MUSIC_NOTE,
+  MUSIC_REST,
   MUSIC_STAFF,
   MUSIC_TUPLET,
   MUSIC_VOICE,
@@ -960,6 +965,37 @@ describe('beams with tremolo strokes', () => {
     expect(staff.shadowRoot!.querySelectorAll('.beam-group')).toHaveLength(2);
   });
 
+  it('beams a flutter-tongued note with a plain one', () => {
+    const notes = eighths(['unmeasured', null, null, null]);
+    notes[0].setAttribute('tremolo-label', 'flz');
+    const staff = staffWith(notes);
+    expect(staff.shadowRoot!.querySelectorAll('.beam-group')).toHaveLength(1);
+  });
+
+  it('beams a flutter passage carried in from the previous measure', () => {
+    const staff = staffWith(eighths(['unmeasured', 'unmeasured', null, null]));
+    expect(staff.shadowRoot!.querySelectorAll('.beam-group')).toHaveLength(2);
+    (staff as unknown as { flutterCarryIn: Set<number> }).flutterCarryIn =
+      new Set([1]);
+    expect(staff.shadowRoot!.querySelectorAll('.beam-group')).toHaveLength(1);
+  });
+
+  it('breaks again once ord. closes the passage', () => {
+    const open = eighths(['unmeasured', null, 'unmeasured', 'unmeasured']);
+    open[0].setAttribute('tremolo-label', 'flz');
+    expect(
+      staffWith(open).shadowRoot!.querySelectorAll('.beam-group')
+    ).toHaveLength(1);
+    document.body.innerHTML = '';
+
+    const closed = eighths(['unmeasured', null, 'unmeasured', 'unmeasured']);
+    closed[0].setAttribute('tremolo-label', 'flz');
+    closed[1].setAttribute('tremolo-label', 'ord');
+    expect(
+      staffWith(closed).shadowRoot!.querySelectorAll('.beam-group')
+    ).toHaveLength(2);
+  });
+
   it('keeps tremolo notes beamed together', () => {
     const staff = staffWith(eighths(['1', '1', '1', '1']));
     expect(staff.shadowRoot!.querySelectorAll('.beam-group')).toHaveLength(1);
@@ -981,5 +1017,208 @@ describe('beams with tremolo strokes', () => {
     expect(
       tremolo[0].shadowRoot!.querySelectorAll('.tremolo-stroke')
     ).toHaveLength(2);
+  });
+});
+
+describe('BeamsBuilder at cue size', () => {
+  it('never beams a cue note with a full-size one', () => {
+    const cue = (note: 'D' | 'E') => {
+      const element = makeNote({ note, octave: 4, duration: 'eighth' });
+      element.setAttribute('size', 'cue');
+      return element;
+    };
+    const elements = [
+      makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
+      cue('D'),
+      cue('E'),
+      makeNote({ note: 'F', octave: 4, duration: 'eighth' }),
+    ];
+    const builder = new BeamsBuilder(
+      elements,
+      [4, 4],
+      [0, 1 / 8, 2 / 8, 3 / 8]
+    );
+    expect(builder.isBeamed(0)).toBe(false);
+    expect(builder.beamGroupFor(1)).toEqual([1, 2]);
+    expect(builder.isBeamed(3)).toBe(false);
+  });
+});
+
+describe('BeamsBuilder over beam-over rests', () => {
+  const sixteenth = (note: Note) =>
+    makeNote({ note, octave: 4, duration: 'sixteenth' });
+  const rest = (duration: DurationType, beamOver = true) => {
+    const element = document.createElement(MUSIC_REST);
+    element.setAttribute('duration', duration);
+    if (beamOver) {
+      element.setAttribute('beam-over', '');
+    }
+    return element as unknown as NoteChordOrRestElementType;
+  };
+  const offsets = (count: number) =>
+    Array.from({ length: count }, (_, i) => i / 16);
+
+  it('joins a beam-over rest to the notes beside it; a plain rest still ends the run', () => {
+    const plain = [sixteenth('C'), rest('sixteenth', false), sixteenth('E')];
+    const plainBuilder = new BeamsBuilder(plain, [2, 4], offsets(3));
+    expect(plainBuilder.isBeamed(0)).toBe(false);
+    expect(plainBuilder.isBeamed(2)).toBe(false);
+
+    const over = [
+      sixteenth('C'),
+      rest('sixteenth'),
+      sixteenth('E'),
+      sixteenth('F'),
+    ];
+    const builder = new BeamsBuilder(over, [2, 4], offsets(4));
+    expect(builder.beamGroupFor(0)).toEqual([0, 2, 3]);
+    expect(builder.beamOverRestsFor(0)).toEqual([1]);
+    expect(builder.isBeamed(1)).toBe(false);
+  });
+
+  it('beams a lone note beside a beam-over rest', () => {
+    const builder = new BeamsBuilder(
+      [rest('eighth'), sixteenth('C')],
+      [2, 4],
+      [0, 1 / 12]
+    );
+    expect(builder.isBeamed(1)).toBe(true);
+    expect(builder.beamGroupFor(1)).toEqual([1]);
+  });
+
+  it('needs every rest in a row to have beam-over', () => {
+    const builder = new BeamsBuilder(
+      [
+        sixteenth('C'),
+        rest('sixteenth'),
+        rest('sixteenth', false),
+        sixteenth('F'),
+      ],
+      [2, 4],
+      offsets(4)
+    );
+    expect(builder.beamGroupFor(0)).toEqual([0]);
+    expect(builder.isBeamed(3)).toBe(false);
+  });
+
+  it('ignores beam-over on a crotchet rest and on a cross-staff beam-group rest', () => {
+    const grouped = rest('sixteenth');
+    grouped.setAttribute('beam-group', 'g');
+    const builder = new BeamsBuilder(
+      [sixteenth('C'), grouped, sixteenth('E'), sixteenth('F')],
+      [2, 4],
+      offsets(4)
+    );
+    expect(builder.isBeamed(0)).toBe(false);
+    expect(builder.beamGroupFor(2)).toEqual([2, 3]);
+
+    const crotchet = new BeamsBuilder(
+      [rest('quarter'), sixteenth('C')],
+      [2, 4],
+      [0, 1 / 4]
+    );
+    expect(crotchet.isBeamed(1)).toBe(false);
+  });
+
+  it('draws a lone note’s stubs from its stem toward the rest, shortening as they close up', () => {
+    const builder = new BeamsBuilder(
+      [rest('eighth'), sixteenth('C')],
+      [2, 4],
+      [0, 1 / 12]
+    );
+    const renderer = builder.buildRenderer([
+      null,
+      { stemUp: true, highestHeadStaffY: 60, lowestHeadStaffY: 60 },
+    ]);
+    const stubLeft = (noteX: number) => {
+      renderer.setX(0, 0);
+      renderer.setX(1, noteX);
+      renderer.spaceAll();
+      const polygons = renderer.svgGroups[0].querySelectorAll('polygon');
+      expect(polygons).toHaveLength(2);
+      const xs = parsePoints(polygons[0]).map(([x]) => x);
+      expect(Math.max(...xs)).toBeCloseTo(noteX + NOTE_STEM_X_OFFSET_PX);
+      return Math.min(...xs);
+    };
+    const wide = 200;
+    const narrow = 40;
+    const reachAt = (noteX: number) =>
+      noteX + NOTE_STEM_X_OFFSET_PX - stubLeft(noteX);
+    expect(reachAt(wide)).toBeCloseTo(20);
+    expect(reachAt(narrow)).toBeCloseTo(
+      0.4 * (narrow + NOTE_STEM_X_OFFSET_PX - 16)
+    );
+  });
+
+  it('reports the beam over an inner rest, not one at the end of a run', () => {
+    const builder = new BeamsBuilder(
+      [rest('sixteenth'), sixteenth('C'), rest('sixteenth'), sixteenth('E')],
+      [2, 4],
+      offsets(4)
+    );
+    const position = {
+      stemUp: true,
+      highestHeadStaffY: 60,
+      lowestHeadStaffY: 60,
+    };
+    const renderer = builder.buildRenderer([null, position, null, position]);
+    [0, 1, 2, 3].forEach((i) => renderer.setX(i, i * 30));
+    renderer.spaceAll();
+    expect(renderer.beamOverRest(0)).toBeNull();
+    const over = renderer.beamOverRest(2);
+    expect(over).not.toBeNull();
+    expect(over!.above).toBe(true);
+    expect(over!.bottom).toBeGreaterThan(over!.top);
+  });
+});
+
+describe('BeamsBuilder beams each tuplet on its own', () => {
+  const inTuplet = (
+    ratio: string,
+    notes: NoteChordOrRestElementType[]
+  ): NoteChordOrRestElementType[] => {
+    const tuplet = document.createElement(MUSIC_TUPLET);
+    tuplet.setAttribute('ratio', ratio);
+    notes.forEach((note) => tuplet.appendChild(note));
+    document.body.appendChild(tuplet);
+    return notes;
+  };
+  const sixteenth = (note: Note) =>
+    makeNote({ note, octave: 4, duration: 'sixteenth' });
+
+  it('breaks a run where a tuplet starts or ends, inside one beat', () => {
+    const first = inTuplet('3', [
+      sixteenth('C'),
+      sixteenth('D'),
+      sixteenth('E'),
+    ]);
+    const second = inTuplet('3', [
+      sixteenth('F'),
+      sixteenth('G'),
+      sixteenth('A'),
+    ]);
+    const plain = [sixteenth('B'), sixteenth('C')];
+    const elements = [...first, ...second, ...plain];
+    const offsets = [0, 1, 2, 3, 4, 5]
+      .map((i) => i / 24)
+      .concat([1 / 4, 5 / 16]);
+    const builder = new BeamsBuilder(elements, [2, 4], offsets);
+    expect(builder.beamGroupFor(0)).toEqual([0, 1, 2]);
+    expect(builder.beamGroupFor(3)).toEqual([3, 4, 5]);
+    expect(builder.beamGroupFor(6)).toEqual([6, 7]);
+  });
+
+  it('keeps a tuplet longer than a beat on one beam', () => {
+    const notes = inTuplet(
+      '5',
+      ['C', 'D', 'E', 'F', 'G'].map((note) => sixteenth(note as Note))
+    );
+    // 5/8 beams by the eighth; the quintuplet lasts a crotchet.
+    const builder = new BeamsBuilder(
+      notes,
+      [5, 8],
+      notes.map((_, i) => i / 20)
+    );
+    expect(builder.beamGroupFor(0)).toEqual([0, 1, 2, 3, 4]);
   });
 });
