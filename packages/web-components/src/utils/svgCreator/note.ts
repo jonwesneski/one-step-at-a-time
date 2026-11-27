@@ -41,6 +41,7 @@ import type {
   DynamicMarking,
   HairpinKind,
   NoteheadType,
+  NoteSize,
   StressType,
   TremoloLabel,
 } from '../../types/theory';
@@ -58,6 +59,7 @@ import {
   BEND_STANDALONE_LENGTH_PX,
   BREATH_MARK_INK_GAP_PX,
   BREATH_MARK_STANDALONE_GAP_PX,
+  CUE_SCALE,
   DOWN_TAIL_HEAD_ROOM_PX,
   FLAG_STEM_STEP_PX,
   QUAVER_TAIL_LENGTH_PX,
@@ -160,6 +162,10 @@ export function flagStemExtensionPx(flagCount: number): number {
   return flagStemExtensionUnits(flagCount) * NOTE_SCALE;
 }
 
+/** How large a note of `size` is drawn against a full-size one. */
+export const noteSizeScale = (size: NoteSize): number =>
+  size === 'cue' ? CUE_SCALE : 1;
+
 // Notehead geometry in pixel space — used by ledgerLines.ts and chord.ts
 export const NOTE_HEAD_RADIUS_PX = HEAD_WIDTH * NOTE_SCALE; // ≈ 4.27px
 // Also the length of a fractional beam.
@@ -250,6 +256,8 @@ export type NoteProps = {
   breathMark?: BreathMark | null;
   // A standalone note's bend.
   bend?: ResolvedBend | null;
+  // CUE_SCALE for a cue-sized note.
+  scale?: number;
 };
 
 // Local-space X at which a note's trill sign's left edge sits, flush with the
@@ -318,10 +326,22 @@ export const createNoteSvg = ({
   phonemes = null,
   breathMark = null,
   bend = null,
+  scale = 1,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
   const stemUp = forcedStemUp(notehead) ?? requestedStemUp;
-  const headGeometry = noteHeadGeometry(stemUp, duration, noFlags, notehead);
-  const leftOverhang = noteHeadLeftOverhangPx(stemUp, duration, notehead);
+  const headGeometry = noteHeadGeometry(
+    stemUp,
+    duration,
+    noFlags,
+    notehead,
+    scale
+  );
+  const leftOverhang = noteHeadLeftOverhangPx(
+    stemUp,
+    duration,
+    notehead,
+    scale
+  );
   const svg = document.createElementNS(SVG_NS, qualifiedElementName);
   if (qualifiedElementName === 'svg') {
     svg.setAttribute('xmlns', SVG_NS);
@@ -350,7 +370,8 @@ export const createNoteSvg = ({
     stemUp,
     duration,
     noFlags,
-    stemExtension
+    stemExtension,
+    scale
   );
   if (!noStem && !isStemlessDuration(duration)) {
     // Stem-up: right side of head, tip at top (y1), head end at bottom (y2).
@@ -369,7 +390,7 @@ export const createNoteSvg = ({
     stem.setAttribute('stroke', 'currentColor');
     stem.setAttribute(
       'stroke-width',
-      (STEM_STROKE_WIDTH_PX / NOTE_SCALE).toString()
+      ((scale * STEM_STROKE_WIDTH_PX) / NOTE_SCALE).toString()
     );
     g.appendChild(stem);
   }
@@ -385,13 +406,14 @@ export const createNoteSvg = ({
     singleFlag.id = flagName;
 
     const tailLength =
-      tailLengthPx(stemUp, flagCount, tailRoomStemExtension) / NOTE_SCALE;
-    const tailXScale = STAFF_LINE_SPACING / NOTE_SCALE;
+      tailLengthPx(stemUp, flagCount, tailRoomStemExtension, scale) /
+      NOTE_SCALE;
+    const tailXScale = (scale * STAFF_LINE_SPACING) / NOTE_SCALE;
     const tailYScale =
       tailLength / (stemUp ? TAIL_UP_NATURAL_HEIGHT : TAIL_DOWN_NATURAL_HEIGHT);
     const tailTopY = stemUp ? stemTipY : stemTipY - tailLength;
     // Additional tails stack along the stem, toward the head.
-    const flagYStep = stemUp ? FLAG_Y_SPACING : -FLAG_Y_SPACING;
+    const flagYStep = scale * (stemUp ? FLAG_Y_SPACING : -FLAG_Y_SPACING);
 
     singleFlag.setAttribute('d', stemUp ? TAIL_UP_PATH_D : TAIL_DOWN_PATH_D);
     singleFlag.setAttribute(
@@ -450,15 +472,15 @@ export const createNoteSvg = ({
       head.classList.add('head');
       head.setAttribute('cx', headXStartStr);
       head.setAttribute('cy', headYStartStr);
-      head.setAttribute('rx', HEAD_WIDTH.toString());
-      head.setAttribute('ry', (HEAD_WIDTH * 0.75).toString());
+      head.setAttribute('rx', headGeometry.halfWidth.toString());
+      head.setAttribute('ry', headGeometry.halfHeight.toString());
       head.setAttribute(
         'transform',
         `rotate(-30 ${headXStartStr} ${headYStartStr})`
       );
       head.setAttribute('stroke', 'currentColor');
       head.setAttribute('fill', headFill);
-      head.setAttribute('stroke-width', '30');
+      head.setAttribute('stroke-width', `${30 * scale}`);
       g.appendChild(head);
     }
   }
@@ -466,11 +488,11 @@ export const createNoteSvg = ({
   if (durationToBase[duration] === 'double-whole') {
     const headCx = headGeometry.cx;
     const headCy = headGeometry.cy;
-    const barHalfHeight = headGeometry.halfHeight + 20;
+    const barHalfHeight = headGeometry.halfHeight + 20 * scale;
     const barY1 = headCy - barHalfHeight;
     const barY2 = headCy + barHalfHeight;
-    const barInnerGap = headGeometry.halfWidth + 20;
-    const barOuterGap = barInnerGap + STEM_WIDTH + 10;
+    const barInnerGap = headGeometry.halfWidth + 20 * scale;
+    const barOuterGap = barInnerGap + scale * (STEM_WIDTH + 10);
 
     for (const xOffset of [
       barInnerGap,
@@ -484,7 +506,7 @@ export const createNoteSvg = ({
       bar.setAttribute('x2', (headCx + xOffset).toString());
       bar.setAttribute('y2', barY2.toString());
       bar.setAttribute('stroke', 'currentColor');
-      bar.setAttribute('stroke-width', STEM_WIDTH.toString());
+      bar.setAttribute('stroke-width', `${scale * STEM_WIDTH}`);
       g.appendChild(bar);
     }
   }
@@ -509,6 +531,7 @@ export const createNoteSvg = ({
           )
         : null,
     repeatCount: articulationRepeatCount,
+    scale,
   });
   if (articulationMarks) {
     g.appendChild(articulationMarks);
@@ -524,7 +547,8 @@ export const createNoteSvg = ({
   if (!stemUp) {
     inkTopY = Math.min(
       inkTopY,
-      headCenterPxY - articulationStackDepth(articulation, stress) * NOTE_SCALE
+      headCenterPxY -
+        articulationStackDepth(articulation, stress, scale) * NOTE_SCALE
     );
   }
   // A breath mark sits beside the stem, clear of whatever is above the head.
@@ -537,7 +561,8 @@ export const createNoteSvg = ({
   if (stemUp) {
     inkBottomY = Math.max(
       inkBottomY,
-      headCenterPxY + articulationStackDepth(articulation, stress) * NOTE_SCALE
+      headCenterPxY +
+        articulationStackDepth(articulation, stress, scale) * NOTE_SCALE
     );
   } else if (!stemless && !noStem) {
     inkBottomY = Math.max(inkBottomY, stemTipY * NOTE_SCALE);
@@ -554,7 +579,7 @@ export const createNoteSvg = ({
       staff: staffY === null ? null : STAFF_BAND,
       stemLengthPx: stemless
         ? null
-        : BASE_STEM_LENGTH_PX +
+        : scale * BASE_STEM_LENGTH_PX +
           stemExtension +
           (ending.kind === 'beam' ? STEM_OVERLAP_PX : 0),
       ending,
@@ -565,13 +590,13 @@ export const createNoteSvg = ({
     svg.setAttribute('overflow', 'visible');
     if (crossCenterY !== null) {
       const crossY = headCenterPxY + crossCenterY - headStaffY;
-      svg.appendChild(createStemCrossSvg(strokeX, crossY));
+      svg.appendChild(createStemCrossSvg(strokeX, crossY, scale));
       if (stemless && stemUp) {
-        inkTopY = Math.min(inkTopY, crossY - STEM_CROSS_SIZE_PX / 2);
+        inkTopY = Math.min(inkTopY, crossY - (scale * STEM_CROSS_SIZE_PX) / 2);
       }
     }
     if (strokeYs.length > 0) {
-      svg.appendChild(createTremoloStrokes(strokeX, strokeYs));
+      svg.appendChild(createTremoloStrokes(strokeX, strokeYs, scale));
     }
     if (stemless && stemUp && strokeYs.length > 0) {
       inkTopY = Math.min(
@@ -640,6 +665,7 @@ export const createNoteSvg = ({
     staffY,
     rowStaffYs: augmentationDotRows,
     columnShiftPx: augmentationDotShiftPx,
+    scale,
   });
   const dots = dotLayout && createAugmentationDotsSvg(dotLayout);
   if (dots) {
@@ -650,7 +676,7 @@ export const createNoteSvg = ({
   if (breathMark !== null && qualifiedElementName === 'svg') {
     const tailRightX =
       stemUp && !noStem && !noFlags && flagCount > 0
-        ? stemX * NOTE_SCALE + TAIL_UP_WIDTH_PX
+        ? stemX * NOTE_SCALE + scale * TAIL_UP_WIDTH_PX
         : -Infinity;
     const rightX = Math.max(
       (headGeometry.cx + headGeometry.halfWidth) * NOTE_SCALE,
@@ -678,6 +704,7 @@ export const createNoteSvg = ({
       noStem,
       stemExtension,
       tailRoomStemExtension,
+      scale,
     });
     const layout = layoutBends({
       heads: [
@@ -721,17 +748,17 @@ export const createNoteSvg = ({
 
     const symbolSvg = createAccidentalSvg(accidental, accidentalParenthesized);
     symbolSvg.classList.add('accidental');
-
-    symbolSvg.setAttribute(
-      'x',
-      `${-(symbolWidth + ACCIDENTAL_NOTE_GAP + leftOverhang)}`
-    );
-    symbolSvg.setAttribute(
-      'y',
-      `${yHeadCenter - accidentalPitchOffset(accidental)}`
-    );
     svg.setAttribute('overflow', 'visible');
-    svg.appendChild(symbolSvg);
+    svg.appendChild(
+      placeAccidentalSvg(
+        symbolSvg,
+        cueLeftShiftPx(stemUp, scale) -
+          leftOverhang -
+          scale * (symbolWidth + ACCIDENTAL_NOTE_GAP),
+        yHeadCenter - scale * accidentalPitchOffset(accidental),
+        scale
+      )
+    );
   }
 
   if (arpeggio && qualifiedElementName === 'svg') {
@@ -739,11 +766,11 @@ export const createNoteSvg = ({
     const headLeftX = (headGeometry.cx - headGeometry.halfWidth) * NOTE_SCALE;
     const accidentalLeftX =
       accidental && !suppressesAccidental(notehead)
-        ? -(
-            accidentalReach(accidental, accidentalParenthesized) +
-            ACCIDENTAL_NOTE_GAP +
-            leftOverhang
-          )
+        ? cueLeftShiftPx(stemUp, scale) -
+          leftOverhang -
+          scale *
+            (accidentalReach(accidental, accidentalParenthesized) +
+              ACCIDENTAL_NOTE_GAP)
         : headLeftX;
     const signRightEdgeX = accidentalLeftX - ARPEGGIO_CHORD_GAP_PX;
     const sign = createArpeggioSvg({
@@ -794,8 +821,14 @@ export const createNoteSvg = ({
 function tailLengthPx(
   stemUp: boolean,
   flagCount: number,
-  tailRoomStemExtension: number
+  tailRoomStemExtension: number,
+  scale = 1
 ): number {
+  if (scale !== 1) {
+    return (
+      scale * tailLengthPx(stemUp, flagCount, tailRoomStemExtension / scale)
+    );
+  }
   const tailRoomPx =
     BASE_STEM_LENGTH_PX +
     tailRoomStemExtension +
@@ -830,6 +863,7 @@ export type NoteDotLayoutInput = {
   // Moves the dot column right, past another voice's head (a unison's one
   // dotted part dots after the whole group).
   columnShiftPx?: number;
+  scale?: number;
 };
 
 export type NoteDotLayout = {
@@ -837,6 +871,7 @@ export type NoteDotLayout = {
   leftX: number;
   rowCentersY: number[];
   rightEdgeX: number;
+  scale?: number;
 };
 
 /**
@@ -854,13 +889,14 @@ export function noteAugmentationDotLayout({
   staffY,
   rowStaffYs = null,
   columnShiftPx = 0,
+  scale = 1,
 }: NoteDotLayoutInput): NoteDotLayout | null {
   const dotCount = durationToDotCount[duration];
   if (dotCount === 0 || rowStaffYs?.length === 0) {
     return null;
   }
   const stemUp = forcedStemUp(notehead) ?? requestedStemUp;
-  const head = noteHeadGeometry(stemUp, duration, noFlags, notehead);
+  const head = noteHeadGeometry(stemUp, duration, noFlags, notehead, scale);
   const headCenterY = head.cy * NOTE_SCALE;
   const rowCentersY =
     staffY === null
@@ -869,7 +905,8 @@ export function noteAugmentationDotLayout({
           (row) => headCenterY + row - staffY
         );
   let leftX =
-    (head.cx + head.halfWidth) * NOTE_SCALE + AUGMENTATION_DOT_NOTEHEAD_GAP_PX;
+    (head.cx + head.halfWidth) * NOTE_SCALE +
+    scale * AUGMENTATION_DOT_NOTEHEAD_GAP_PX;
   const tailClearX = upTailDotClearX({
     duration,
     stemUp,
@@ -878,6 +915,7 @@ export function noteAugmentationDotLayout({
     stemExtension,
     tailRoomStemExtension: stemExtension,
     rowCentersY,
+    scale,
   });
   if (tailClearX !== null) {
     leftX = Math.max(leftX, tailClearX);
@@ -887,7 +925,8 @@ export function noteAugmentationDotLayout({
     dotCount,
     leftX,
     rowCentersY,
-    rightEdgeX: leftX + augmentationDotRowWidthPx(dotCount),
+    rightEdgeX: leftX + augmentationDotRowWidthPx(dotCount, scale),
+    scale,
   };
 }
 
@@ -898,6 +937,7 @@ type UpTailInput = {
   noStem: boolean;
   stemExtension: number;
   tailRoomStemExtension: number;
+  scale?: number;
 };
 
 /**
@@ -911,6 +951,7 @@ export function upTailInk({
   noStem,
   stemExtension,
   tailRoomStemExtension,
+  scale = 1,
 }: UpTailInput): { rightX: number; bottomY: number } | null {
   const flagCount = durationToFlagCountMap.get(duration) ?? 0;
   if (!stemUp || noStem || noFlags || flagCount === 0) {
@@ -920,13 +961,14 @@ export function upTailInk({
     stemUp,
     duration,
     noFlags,
-    stemExtension
+    stemExtension,
+    scale
   );
   return {
-    rightX: stemX * NOTE_SCALE + TAIL_UP_WIDTH_PX,
+    rightX: stemX * NOTE_SCALE + scale * TAIL_UP_WIDTH_PX,
     bottomY:
-      (stemTipY + (flagCount - 1) * FLAG_Y_SPACING) * NOTE_SCALE +
-      tailLengthPx(stemUp, flagCount, tailRoomStemExtension),
+      (stemTipY + scale * (flagCount - 1) * FLAG_Y_SPACING) * NOTE_SCALE +
+      tailLengthPx(stemUp, flagCount, tailRoomStemExtension, scale),
   };
 }
 
@@ -942,10 +984,12 @@ export function upTailDotClearX({
   if (tail === null) {
     return null;
   }
-  const dotTopY = Math.min(...rowCentersY) - AUGMENTATION_DOT_DIAMETER_PX / 2;
+  const scale = tailInput.scale ?? 1;
+  const dotTopY =
+    Math.min(...rowCentersY) - (scale * AUGMENTATION_DOT_DIAMETER_PX) / 2;
   return tail.bottomY + AUGMENTATION_DOT_TAIL_CLEARANCE_PX <= dotTopY
     ? null
-    : tail.rightX + AUGMENTATION_DOT_TAIL_GAP_PX;
+    : tail.rightX + scale * AUGMENTATION_DOT_TAIL_GAP_PX;
 }
 
 // Compute the Y offset from the top of the note SVG to the notehead center.
@@ -964,9 +1008,16 @@ export function noteHeadCenter(
   stemUp: boolean,
   duration: DurationType,
   noFlags: boolean,
-  notehead: NoteheadType = 'normal'
+  notehead: NoteheadType = 'normal',
+  scale = 1
 ): { cx: number; cy: number } {
-  const { cx, cy } = noteHeadGeometry(stemUp, duration, noFlags, notehead);
+  const { cx, cy } = noteHeadGeometry(
+    stemUp,
+    duration,
+    noFlags,
+    notehead,
+    scale
+  );
   return { cx, cy };
 }
 
@@ -981,20 +1032,78 @@ export type NoteHeadGeometry = {
   placement: NoteheadPlacement | null;
 };
 
+// A cue-sized note is the full-size one drawn `scale` times as large about
+// the ellipse head's left edge and the head's centre (600-unit space), so its
+// head keeps its place on the stave and the stem column stays the same for
+// every notehead.
+function scaleOriginX(stemUp: boolean): number {
+  return (
+    (stemUp ? COORD_WIDTH / 2 - 10 : COORD_WIDTH / 2 + STEM_WIDTH) - HEAD_WIDTH
+  );
+}
+
+function headCenterY(
+  stemUp: boolean,
+  duration: DurationType,
+  noFlags: boolean
+): number {
+  const flagCount = durationToFlagCountMap.get(duration) ?? 0;
+  const flagStemExtension = noFlags ? 0 : flagStemExtensionUnits(flagCount);
+  return stemUp
+    ? NOTE_Y_STEM_START + BASE_STEM_LENGTH + flagStemExtension
+    : HEAD_WIDTH;
+}
+
 // Notehead geometry in the 600-unit space. The stem column is the same for
 // every notehead; a glyph head is translated so its stem anchor lands on it.
 export function noteHeadGeometry(
   requestedStemUp: boolean,
   duration: DurationType,
   noFlags: boolean,
-  notehead: NoteheadType = 'normal'
+  notehead: NoteheadType = 'normal',
+  scale = 1
+): NoteHeadGeometry {
+  const full = fullSizeNoteHeadGeometry(
+    requestedStemUp,
+    duration,
+    noFlags,
+    notehead
+  );
+  if (scale === 1) {
+    return full;
+  }
+  const originX = scaleOriginX(forcedStemUp(notehead) ?? requestedStemUp);
+  const x = (value: number): number => originX + scale * (value - originX);
+  const y = (value: number): number => full.cy + scale * (value - full.cy);
+  return {
+    cx: x(full.cx),
+    cy: full.cy,
+    halfWidth: scale * full.halfWidth,
+    halfHeight: scale * full.halfHeight,
+    anchorY: y(full.anchorY),
+    glyph: full.glyph,
+    placement: full.placement && {
+      cx: x(full.placement.cx),
+      cy: full.cy,
+      halfWidth: scale * full.placement.halfWidth,
+      halfHeight: scale * full.placement.halfHeight,
+      anchorY: y(full.placement.anchorY),
+      originX: x(full.placement.originX),
+      originY: y(full.placement.originY),
+      scale: scale * full.placement.scale,
+    },
+  };
+}
+
+function fullSizeNoteHeadGeometry(
+  requestedStemUp: boolean,
+  duration: DurationType,
+  noFlags: boolean,
+  notehead: NoteheadType
 ): NoteHeadGeometry {
   const stemUp = forcedStemUp(notehead) ?? requestedStemUp;
   const xStart = COORD_WIDTH / 2;
-  const flagCount = durationToFlagCountMap.get(duration) ?? 0;
-  const flagStemExtension = noFlags ? 0 : flagStemExtensionUnits(flagCount);
-  const yStemEnd = NOTE_Y_STEM_START + BASE_STEM_LENGTH + flagStemExtension;
-  const cy = stemUp ? yStemEnd : HEAD_WIDTH;
+  const cy = headCenterY(stemUp, duration, noFlags);
   const upStemEllipseCx = xStart - 10;
   const ellipseCx = stemUp ? upStemEllipseCx : xStart + STEM_WIDTH;
   const glyph = resolveNoteheadGlyph(notehead, duration);
@@ -1041,47 +1150,97 @@ export function noteHeadGeometry(
 export function noteHeadLeftOverhangPx(
   stemUp: boolean,
   duration: DurationType,
-  notehead: NoteheadType = 'normal'
+  notehead: NoteheadType = 'normal',
+  scale = 1
 ): number {
   const ellipse = noteHeadGeometry(stemUp, duration, false);
   const head = noteHeadGeometry(stemUp, duration, false, notehead);
-  return Math.max(
-    0,
-    (ellipse.cx - ellipse.halfWidth - (head.cx - head.halfWidth)) * NOTE_SCALE
+  return (
+    scale *
+    Math.max(
+      0,
+      (ellipse.cx - ellipse.halfWidth - (head.cx - head.halfWidth)) * NOTE_SCALE
+    )
   );
 }
 
-// How far (px) right of the note's box centre a semibreve is centred; every
-// other head is taken to be at the box's centre.
-export function noteHeadCenterShiftPx(
-  duration: DurationType,
-  notehead: NoteheadType = 'normal'
-): number {
-  return resolveNoteheadGlyph(notehead, duration) === 'whole'
-    ? noteHeadGeometry(true, duration, false, notehead).cx * NOTE_SCALE -
-        NOTE_SVG_WIDTH / 2
-    : 0;
+// How far (px) right a cue note's left decorations move: what stands left of
+// the box's left edge keeps its distance from the head's left edge at scale.
+export function cueLeftShiftPx(stemUp: boolean, scale: number): number {
+  return (1 - scale) * scaleOriginX(stemUp) * NOTE_SCALE;
 }
 
-// The stem tip (600-unit space), as createNoteSvg draws it.
+/** What a cue note reaches left of its box, from the full size's reach. */
+export function cueLeftwardExtentPx(
+  fullExtentPx: number,
+  stemUp: boolean,
+  scale: number
+): number {
+  return fullExtentPx === 0
+    ? 0
+    : Math.max(0, scale * fullExtentPx - cueLeftShiftPx(stemUp, scale));
+}
+
+// An accidental's glyph at (x, y), drawn at `scale` from there.
+export function placeAccidentalSvg(
+  symbol: SVGElement,
+  x: number,
+  y: number,
+  scale: number
+): SVGElement {
+  if (scale === 1) {
+    symbol.setAttribute('x', `${x}`);
+    symbol.setAttribute('y', `${y}`);
+    return symbol;
+  }
+  const group = document.createElementNS(SVG_NS, 'g');
+  group.setAttribute('transform', `translate(${x} ${y}) scale(${scale})`);
+  group.appendChild(symbol);
+  return group;
+}
+
+// How far (px) right of the note's box centre a semibreve is centred; every
+// other full-size head is taken to be at the box's centre, and a cue head
+// moves left with its smaller width.
+export function noteHeadCenterShiftPx(
+  duration: DurationType,
+  notehead: NoteheadType = 'normal',
+  scale = 1
+): number {
+  const full = noteHeadGeometry(true, duration, false, notehead);
+  const drawn = noteHeadGeometry(true, duration, false, notehead, scale);
+  return (
+    (resolveNoteheadGlyph(notehead, duration) === 'whole'
+      ? full.cx * NOTE_SCALE - NOTE_SVG_WIDTH / 2
+      : 0) +
+    (drawn.cx - full.cx) * NOTE_SCALE
+  );
+}
+
+// The stem tip (600-unit space), as createNoteSvg draws it. A cue note's
+// base length and tail lengthening scale; `stemExtension` is real px beyond
+// them.
 export function stemTipPosition(
   stemUp: boolean,
   duration: DurationType,
   noFlags: boolean,
-  stemExtension: number
+  stemExtension: number,
+  scale = 1
 ): { x: number; y: number } {
   const xStart = COORD_WIDTH / 2;
   const flagCount = durationToFlagCountMap.get(duration) ?? 0;
   const flagStemExtension = noFlags ? 0 : flagStemExtensionUnits(flagCount);
   const stemExtensionInternal = stemExtension / NOTE_SCALE;
+  const originX = scaleOriginX(stemUp);
+  const fullX = stemUp
+    ? xStart + HEAD_WIDTH - 15
+    : xStart + STEM_WIDTH - HEAD_WIDTH + 5;
+  const cy = headCenterY(stemUp, duration, noFlags);
+  const length =
+    scale * (BASE_STEM_LENGTH + flagStemExtension) + stemExtensionInternal;
   return {
-    x: stemUp ? xStart + HEAD_WIDTH - 15 : xStart + STEM_WIDTH - HEAD_WIDTH + 5,
-    y: stemUp
-      ? NOTE_Y_STEM_START - stemExtensionInternal
-      : HEAD_WIDTH +
-        BASE_STEM_LENGTH +
-        flagStemExtension +
-        stemExtensionInternal,
+    x: originX + scale * (fullX - originX),
+    y: stemUp ? cy - length : cy + length,
   };
 }
 

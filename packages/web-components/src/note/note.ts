@@ -81,6 +81,7 @@ import type {
   Note,
   NoteheadType,
   NoteLetter,
+  NoteSize,
   Octave,
   OctaveContinuationMode,
   OctaveDisplayMode,
@@ -152,10 +153,10 @@ import {
   parseTrillContinuationMode,
   parseTrillFinishSlur,
   parseTrillLineMode,
-  stemUpTipYPx,
 } from '../utils';
 import {
   CHORD_TAGS,
+  isChordNodeName,
   MUSIC_NOTE,
   MUSIC_TREMOLO,
   MUSIC_TREMOLO_NODE,
@@ -169,15 +170,20 @@ import {
   isAccidentalReminder,
   parseAccidentalReminder,
   parseDuration,
+  parseNoteSize,
   parseStemMark,
   parseTextPlacement,
   parseTextStyle,
   parseUnpitched,
+  resolveNoteSize,
   warnIfInvalidDuration,
 } from '../utils/parsers';
 import {
+  cueLeftShiftPx,
   NOTE_SVG_WIDTH,
   noteAugmentationDotLayout,
+  noteSizeScale,
+  stemTipPosition,
 } from '../utils/svgCreator/note';
 import { techniqueTextLabel } from '../utils/svgCreator/techniqueLabel';
 import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
@@ -218,6 +224,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {AccidentalReminder} accidental-reminder - Shows the accidental already in force as a reminder, e.g. at the start of a repeated section: bare or `bracketed` in parentheses, "(♮)", `plain` without. An accidental that is required anyway draws plainly.
  * @attr {UnpitchedPlacement} unpitched - Marks an unpitched sound (breath, key or valve noise): no accidental or ledger line, and no effect on later accidentals. `top` draws it in the space above the stave, `bottom` below it, and bare or `written` at its `note`/`octave` (which `top` and `bottom` don't need). Ignored on a triangle notehead. Its grace notes stand at the same place.
  * @attr {StemMark} stem-mark - `cross` draws a small × through the stem, near its end: air blown through the instrument with the given fingering. With tremolo strokes it stands between them and the head.
+ * @attr {NoteSize} size - `cue` draws the note at ¾ size (head, stem, tails, beams, dots, accidental and marks), e.g. for sung or hummed pitches; the head keeps its place on the stave. Unset, a note takes its `<music-voice>`'s `size`. A cue note never beams with a full-size one. On a chord's own note it is ignored: set it on the chord.
  * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin spanning to another note.
  * @attr {'start' | 'end'} decrescendo - Start or end of a decrescendo hairpin.
  * @attr {'start' | 'end'} diminuendo - Alias of `decrescendo`.
@@ -343,6 +350,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       'notehead',
       'unpitched',
       'stem-mark',
+      'size',
       'grace-notehead',
       'tremolo',
       'tremolo-tuplet',
@@ -824,6 +832,22 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     }
   }
 
+  // The note's own `size`, else its voice's.
+  get size(): NoteSize {
+    return resolveNoteSize(this.readAttribute('size'), this);
+  }
+  set size(value: NoteSize | null) {
+    if (value === null) {
+      this.removeAttribute('size');
+    } else {
+      this.setAttribute('size', value);
+    }
+  }
+
+  #scale(): number {
+    return noteSizeScale(this.size);
+  }
+
   get crescendo(): HairpinRole | null {
     return parseConnectorRole(this.readAttribute('crescendo'));
   }
@@ -957,7 +981,12 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
 
   // See noteHeadLeftOverhangPx.
   get headLeftOverhangPx(): number {
-    return noteHeadLeftOverhangPx(this.stemUp, this.duration, this.notehead);
+    return noteHeadLeftOverhangPx(
+      this.stemUp,
+      this.duration,
+      this.notehead,
+      this.#scale()
+    );
   }
 
   get augmentationDotsRightEdgePx(): number | null {
@@ -972,6 +1001,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
         staffY: this.#staffY,
         rowStaffYs: this.#augmentationDotRows,
         columnShiftPx: this.#augmentationDotShiftPx,
+        scale: this.#scale(),
       })?.rightEdgeX ?? null
     );
   }
@@ -1905,6 +1935,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       name === 'notehead' ||
       name === 'unpitched' ||
       name === 'stem-mark' ||
+      name === 'size' ||
       name === 'grace-type' ||
       name === 'grace-duration' ||
       name === 'grace-slur' ||
@@ -2003,6 +2034,14 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
         : [
             `accidental-reminder="${reminder}" isn't bracketed or plain; drawing it bracketed`,
           ]),
+      ...(this.readAttribute('size') !== null &&
+      parseNoteSize(this.readAttribute('size')) === null
+        ? [`size="${this.readAttribute('size')}" isn't normal or cue`]
+        : []),
+      ...(this.readAttribute('size') !== null &&
+      isChordNodeName(this.parentElement?.nodeName ?? '')
+        ? ["size on a chord's note is ignored; set it on the chord"]
+        : []),
       ...(this.readAttribute('stem-mark') !== null && this.stemMark === null
         ? [
             `stem-mark="${this.readAttribute(
@@ -2274,6 +2313,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       phonemes: this.closest(STAFF_TAGS) ? null : parsePhonemes(this.phonemes),
       breathMark: this.closest(STAFF_TAGS) ? null : this.breathMark,
       bend: this.#standaloneBend(),
+      scale: this.#scale(),
     });
 
     if (
@@ -2285,14 +2325,19 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
         stemUp,
         this.duration,
         this.#noFlags,
-        notehead
+        notehead,
+        this.#scale()
       );
       addLedgerLines(
         noteSvg,
         [this.#staffY],
         stemUp,
         yHeadOffset - NOTE_HEAD_Y_OFFSET_CORRECTION - this.#staffY,
-        { cxPx: cx * NOTE_SCALE, halfWidthPx: halfWidth * NOTE_SCALE }
+        {
+          cxPx: cx * NOTE_SCALE,
+          halfWidthPx: halfWidth * NOTE_SCALE,
+          scale: this.#scale(),
+        }
       );
     }
 
@@ -2395,9 +2440,13 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     applyGraceHeadOverhangs(graceNotes, this.graceHeadLeftOverhangsPx);
     this.#rebaseOrnamentSteps(graceNotes);
 
+    const scale = this.#scale();
+    const leftShift = cueLeftShiftPx(this.stemUp, scale);
     const accidentalFootprint = accidental
-      ? accidentalReach(accidental, accidentalParenthesized) +
-        ACCIDENTAL_NOTE_GAP
+      ? scale *
+          (accidentalReach(accidental, accidentalParenthesized) +
+            ACCIDENTAL_NOTE_GAP) -
+        leftShift
       : 0;
     const arpeggioFootprint =
       computeArpeggioFootprintWidth(
@@ -2413,7 +2462,8 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       this.stemUp,
       this.duration,
       this.#noFlags,
-      this.notehead
+      this.notehead,
+      scale
     );
     // Only used for a descending grace group's stem-tip slur anchoring
     // (see buildGraceSlur) — the real stem tip when this note is
@@ -2421,7 +2471,13 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     // project to). Unused (and harmless to compute) otherwise.
     const mainSlurTargetXPx = cx * NOTE_SCALE;
     const mainSlurTargetYPx = this.stemUp
-      ? stemUpTipYPx(this.#drawnStemExtension())
+      ? stemTipPosition(
+          true,
+          this.duration,
+          this.#noFlags,
+          this.#drawnStemExtension(),
+          scale
+        ).y * NOTE_SCALE
       : cy * NOTE_SCALE;
     const graceGroup = createGraceNotesSvg({
       graceNotes,
@@ -2444,18 +2500,19 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
         ? [
             accidentalInkRect(
               accidental,
-              -(
-                accidentalSymbolWidth(accidental, accidentalParenthesized) +
-                ACCIDENTAL_NOTE_GAP +
-                this.headLeftOverhangPx
-              ),
+              leftShift -
+                scale *
+                  (accidentalSymbolWidth(accidental, accidentalParenthesized) +
+                    ACCIDENTAL_NOTE_GAP) -
+                this.headLeftOverhangPx,
               cy * NOTE_SCALE,
-              { parenthesized: accidentalParenthesized }
+              { parenthesized: accidentalParenthesized, scale }
             ),
           ]
         : [],
       mainStemUp: this.stemUp,
       mainStaffY: this.#staffY,
+      ratio: scale,
     });
     noteSvg.setAttribute('overflow', 'visible');
     noteSvg.appendChild(graceGroup);
@@ -2500,7 +2557,8 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       this.stemUp,
       this.duration,
       this.#noFlags,
-      this.notehead
+      this.notehead,
+      this.#scale()
     );
     const { element } = createTrillFinishNotesSvg({
       trillFinishNotes,
@@ -2511,6 +2569,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
         Math.max(NOTE_SVG_WIDTH, this.augmentationDotsRightEdgePx ?? 0) +
         GRACE_MAIN_GAP_PX,
       mainStaffY: this.#staffY,
+      ratio: this.#scale(),
     });
     noteSvg.setAttribute('overflow', 'visible');
     noteSvg.appendChild(element);

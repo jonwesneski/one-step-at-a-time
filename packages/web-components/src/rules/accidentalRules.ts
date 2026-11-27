@@ -718,7 +718,8 @@ function minVerticalClearance(
 }
 
 export function computeChordAccidentalPlacements(
-  inputs: AccidentalPlacementInput[]
+  inputs: AccidentalPlacementInput[],
+  scale = 1
 ): AccidentalPlacement[] {
   if (inputs.length === 0) {
     return [];
@@ -756,7 +757,7 @@ export function computeChordAccidentalPlacements(
       const fits = columns[col].every(
         (existing) =>
           Math.abs(existing.yPixel - item.yPixel) >=
-          minVerticalClearance(existing, item)
+          scale * minVerticalClearance(existing, item)
       );
       if (fits) {
         assignedColumn = col;
@@ -776,9 +777,11 @@ export function computeChordAccidentalPlacements(
   // Compute column widths and cumulative x offsets
   const columnWidths = columns.map(
     (col) =>
-      Math.max(
+      scale *
+      (Math.max(
         ...col.map((i) => accidentalReach(i.accidental, i.parenthesized))
-      ) + COLUMN_GAP
+      ) +
+        COLUMN_GAP)
   );
   const cumulativeX: number[] = [];
   let runningX = 0;
@@ -794,7 +797,7 @@ export function computeChordAccidentalPlacements(
         ...placements[item.noteIndex],
         xOffset: -(
           cumulativeX[col] +
-          accidentalSymbolWidth(item.accidental, item.parenthesized)
+          scale * accidentalSymbolWidth(item.accidental, item.parenthesized)
         ),
       };
     }
@@ -806,7 +809,8 @@ export function computeChordAccidentalPlacements(
 export function totalChordAccidentalWidth(
   noteAccidentals: (AccidentalType | null | undefined)[],
   staffYCoordinates: number[],
-  parenthesized: readonly boolean[] = []
+  parenthesized: readonly boolean[] = [],
+  scale = 1
 ): number {
   const inputs: AccidentalPlacementInput[] = [];
   for (let i = 0; i < noteAccidentals.length; i++) {
@@ -823,7 +827,7 @@ export function totalChordAccidentalWidth(
   if (inputs.length === 0) {
     return 0;
   }
-  const placements = computeChordAccidentalPlacements(inputs);
+  const placements = computeChordAccidentalPlacements(inputs, scale);
   if (placements.length === 0) {
     return 0;
   }
@@ -832,9 +836,11 @@ export function totalChordAccidentalWidth(
       ...placements.map(
         (p) =>
           -p.xOffset +
-          accidentalReach(p.accidental, p.parenthesized) -
-          accidentalSymbolWidth(p.accidental, p.parenthesized)
+          scale *
+            (accidentalReach(p.accidental, p.parenthesized) -
+              accidentalSymbolWidth(p.accidental, p.parenthesized))
       )
-    ) + ACCIDENTAL_NOTE_GAP
+    ) +
+    scale * ACCIDENTAL_NOTE_GAP
   );
 }

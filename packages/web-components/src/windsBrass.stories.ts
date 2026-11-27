@@ -492,6 +492,76 @@ export const ConventionalAndQuasiGlissando: Story = {
 };
 
 /**
+ * Sung or hummed pitches beside the played ones: a cue-sized voice
+ * (`<music-voice size="cue">`) on the same stave, labelled `hum`, its stems
+ * apart from the played notes. The played note's swell runs over its ties.
+ */
+export const HummingWhilePlaying: Story = {
+  render: () => html`
+    <music-composition time="4/4">
+      <music-measure>
+        <music-staff clef="bass">
+          <music-voice size="cue">
+            <music-rest duration="half"></music-rest>
+            <music-note
+              note="B"
+              octave="3"
+              duration="half"
+              glissando="start"
+              technique-text="hum"
+            ></music-note>
+          </music-voice>
+          <music-voice>
+            <music-note
+              note="B"
+              octave="2"
+              duration="whole"
+              tie="start"
+              swell
+            ></music-note>
+          </music-voice>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="bass">
+          <music-voice size="cue">
+            <music-note
+              note="A#"
+              octave="3"
+              duration="whole"
+              glissando="end"
+            ></music-note>
+          </music-voice>
+          <music-voice>
+            <music-note
+              note="B"
+              octave="2"
+              duration="whole"
+              tie="continue"
+            ></music-note>
+          </music-voice>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="bass">
+          <music-voice size="cue">
+            <music-note note="B" octave="3" duration="whole"></music-note>
+          </music-voice>
+          <music-voice>
+            <music-note
+              note="B"
+              octave="2"
+              duration="whole"
+              tie="end"
+            ></music-note>
+          </music-voice>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};
+
+/**
  * A pitch bend (lip glissando) is a line after the notehead, shaped like its
  * contour: to the next note, free, to a pitch in parentheses, a dip over the
  * barline, and a wave. `glissando-label` says `lip`, `bend` or anything else.

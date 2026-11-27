@@ -686,6 +686,21 @@ describe('resolveTremoloGroupLayout', () => {
       total,
     });
 
+  it("steps a cue group's beams at ¾", () => {
+    const full = pair(1, 3);
+    const cue = resolveTremoloGroupLayout({
+      members: [
+        { stemX: 0, nearestHeadY: F4 },
+        { stemX: 50, nearestHeadY: F4 },
+      ],
+      stemUp: true,
+      attached: 1,
+      total: 3,
+      scale: 0.75,
+    });
+    expect(cue.levelOffset).toBeCloseTo(0.75 * full.levelOffset);
+  });
+
   it('draws every beam, detached ones stopping short of both stems', () => {
     const { beams } = pair(0, 3);
     expect(beams).toHaveLength(3);

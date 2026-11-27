@@ -189,7 +189,8 @@ export function computeFirstGraceHeadX(
   leftwardWidth: number,
   graceNotes: Note[],
   resolvedAccidentals?: (AccidentalType | null)[] | null,
-  headLeftOverhangsPx: readonly number[] = []
+  headLeftOverhangsPx: readonly number[] = [],
+  ratio = 1
 ): number {
   if (graceNotes.length === 0) {
     return noteX - leftwardWidth;
@@ -206,7 +207,7 @@ export function computeFirstGraceHeadX(
       ? graceAccidentalWidth(firstAccidental, 0) + (headLeftOverhangsPx[0] ?? 0)
       : 0;
   const firstHeadXCenter = firstAccidentalWidth + GRACE_NOTE_ADVANCE_PX / 2;
-  return noteX - leftwardWidth + firstHeadXCenter;
+  return noteX - leftwardWidth + ratio * firstHeadXCenter;
 }
 
 // True when resolvedAccidentals is usable (non-null and index-aligned with
@@ -225,11 +226,13 @@ function hasUsableResolvedAccidentals(
 // group, in addition to the main element's own accidental footprint. Prefers
 // the key-signature-resolved accidentals (which can render a natural even for
 // a suffix-less grace note) and falls back to suffix-derived accidentals when
-// resolved data isn't available, e.g. standalone (no staff) rendering.
+// resolved data isn't available, e.g. standalone (no staff) rendering. A cue
+// note's grace notes are `ratio` as wide; the gap before the note stays.
 export function computeGraceFootprintWidth(
   graceNotes: Note[] | null,
   resolvedAccidentals?: (AccidentalType | null)[] | null,
-  headLeftOverhangsPx: readonly number[] = []
+  headLeftOverhangsPx: readonly number[] = [],
+  ratio = 1
 ): number {
   if (graceNotes === null || graceNotes.length === 0) {
     return 0;
@@ -249,7 +252,7 @@ export function computeGraceFootprintWidth(
     }
     width += GRACE_NOTE_ADVANCE_PX;
   }
-  return width;
+  return GRACE_MAIN_GAP_PX + ratio * (width - GRACE_MAIN_GAP_PX);
 }
 
 // Beam-surface Y for each stem of a grace group. The beam line runs through

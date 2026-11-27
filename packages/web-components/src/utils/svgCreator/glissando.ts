@@ -13,7 +13,7 @@ import {
   BEND_TARGET_LEDGER_OVERHANG_PX,
   BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX,
   BEND_TARGET_PARENTHESIS_WIDTH_PX,
-  BEND_TARGET_SCALE,
+  CUE_SCALE,
   GLISSANDO_DIP_DEPTH_PX,
   GLISSANDO_LINE_THICKNESS_PX,
   GLISSANDO_WAVE_AMPLITUDE_PX,
@@ -83,7 +83,7 @@ export function createGlissandoLineSvg(props: GlissandoLineProps): SVGGElement {
 
 const BEND_TARGET_STYLE: WrittenNoteStyle = {
   classPrefix: 'bend-target',
-  scale: BEND_TARGET_SCALE,
+  scale: CUE_SCALE,
   parenthesisWidthPx: BEND_TARGET_PARENTHESIS_WIDTH_PX,
   gapPx: BEND_TARGET_GAP_PX,
   // An arrow reaches past the parentheses rather than lengthening them.

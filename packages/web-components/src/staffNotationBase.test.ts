@@ -3,7 +3,11 @@
  */
 import './index';
 import type { CrossStaffDynamicsOverride } from './rules/hairpinPlacementRules';
-import { ChordElementType, StaffElementType } from './types/elements';
+import {
+  ChordElementType,
+  NoteElementType,
+  StaffElementType,
+} from './types/elements';
 import type { Chord, DurationType, Octave } from './types/theory';
 import {
   COMMON_ATTRIBUTES,
@@ -18,6 +22,7 @@ import {
 } from './utils/consts';
 import {
   BASE_STEM_LENGTH_PX,
+  CUE_SCALE,
   DYNAMICS_BASELINE_Y,
   DYNAMICS_CHAR_WIDTH_PX,
   MIDDLE_STAFF_Y,
@@ -797,6 +802,25 @@ describe('staffNotationBase', () => {
 
       const synthesizedChord = staff.shadowRoot.querySelector(MUSIC_CHORD);
       expect(synthesizedChord.dynamicReminder).toBe(true);
+    });
+
+    it("copies a cue voice's size onto the combined chord", () => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      document.body.appendChild(staff);
+
+      const voice1 = document.createElement('music-voice');
+      voice1.setAttribute('size', 'cue');
+      voice1.appendChild(makeQuarterNote('C'));
+      const voice2 = document.createElement('music-voice');
+      voice2.setAttribute('size', 'cue');
+      voice2.appendChild(makeQuarterNote('E'));
+
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => [voice1, voice2];
+      slot.dispatchEvent(new Event('slotchange'));
+
+      expect(staff.shadowRoot.querySelector(MUSIC_CHORD).size).toBe('cue');
     });
 
     describe('re-combines when articulation-repeat changes', () => {
@@ -3149,5 +3173,46 @@ describe('staffNotationBase flutter-tongue passages', () => {
       expect.stringContaining('flutter-tongued')
     );
     warn.mockRestore();
+  });
+});
+
+describe('cue size', () => {
+  function renderStaff(markup: string): any {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    document.body.appendChild(staff);
+    staff.innerHTML = markup;
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+
+  it("gives a cue note's unbeamed stem ¾ of the rule's length", () => {
+    const staff = renderStaff(`
+      <music-note note="A" octave="3" duration="half"></music-note>
+      <music-note note="A" octave="3" duration="half" size="cue"></music-note>`);
+    const [full, cue] = Array.from(staff.children) as NoteElementType[];
+    expect(full.stemExtension).toBeGreaterThan(0);
+    expect(cue.stemExtension).toBeCloseTo(CUE_SCALE * full.stemExtension);
+  });
+
+  it("reserves less room for a cue note's accidental", () => {
+    const minWidthOf = (size: string) => {
+      document.body.innerHTML = '';
+      let minWidth = 0;
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+        minWidth = (event as CustomEvent).detail.minWidth;
+      });
+      document.body.appendChild(staff);
+      staff.innerHTML = `<music-note note="F#" octave="4" duration="whole" size="${size}"></music-note>`;
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => Array.from(staff.children);
+      slot.dispatchEvent(new Event('slotchange'));
+      return minWidth;
+    };
+    expect(minWidthOf('cue')).toBeLessThan(minWidthOf('normal'));
   });
 });

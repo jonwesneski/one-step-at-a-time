@@ -1014,3 +1014,27 @@ describe('beams with tremolo strokes', () => {
     ).toHaveLength(2);
   });
 });
+
+describe('BeamsBuilder at cue size', () => {
+  it('never beams a cue note with a full-size one', () => {
+    const cue = (note: 'D' | 'E') => {
+      const element = makeNote({ note, octave: 4, duration: 'eighth' });
+      element.setAttribute('size', 'cue');
+      return element;
+    };
+    const elements = [
+      makeNote({ note: 'C', octave: 4, duration: 'eighth' }),
+      cue('D'),
+      cue('E'),
+      makeNote({ note: 'F', octave: 4, duration: 'eighth' }),
+    ];
+    const builder = new BeamsBuilder(
+      elements,
+      [4, 4],
+      [0, 1 / 8, 2 / 8, 3 / 8]
+    );
+    expect(builder.isBeamed(0)).toBe(false);
+    expect(builder.beamGroupFor(1)).toEqual([1, 2]);
+    expect(builder.isBeamed(3)).toBe(false);
+  });
+});

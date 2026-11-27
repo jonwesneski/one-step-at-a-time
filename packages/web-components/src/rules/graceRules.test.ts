@@ -253,6 +253,12 @@ describe('computeGraceFootprintWidth', () => {
     );
   });
 
+  it("narrows a cue note's grace notes, keeping the gap to the note", () => {
+    expect(computeGraceFootprintWidth(['G', 'A'], null, [], 0.75)).toBeCloseTo(
+      GRACE_MAIN_GAP_PX + 0.75 * 2 * GRACE_NOTE_ADVANCE_PX
+    );
+  });
+
   it('includes scaled accidental columns', () => {
     const accidentalWidth =
       GRACE_SCALE * (ACCIDENTAL_SYMBOL_WIDTH.sharp + ACCIDENTAL_NOTE_GAP);

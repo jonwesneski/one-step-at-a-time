@@ -4,6 +4,8 @@ export type SharedStemEntry = {
   /** The element's own `id`, or null. */
   id: string | null;
   sharedStemFor: string | null;
+  // A cue-sized note or chord, which keeps its own stem.
+  cue?: boolean;
 };
 
 export type SharedStemPair = {
@@ -48,6 +50,12 @@ export function resolveSharedStemPairs(
     if (paired.has(other) || paired.has(entry)) {
       warnings.push(
         `shared-stem-for="${entry.sharedStemFor}" reuses an element already paired with another shared stem; drawing its own local stem instead`
+      );
+      continue;
+    }
+    if (entry.cue || other.cue) {
+      warnings.push(
+        `shared-stem-for="${entry.sharedStemFor}" joins a cue-sized note; a shared stem takes full-size notes only, drawing its own local stem instead`
       );
       continue;
     }

@@ -64,6 +64,8 @@ export type ArticulationMarksProps = {
   // Times the length mark is drawn across a row (a measured tremolo's
   // repetitions); 1 draws it once.
   repeatCount?: number;
+  // A cue note's marks, drawn smaller about their anchor.
+  scale?: number;
 };
 
 // Split a combined articulation value into its optional accent prefix and its
@@ -369,7 +371,8 @@ function headAnchoredOffsets(rows: readonly MarkRow[]): number[] {
  */
 export function articulationStackDepth(
   articulation: ArticulationType | null | undefined,
-  stress: StressType | null | undefined
+  stress: StressType | null | undefined,
+  scale = 1
 ): number {
   const { rows } = markRows(articulation, stress);
   if (rows.length === 0) {
@@ -377,7 +380,8 @@ export function articulationStackDepth(
   }
   const offsets = headAnchoredOffsets(rows);
   return (
-    offsets[offsets.length - 1] + rows[rows.length - 1].extent.awayFromHead
+    scale *
+    (offsets[offsets.length - 1] + rows[rows.length - 1].extent.awayFromHead)
   );
 }
 
@@ -402,6 +406,7 @@ export const createArticulationMarks = ({
   noteHeadCenterY,
   stemAnchor = null,
   repeatCount = 1,
+  scale = 1,
 }: ArticulationMarksProps): SVGGElement | null => {
   if (!articulation && !stress) {
     return null;
@@ -464,5 +469,11 @@ export const createArticulationMarks = ({
     }
   }
 
+  if (scale !== 1) {
+    group.setAttribute(
+      'transform',
+      `translate(${markX} ${anchorY}) scale(${scale}) translate(${-markX} ${-anchorY})`
+    );
+  }
   return group;
 };

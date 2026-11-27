@@ -16,14 +16,15 @@ import { createTupletNumeralText } from './tuplet';
  */
 export function createTremoloStrokes(
   centerX: number,
-  centerYs: readonly number[]
+  centerYs: readonly number[],
+  scale = 1
 ): SVGGElement {
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('tremolo-strokes');
-  const left = centerX - TREMOLO_STROKE_WIDTH_PX / 2;
-  const right = centerX + TREMOLO_STROKE_WIDTH_PX / 2;
-  const halfThickness = TREMOLO_STROKE_THICKNESS_PX / 2;
-  const halfRise = TREMOLO_STROKE_RISE_PX / 2;
+  const left = centerX - (scale * TREMOLO_STROKE_WIDTH_PX) / 2;
+  const right = centerX + (scale * TREMOLO_STROKE_WIDTH_PX) / 2;
+  const halfThickness = (scale * TREMOLO_STROKE_THICKNESS_PX) / 2;
+  const halfRise = (scale * TREMOLO_STROKE_RISE_PX) / 2;
   for (const centerY of centerYs) {
     const leftMiddle = centerY + halfRise;
     const rightMiddle = centerY - halfRise;
@@ -56,13 +57,16 @@ export function createTremoloNumeral(
 }
 
 /** `points` for a tremolo beam whose top edge runs along `segment`. */
-export function tremoloBeamPoints(segment: TremoloBeamSegment): string {
+export function tremoloBeamPoints(
+  segment: TremoloBeamSegment,
+  thickness = BEAM_THICKNESS_PX
+): string {
   const { x1, x2, top1, top2 } = segment;
   return [
     [x1, top1],
     [x2, top2],
-    [x2, top2 + BEAM_THICKNESS_PX],
-    [x1, top1 + BEAM_THICKNESS_PX],
+    [x2, top2 + thickness],
+    [x1, top1 + thickness],
   ]
     .map(([x, y]) => `${x},${y}`)
     .join(' ');

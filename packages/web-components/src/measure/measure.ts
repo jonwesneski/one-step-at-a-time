@@ -207,6 +207,7 @@ import {
   parseMeasureNumberDisplay,
   parseTremoloBeamAttach,
   parseTremoloStrokes,
+  resolveNoteSize,
 } from '../utils/parsers';
 import { flattenSlotElements } from '../utils/slotElements';
 import {
@@ -2508,6 +2509,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
                 isRest: element.nodeName === MUSIC_REST_NODE,
                 duration,
                 beatLength: durationToFactor[duration] * share,
+                cue:
+                  resolveNoteSize(element.getAttribute('size'), element) ===
+                  'cue',
               };
             }),
           });
@@ -3022,6 +3026,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             entryIndex,
             beamGroup: element.beamGroup,
             nodeName: element.nodeName,
+            cue:
+              element.nodeName !== MUSIC_REST_NODE &&
+              (element as NoteOrChordElementType).size === 'cue',
           }))
       );
 
@@ -3664,6 +3671,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
             entryIndex,
             id: element.id || null,
             sharedStemFor: element.sharedStemFor,
+            cue: element.size === 'cue',
           });
         });
       });

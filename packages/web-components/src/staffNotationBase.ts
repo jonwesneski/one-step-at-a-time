@@ -362,7 +362,6 @@ import {
   BASE_STEM_LENGTH_PX,
   BEAM_THICKNESS_PX,
   BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX,
-  BEND_TARGET_SCALE,
   BREATH_MARK_INK_GAP_PX,
   CLEF_CHANGE_RESERVED_WIDTH_PX,
   CLEF_X_OFFSET,
@@ -370,6 +369,7 @@ import {
   COURTESY_CLEF_SCALE,
   COURTESY_CLEF_WIDTH_PX,
   CROSS_STAFF_TUPLET_BEAM_Y_EPSILON_PX,
+  CUE_SCALE,
   DYNAMIC_END_BARLINE_GAP_PX,
   DYNAMIC_END_NEXT_GAP_PX,
   DYNAMICS_ABOVE_BASELINE_Y,
@@ -470,11 +470,13 @@ import { graceHeadsBottomY, graceInkTopY } from './utils/svgCreator/graceNotes';
 import { ledgerLineOverhangPx } from './utils/svgCreator/ledgerLines';
 import {
   ACCIDENTAL_NOTE_GAP,
+  cueLeftShiftPx,
   flagStemExtensionPx,
   NOTE_SCALE,
   NOTE_SVG_WIDTH,
   noteHeadCenterShiftPx,
   noteHeadGeometry,
+  noteSizeScale,
   stemTipPosition,
   TAIL_UP_WIDTH_PX,
   trillSignLeftX,
@@ -867,17 +869,33 @@ const entryNotehead = (element: NoteChordOrRestElementType): NoteheadType =>
     ? (element as NoteElementType).notehead
     : (element as ChordElementType).toneNoteheads?.[0] ?? 'normal';
 
-// How far (px) right of its box's centre an entry's semibreve head is centred.
+// How large an entry is drawn: CUE_SCALE for a cue note or chord.
+const entryScale = (element: NoteChordOrRestElementType): number =>
+  element.nodeName === MUSIC_REST_NODE
+    ? 1
+    : noteSizeScale((element as NoteElementType | ChordElementType).size);
+
+// How far (px) right of its box's centre an entry's head is centred: a
+// semibreve's further, a cue head's less.
 const entryCenterShiftPx = (element: NoteChordOrRestElementType): number =>
   element.nodeName === MUSIC_REST_NODE
     ? 0
-    : noteHeadCenterShiftPx(element.duration, entryNotehead(element));
+    : noteHeadCenterShiftPx(
+        element.duration,
+        entryNotehead(element),
+        entryScale(element)
+      );
 
 const entryHeadHalfWidthPx = (element: NoteChordOrRestElementType): number =>
   entryCenterShiftPx(element) === 0
     ? NOTE_HEAD_RADIUS_PX
-    : noteHeadGeometry(true, element.duration, false, entryNotehead(element))
-        .halfWidth * NOTE_SCALE;
+    : noteHeadGeometry(
+        true,
+        element.duration,
+        false,
+        entryNotehead(element),
+        entryScale(element)
+      ).halfWidth * NOTE_SCALE;
 
 // The side of a voice's own ties and slurs; null with one voice on the staff.
 const voiceSideOf = ({ direction }: VoiceRenderState): CurveSide | null =>
@@ -2369,6 +2387,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     if (reference.stemMark !== null) {
       chord.setAttribute('stem-mark', reference.stemMark);
     }
+    if (reference.size === 'cue') {
+      chord.setAttribute('size', 'cue');
+    }
     for (const tone of group.tones) {
       const note = document.createElement(MUSIC_NOTE);
       note.setAttribute('note', tone.value);
@@ -2486,6 +2507,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       const headYs = getStaffYs(element, noteStaffYCoords, chordStaffYCoords);
       const stem = resolvedStem?.(i);
       const duration = (element as NoteElementType | ChordElementType).duration;
+      const scale = entryScale(element);
       return {
         kind: 'pitched',
         headYs,
@@ -2496,10 +2518,10 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
               stemless: isStemlessDuration(duration),
               noFlags: stem.noFlags,
               stemExtensionPx: stem.stemExtensionPx,
-              baseStemLengthPx: BASE_STEM_LENGTH_PX,
-              flagExtensionPx: flagStemExtensionPx(
-                durationToFlagCountMap.get(duration) ?? 0
-              ),
+              baseStemLengthPx: scale * BASE_STEM_LENGTH_PX,
+              flagExtensionPx:
+                scale *
+                flagStemExtensionPx(durationToFlagCountMap.get(duration) ?? 0),
             })
           : null,
       };
@@ -2695,23 +2717,27 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
       const element = elements[i] as NoteElementType | ChordElementType;
       const headYs = getStaffYs(element, noteStaffYCoords, chordStaffYCoords);
-      return unbeamedTremoloStemExtensionPx({
-        tremolo: element.tremolo,
-        stemCross: element.stemMark === 'cross',
-        duration: element.duration,
-        headYs,
-        stemUp: stemDirections[i],
-        staff: STAFF_BAND,
-        stemExtensionPx: unbeamedStemExtensionPx(
+      // A cue stem is the rule's length at its scale.
+      return (
+        entryScale(element) *
+        unbeamedTremoloStemExtensionPx({
+          tremolo: element.tremolo,
+          stemCross: element.stemMark === 'cross',
+          duration: element.duration,
           headYs,
-          stemDirections[i],
-          durationToFlagCountMap.get(element.duration) ?? 0,
-          !(
-            isNoteNodeName(element.nodeName) &&
-            isTriangle((element as NoteElementType).notehead)
-          )
-        ),
-      });
+          stemUp: stemDirections[i],
+          staff: STAFF_BAND,
+          stemExtensionPx: unbeamedStemExtensionPx(
+            headYs,
+            stemDirections[i],
+            durationToFlagCountMap.get(element.duration) ?? 0,
+            !(
+              isNoteNodeName(element.nodeName) &&
+              isTriangle((element as NoteElementType).notehead)
+            )
+          ),
+        })
+      );
     };
     this.#placeTriangles(
       elements,
@@ -2729,10 +2755,15 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         return 0;
       }
       const headYs = getStaffYs(element, noteStaffYCoords, chordStaffYCoords);
+      const scale = entryScale(element);
       return (
         unbeamedExtensionsPx[i] +
         (Math.max(...headYs) - Math.min(...headYs)) +
-        flagStemExtensionPx(durationToFlagCountMap.get(element.duration) ?? 0)
+        scale *
+          flagStemExtensionPx(
+            durationToFlagCountMap.get(element.duration) ?? 0
+          ) -
+        (1 - scale) * BASE_STEM_LENGTH_PX
       );
     });
 
@@ -3745,11 +3776,17 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       if (trillFinish === null || trillFinish.length === 0) {
         continue;
       }
+      const ratio = entryScale(hostElement);
       const width = computeGraceFootprintWidth(
         trillFinish,
-        hostElement.resolvedTrillFinishAccidentals
+        hostElement.resolvedTrillFinishAccidentals,
+        [],
+        ratio
       );
-      footprints.set(i, width + trillFinishTailOverhangPx(trillFinish.length));
+      footprints.set(
+        i,
+        width + trillFinishTailOverhangPx(trillFinish.length, ratio)
+      );
     }
     return footprints;
   }
@@ -4125,15 +4162,18 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         notehead: resolveNoteheadGlyph(note.notehead, duration),
         unpitched: note.unpitched !== null,
         isChord: false,
+        scale: entryScale(note),
       };
     }
     const chord = element as ChordElementType;
+    const scale = entryScale(chord);
     const headInput = {
       duration,
       staffYCoordinates: staffYs,
       stemUp: chord.stemUp,
       noFlags: chord.noFlags,
       noteheads: chord.toneNoteheads,
+      scale,
     };
     const quarterTones = chord.toneQuarterTones;
     return {
@@ -4158,8 +4198,14 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         };
       }),
       accidentalReachPx: chord.noteAccidentals.some((a) => a != null)
-        ? totalChordAccidentalWidth(chord.noteAccidentals, [...staffYs])
+        ? totalChordAccidentalWidth(
+            chord.noteAccidentals,
+            [...staffYs],
+            [],
+            scale
+          )
         : 0,
+      scale,
     };
   }
 
@@ -4170,6 +4216,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     staffYs: readonly number[]
   ): VoicePartGeometry {
     const { stemUp, noFlags, duration } = element;
+    const scale = entryScale(element);
     let headLeftX: number;
     let headRightX: number;
     if (isNoteNodeName(element.nodeName)) {
@@ -4177,7 +4224,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         stemUp,
         duration,
         noFlags,
-        (element as NoteElementType).notehead
+        (element as NoteElementType).notehead,
+        scale
       );
       headLeftX = (head.cx - head.halfWidth) * NOTE_SCALE;
       headRightX = (head.cx + head.halfWidth) * NOTE_SCALE;
@@ -4188,13 +4236,14 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         stemUp,
         noFlags,
         noteheads: (element as ChordElementType).toneNoteheads,
+        scale,
       });
       headLeftX = extent.left;
       headRightX = extent.right;
     }
     const stemX = isStemlessDuration(duration)
       ? null
-      : stemTipPosition(stemUp, duration, noFlags, 0).x * NOTE_SCALE;
+      : stemTipPosition(stemUp, duration, noFlags, 0, scale).x * NOTE_SCALE;
     const drawsTails =
       stemUp &&
       !noFlags &&
@@ -4206,7 +4255,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       stemX,
       dotsRightEdgeX: element.augmentationDotsRightEdgePx,
       tailRightX:
-        drawsTails && stemX !== null ? stemX + TAIL_UP_WIDTH_PX : null,
+        drawsTails && stemX !== null ? stemX + scale * TAIL_UP_WIDTH_PX : null,
     };
   }
 
@@ -4568,7 +4617,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     );
     return (
       this.#voicePartGeometry(noteOrChord, staffYs).headLeftX -
-      ledgerLineOverhangPx(staffYs, noteOrChord.stemUp)
+      ledgerLineOverhangPx(staffYs, noteOrChord.stemUp, entryScale(noteOrChord))
     );
   }
 
@@ -4651,7 +4700,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     extent += computeGraceFootprintWidth(
       el.grace,
       el.resolvedGraceAccidentals,
-      el.graceHeadLeftOverhangsPx
+      el.graceHeadLeftOverhangsPx,
+      entryScale(el)
     );
 
     const partner = crossStaffArpeggioPartner(el);
@@ -4680,25 +4730,40 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       : chordHeadsLeftReachPx(element);
   }
 
-  // How far (px) an entry's own accidentals reach left of its box.
+  // How far (px) an entry's own accidentals reach left of its box. A cue
+  // entry's column is smaller and starts nearer its smaller head.
   #accidentalExtent(element: NoteChordOrRestElementType): number {
     if (isNoteNodeName(element.nodeName)) {
       const note = element as NoteElementType;
+      const scale = entryScale(note);
       return note.showAccidental
-        ? accidentalReach(note.showAccidental, note.accidentalParenthesized) +
-            ACCIDENTAL_NOTE_GAP
+        ? Math.max(
+            0,
+            scale *
+              (accidentalReach(
+                note.showAccidental,
+                note.accidentalParenthesized
+              ) +
+                ACCIDENTAL_NOTE_GAP) -
+              cueLeftShiftPx(note.stemUp, scale)
+          )
         : 0;
     }
     if (!isChordNodeName(element.nodeName)) {
       return 0;
     }
     const chord = element as ChordElementType;
+    const scale = entryScale(chord);
     return chord.staffYCoordinates &&
       chord.noteAccidentals.some((accidental) => accidental != null)
-      ? totalChordAccidentalWidth(
-          chord.noteAccidentals,
-          chord.staffYCoordinates,
-          chord.noteAccidentalsParenthesized
+      ? Math.max(
+          0,
+          totalChordAccidentalWidth(
+            chord.noteAccidentals,
+            chord.staffYCoordinates,
+            chord.noteAccidentalsParenthesized,
+            scale
+          ) - cueLeftShiftPx(chord.stemUp, scale)
         )
       : 0;
   }
@@ -4907,7 +4972,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           note.stemUp,
           note.duration,
           note.noFlags,
-          note.notehead
+          note.notehead,
+          entryScale(note)
         );
         return {
           left: x + (head.cx - head.halfWidth) * NOTE_SCALE,
@@ -4930,6 +4996,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
             stemUp: chord.stemUp,
             noFlags: chord.noFlags,
             noteheads: chord.toneNoteheads,
+            scale: entryScale(chord),
           },
           toneIndex
         );
@@ -4937,7 +5004,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           chord.stemUp,
           chord.duration,
           chord.noFlags,
-          chord.toneNoteheads[toneIndex] ?? 'normal'
+          chord.toneNoteheads[toneIndex] ?? 'normal',
+          entryScale(chord)
         );
         return {
           left: x + extent.left,
@@ -5143,7 +5211,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
               leftwardWidth,
               grace,
               resolvedGraceAccidentals,
-              graceHeadLeftOverhangsPx
+              graceHeadLeftOverhangsPx,
+              entryScale(element)
             )
           );
         }
@@ -5603,7 +5672,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       const graceWidth = computeGraceFootprintWidth(
         element.grace,
         element.resolvedGraceAccidentals,
-        element.graceHeadLeftOverhangsPx
+        element.graceHeadLeftOverhangsPx,
+        entryScale(element)
       );
       const extent = this.#entryLeftwardExtent(element) - graceWidth;
       left = extent > 0 ? x - extent : left;
@@ -5612,7 +5682,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       left =
         graceHeadX === undefined
           ? left
-          : graceHeadX - GRACE_SCALE * NOTE_HEAD_RADIUS_PX;
+          : graceHeadX -
+            entryScale(state.elements[i]) * GRACE_SCALE * NOTE_HEAD_RADIUS_PX;
     }
     if (label.kind === 'glissando' && this.#notesAreaEndX > 0) {
       left = Math.max(0, Math.min(left, this.#notesAreaEndX - width));
@@ -6132,7 +6203,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           left:
             x +
             headLeftX -
-            ledgerLineOverhangPx([...staffYs], state.stemDirections[i]),
+            ledgerLineOverhangPx(
+              [...staffYs],
+              state.stemDirections[i],
+              entryScale(state.elements[i])
+            ),
           bottom,
         };
   }
@@ -6459,15 +6534,20 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
 
   #headCenterX(state: VoiceRenderState, index: number): number {
     const x = state.noteXPositions.get(index) ?? 0;
-    const shift = entryCenterShiftPx(state.elements[index]);
-    if (shift !== 0) {
+    const element = state.elements[index];
+    const shift = entryCenterShiftPx(element);
+    if (
+      element.nodeName !== MUSIC_REST_NODE &&
+      resolveNoteheadGlyph(entryNotehead(element), element.duration) === 'whole'
+    ) {
       return x + NOTE_SVG_WIDTH / 2 + shift;
     }
     return (
       x +
       (state.stemDirections[index]
         ? NOTE_HEAD_CX_STEM_UP_PX
-        : NOTE_HEAD_CX_STEM_DOWN_PX)
+        : NOTE_HEAD_CX_STEM_DOWN_PX) +
+      shift
     );
   }
 
@@ -6764,13 +6844,15 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     if (isUnpitchedNote(element)) {
       flattenUnpitchedGraces(descriptors);
     }
+    const ratio = entryScale(element);
     return above
       ? graceInkTopY(
           descriptors,
           element.graceDuration,
-          containerYOfStaffY(headStaffY)
+          containerYOfStaffY(headStaffY),
+          ratio
         )
-      : graceHeadsBottomY(descriptors, containerYOfStaffY(headStaffY));
+      : graceHeadsBottomY(descriptors, containerYOfStaffY(headStaffY), ratio);
   }
 
   // A label's baseline moved up past the placed labels it would overlap.
@@ -8323,12 +8405,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       const layout = computeGraceLayout(descriptors);
       const lastLocalIndex = descriptors.length - 1;
       const hostX = state.noteXPositions.get(i) ?? 0;
+      const ratio = entryScale(hostElement);
       const lastHeadX =
         hostX +
         NOTE_SVG_WIDTH +
         this.#augmentationDotFootprint(state, i) +
         GRACE_MAIN_GAP_PX +
-        layout.headXCenters[lastLocalIndex];
+        ratio * layout.headXCenters[lastLocalIndex];
 
       const lastPitch = trillFinish[lastLocalIndex];
       const lastOctave =
@@ -8341,7 +8424,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       const slur = createOrnamentConnectorSlur(
         lastHeadX,
         lastHeadY,
-        TRILL_FINISH_HEAD_RY,
+        ratio * TRILL_FINISH_HEAD_RY,
         targetPosition.xCenter,
         targetPosition.y,
         NOTE_HEAD_RADIUS_PX * 0.75,
@@ -8533,7 +8616,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
             : accidentalVerticalExtent(target.accidental);
         const reach = Math.max(
           BEND_TARGET_PARENTHESIS_HALF_HEIGHT_PX,
-          BEND_TARGET_SCALE * (above ? accidental.above : accidental.below)
+          CUE_SCALE * (above ? accidental.above : accidental.below)
         );
         return [y - target.steps * STAFF_Y_STEP + (above ? -reach : reach)];
       }

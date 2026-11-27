@@ -31,6 +31,7 @@ import { parseDynamicMarking, parseSwellShape } from '../utils/parsers';
 import {
   NOTE_SVG_WIDTH,
   noteHeadCenterShiftPx,
+  noteSizeScale,
 } from '../utils/svgCreator/note';
 import type { HairpinEndpointText } from './hairpinPlacementRules';
 import { estimateTextWidthPx } from './techniqueTextRules';
@@ -46,6 +47,13 @@ export type HairpinPair = {
   endX: number;
   errors: string[];
 };
+
+const entryHeadCenterShiftPx = (element: NoteOrChordElementType): number =>
+  noteHeadCenterShiftPx(
+    element.duration,
+    'normal',
+    noteSizeScale(element.size ?? 'normal')
+  );
 
 type OpenHairpinStart = {
   element: NoteOrChordElementType;
@@ -179,7 +187,7 @@ function separateHairpinsAtJoints(
       after,
       (noteXPositions.get(jointIndex) ?? 0) +
         NOTE_SVG_WIDTH / 2 +
-        noteHeadCenterShiftPx(before.endElement.duration)
+        entryHeadCenterShiftPx(before.endElement)
     );
   }
 }
@@ -240,13 +248,11 @@ function buildHairpinPair(
     rawStartX,
     rawEndX,
     startTextCenterX:
-      rawStartX +
-      NOTE_SVG_WIDTH / 2 +
-      noteHeadCenterShiftPx(start.element.duration),
+      rawStartX + NOTE_SVG_WIDTH / 2 + entryHeadCenterShiftPx(start.element),
     endTextCenterX:
       (noteXPositions.get(end.index) ?? 0) +
       NOTE_SVG_WIDTH / 2 +
-      noteHeadCenterShiftPx(end.element.duration),
+      entryHeadCenterShiftPx(end.element),
     startMarking: start.element.dynamic,
     endMarking: end.element.dynamic,
     startBracketed: start.element.dynamicReminder,

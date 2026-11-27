@@ -49,6 +49,8 @@ export type UnisonPartDescriptor = {
   tones?: readonly UnisonTone[];
   // A chord's whole accidental column; replaces the width of one accidental.
   accidentalReachPx?: number;
+  // A cue part's size; a cue and a full-size part never share a head.
+  scale?: number;
 };
 
 export type UnisonPartInput = UnisonPartDescriptor & {
@@ -66,7 +68,9 @@ export type UnisonPartInput = UnisonPartDescriptor & {
 
 const accidentalReachOf = (part: UnisonPartInput): number =>
   part.accidentalReachPx ??
-  (part.shownAccidental ? accidentalReach(part.shownAccidental) : 0);
+  (part.shownAccidental
+    ? (part.scale ?? 1) * accidentalReach(part.shownAccidental)
+    : 0);
 
 const hasAccidentalShown = (part: UnisonPartInput): boolean =>
   accidentalReachOf(part) > 0;
@@ -104,7 +108,8 @@ export function canShareNotehead(
     (a.isChord && b.isChord) ||
     a.direction === b.direction ||
     a.unpitched ||
-    b.unpitched
+    b.unpitched ||
+    (a.scale ?? 1) !== (b.scale ?? 1)
   ) {
     return false;
   }

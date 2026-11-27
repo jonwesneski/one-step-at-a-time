@@ -83,3 +83,21 @@ describe('resolveSharedStemPairs', () => {
     expect(warnings).toEqual([]);
   });
 });
+
+describe('resolveSharedStemPairs with a cue note', () => {
+  it('warns and keeps each stem when either end is cue-sized', () => {
+    const { pairs, warnings } = resolveSharedStemPairs([
+      { staffIndex: 0, entryIndex: 0, id: 'top', sharedStemFor: null },
+      {
+        staffIndex: 1,
+        entryIndex: 0,
+        id: null,
+        sharedStemFor: 'top',
+        cue: true,
+      },
+    ]);
+    expect(pairs).toEqual([]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('cue');
+  });
+});

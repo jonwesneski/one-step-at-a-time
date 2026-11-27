@@ -1103,3 +1103,68 @@ test.describe('a tie on a staff of two voices', () => {
     expect(await curvesUp()).toBe(true);
   });
 });
+
+test.describe('cue-sized voice', () => {
+  test("toggling a voice's size re-lays its notes, and back", async ({
+    page,
+  }) => {
+    await render(
+      page,
+      `<music-staff clef="treble" time="2/4">
+        <music-voice>
+          <music-note note="C" octave="5" duration="eighth"></music-note>
+          <music-note note="D" octave="5" duration="eighth"></music-note>
+          <music-note note="E" octave="5" duration="quarter"></music-note>
+        </music-voice>
+        <music-voice>
+          <music-note note="E" octave="4" duration="half"></music-note>
+        </music-voice>
+      </music-staff>`
+    );
+    const measure = () =>
+      page.evaluate(() => {
+        const notes = Array.from(
+          document.querySelectorAll('music-voice:first-child music-note')
+        );
+        const staff = document.querySelector('music-staff');
+        const beam = staff?.shadowRoot
+          ?.querySelector('.beam')
+          ?.getBoundingClientRect();
+        return {
+          heads: notes.map(
+            (note) =>
+              note.shadowRoot?.querySelector('.head')?.getBoundingClientRect()
+                .height ?? 0
+          ),
+          stem:
+            notes[2].shadowRoot?.querySelector('.stem')?.getBoundingClientRect()
+              .height ?? 0,
+          beam: beam?.height ?? 0,
+        };
+      });
+    const setSize = async (size: string | null) => {
+      await page.evaluate((value) => {
+        const voice = document.querySelector('music-voice');
+        if (value === null) {
+          voice?.removeAttribute('size');
+        } else {
+          voice?.setAttribute('size', value);
+        }
+      }, size);
+      await waitForRedrawCycle(page);
+    };
+
+    const full = await measure();
+    await setSize('cue');
+    const cue = await measure();
+    cue.heads.forEach((height, i) =>
+      expect(height).toBeLessThan(full.heads[i])
+    );
+    expect(cue.stem).toBeLessThan(full.stem);
+    expect(cue.beam).toBeGreaterThan(0);
+    expect(cue.beam).toBeLessThan(full.beam);
+
+    await setSize(null);
+    expect(await measure()).toEqual(full);
+  });
+});

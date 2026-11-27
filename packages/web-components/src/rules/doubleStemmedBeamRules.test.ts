@@ -589,3 +589,16 @@ describe('classifyAutoRestStaffSide', () => {
     expect(classifyAutoRestStaffSide(members, 0, TOP)).toBe('below');
   });
 });
+
+describe('resolveDoubleStemmedBeamGroups with a cue member', () => {
+  it('drops the group with one warning', () => {
+    const { groups, warnings } = resolveDoubleStemmedBeamGroups([
+      note(0, 0, 'g1'),
+      { ...note(1, 0, 'g1'), cue: true },
+      note(0, 1, 'g1'),
+    ]);
+    expect(groups).toEqual([]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('cue');
+  });
+});

@@ -14,10 +14,11 @@ const LEDGER_LINE_MARGIN = 6;
 /** How far (px) ledger lines reach past the heads they pass through. */
 export function ledgerLineOverhangPx(
   staffYCoordinates: number[],
-  stemUp: boolean
+  stemUp: boolean,
+  scale = 1
 ): number {
   return computeLedgerLines(staffYCoordinates, stemUp).length > 0
-    ? LEDGER_LINE_MARGIN
+    ? scale * LEDGER_LINE_MARGIN
     : 0;
 }
 
@@ -42,6 +43,8 @@ export type LedgerHeadExtent = {
   halfWidthPx: number;
   all?: HeadExtent;
   tones?: readonly (HeadExtent & { staffY: number })[];
+  // A cue note's lines reach past its heads by less; their weight stays.
+  scale?: number;
 };
 
 export function createLedgerLineElements(
@@ -70,9 +73,10 @@ export function createLedgerLineElements(
     const left = Math.min(...spanned.map((extent) => extent.left));
     const right = Math.max(...spanned.map((extent) => extent.right));
 
-    line.setAttribute('x1', (left - LEDGER_LINE_MARGIN).toString());
+    const margin = (head.scale ?? 1) * LEDGER_LINE_MARGIN;
+    line.setAttribute('x1', (left - margin).toString());
     line.setAttribute('y1', svgY.toString());
-    line.setAttribute('x2', (right + LEDGER_LINE_MARGIN).toString());
+    line.setAttribute('x2', (right + margin).toString());
     line.setAttribute('y2', svgY.toString());
     line.setAttribute('stroke', 'currentColor');
     line.setAttribute('stroke-width', `${STAFF_LINE_THICKNESS_PX}`);

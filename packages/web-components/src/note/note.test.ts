@@ -1,6 +1,7 @@
 /**
  * @jest-environment jsdom
  */
+import '../chord/index';
 import '../staff/index';
 import '../tuplet/index';
 import type { NoteElementType, NoteLetterOctave } from '../types/elements';
@@ -13,8 +14,10 @@ import type {
 } from '../types/theory';
 import {
   COMMON_ATTRIBUTES,
+  MUSIC_CHORD,
   MUSIC_NOTE,
   MUSIC_STAFF,
+  MUSIC_VOICE,
   NOTE_EVENTS,
 } from '../utils/consts';
 import {
@@ -2059,6 +2062,33 @@ describe('phonemes', () => {
     noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
     noteElement.phonemes = 'i';
     expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('size', () => {
+  it("takes its voice's size unless it has its own", () => {
+    const voice = document.createElement(MUSIC_VOICE);
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    voice.appendChild(noteElement);
+    document.body.appendChild(voice);
+    expect(noteElement.size).toBe('normal');
+    voice.setAttribute('size', 'cue');
+    expect(noteElement.size).toBe('cue');
+    noteElement.size = 'normal';
+    expect(noteElement.size).toBe('normal');
+  });
+
+  it("warns on a chord's own note", () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const chord = document.createElement(MUSIC_CHORD);
+    const tone = document.createElement(MUSIC_NOTE);
+    tone.setAttribute('size', 'cue');
+    chord.appendChild(tone);
+    document.body.appendChild(chord);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringMatching(/set it on the chord/)
+    );
+    warn.mockRestore();
   });
 });
 

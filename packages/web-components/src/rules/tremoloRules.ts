@@ -770,8 +770,10 @@ export function resolveTremoloGroupLayout(input: {
   stemUp: boolean;
   attached: number;
   total: number;
+  // A cue group's beams.
+  scale?: number;
 }): TremoloGroupLayout {
-  const { members, stemUp, attached, total } = input;
+  const { members, stemUp, attached, total, scale = 1 } = input;
   const placement = resolveBeamPlacement({
     notes: members.map((member) => ({
       x: member.stemX,
@@ -779,6 +781,7 @@ export function resolveTremoloGroupLayout(input: {
       beamCount: total,
     })),
     stemUp,
+    scale,
   });
   const xs = members.map((member) => member.stemX);
   const first = xs[0];
@@ -813,8 +816,9 @@ export function resolveBetweenTremoloBeams(input: {
   from: { edgeX: number; centerY: number };
   to: { edgeX: number; centerY: number };
   strokes: number;
+  scale?: number;
 }): TremoloBeamSegment[] {
-  const { from, to, strokes } = input;
+  const { from, to, strokes, scale = 1 } = input;
   const { x1, x2 } = tremoloDetachedSpan([from.edgeX, to.edgeX]);
   const run = to.edgeX - from.edgeX;
   const slope = run === 0 ? 0 : (to.centerY - from.centerY) / run;
@@ -823,9 +827,10 @@ export function resolveBetweenTremoloBeams(input: {
     -MAX_BEAM_SLOPE_SHORT_GROUP_PX / 2,
     Math.min(MAX_BEAM_SLOPE_SHORT_GROUP_PX / 2, (slope * (x2 - x1)) / 2)
   );
-  const stackHeight = BEAM_THICKNESS_PX + (strokes - 1) * BEAM_STEP_PX;
+  const stackHeight =
+    scale * (BEAM_THICKNESS_PX + (strokes - 1) * BEAM_STEP_PX);
   return Array.from({ length: strokes }, (_, level) => {
-    const top = middleY - stackHeight / 2 + level * BEAM_STEP_PX;
+    const top = middleY - stackHeight / 2 + level * scale * BEAM_STEP_PX;
     return {
       x1,
       x2,

@@ -131,7 +131,7 @@ function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
   );
 }
 
-// duration/articulation/dynamic/crescendo/decrescendo and the tremolo
+// duration/articulation/dynamic/crescendo/decrescendo, the size and the tremolo
 // attributes must all match — pitch content is deliberately excluded (that's
 // what gets unioned into the combined chord's tone set). Matching tremolos
 // share one set of strokes, numeral and label.
@@ -152,6 +152,7 @@ function combineKey(element: NoteOrChordElementType): string {
     element.swell ?? null,
     element.dynamicEnd ?? null,
     element.stemMark ?? null,
+    element.size ?? 'normal',
   ]);
 }
 

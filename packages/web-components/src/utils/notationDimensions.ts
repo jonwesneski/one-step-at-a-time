@@ -990,6 +990,15 @@ export const ACCIDENTAL_PITCH_RATIO: Record<
  */
 export const NATURAL_LEFT_STROKE_INSET_PX = STAFF_LINE_SPACING / 3;
 
+// ─── Cue size ─────────────────────────────────────────────────────────────────
+
+/**
+ * Size of a cue note (`size="cue"`) against a full-size one: its head, stem,
+ * tails, beams, dots, accidentals and marks. A written trilling note and a
+ * bend's target are drawn at it too.
+ */
+export const CUE_SCALE = 0.75;
+
 // ─── Grace notes ──────────────────────────────────────────────────────────────
 
 /**
@@ -1521,14 +1530,6 @@ export const TRILL_ACCIDENTAL_SCALE = 0.7;
 /** Gap (px) between the trilling-note accidental's bottom edge and the sign's top edge. */
 export const TRILL_ACCIDENTAL_GAP_PX = STAFF_LINE_SPACING * 0.2;
 
-/**
- * Scale applied to a written trilling notehead (`trill-note`) — a cue-note
- * size (¾ scale), matching GRACE_SCALE's own note on cue-note sizing but
- * slightly larger than a grace note, since it stands alone rather than
- * grouped in a run.
- */
-export const TRILL_WRITTEN_NOTE_SCALE = 0.75;
-
 /** Gap (px) between the anchor notehead's right edge and the written trilling notehead's left parenthesis. */
 export const TRILL_WRITTEN_NOTE_GAP_PX = STAFF_LINE_SPACING * 0.5;
 
@@ -1974,9 +1975,6 @@ export const BEND_CONTOUR_POINT_PX = STAFF_LINE_SPACING * 1.2;
  * = STAFF_LINE_THICKNESS_PX
  */
 export const BEND_CONTOUR_THICKNESS_PX = STAFF_LINE_THICKNESS_PX;
-
-/** Size of a bend's target notehead and its accidental, against full-size ones. */
-export const BEND_TARGET_SCALE = 0.75;
 
 /** Width (px) of each parenthesis around a bend's target. = 0.6 × STAFF_LINE_SPACING */
 export const BEND_TARGET_PARENTHESIS_WIDTH_PX = STAFF_LINE_SPACING * 0.6;

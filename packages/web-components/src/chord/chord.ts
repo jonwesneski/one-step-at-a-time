@@ -66,6 +66,7 @@ import type {
   Note,
   NoteheadType,
   NoteLetter,
+  NoteSize,
   Octave,
   OctaveContinuationMode,
   OctaveDisplayMode,
@@ -152,9 +153,11 @@ import {
 import {
   parseAccidentalReminder,
   parseDuration,
+  parseNoteSize,
   parseStemMark,
   parseTextPlacement,
   parseTextStyle,
+  resolveNoteSize,
   warnIfInvalidDuration,
 } from '../utils/parsers';
 import type { LedgerHeadExtent } from '../utils/svgCreator';
@@ -164,6 +167,7 @@ import {
   chordHeadLeftOverhangPx,
   chordToneHeadExtentPx,
 } from '../utils/svgCreator/chord';
+import { noteSizeScale } from '../utils/svgCreator/note';
 import { techniqueTextLabel } from '../utils/svgCreator/techniqueLabel';
 import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
 
@@ -201,6 +205,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
  * @attr {AccidentalReminder} accidental-reminder - Shows every tone's accidental already in force as a reminder: bare or `bracketed` in parentheses, `plain` without. A slotted `<music-note>`'s own `accidental-reminder` marks just that tone, and its own `unpitched` makes that tone unpitched.
  * @attr {StemMark} stem-mark - `cross` draws a small × through the stem, near its end (see `<music-note>`).
+ * @attr {NoteSize} size - `cue` draws the chord at ¾ size (see `<music-note>`). Unset, a chord takes its `<music-voice>`'s `size`.
  * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin.
  * @attr {'start' | 'end'} decrescendo - Start or end of a decrescendo hairpin.
  * @attr {'start' | 'end'} diminuendo - Alias of `decrescendo`.
@@ -287,6 +292,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'dynamic-reminder',
       'accidental-reminder',
       'stem-mark',
+      'size',
       'quarter-tone',
       'crescendo',
       'decrescendo',
@@ -797,6 +803,22 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     }
   }
 
+  // The chord's own `size`, else its voice's.
+  get size(): NoteSize {
+    return resolveNoteSize(this.readAttribute('size'), this);
+  }
+  set size(value: NoteSize | null) {
+    if (value === null) {
+      this.removeAttribute('size');
+    } else {
+      this.setAttribute('size', value);
+    }
+  }
+
+  #scale(): number {
+    return noteSizeScale(this.size);
+  }
+
   get crescendo(): HairpinRole | null {
     return parseConnectorRole(this.readAttribute('crescendo'));
   }
@@ -922,6 +944,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       stemUp: this.#stemUp,
       noFlags: this.#noFlags,
       noteheads: this.toneNoteheads,
+      scale: this.#scale(),
     });
   }
 
@@ -944,6 +967,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         noteheads: this.toneNoteheads,
         stemExtension: this.#stemExtension,
         rowStaffYs: this.#augmentationDotRows,
+        scale: this.#scale(),
       })?.rightEdgeX ?? null
     );
   }
@@ -1706,6 +1730,13 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     if (swellWarning !== null) {
       console.warn(`[music-chord] ${swellWarning}`);
     }
+    if (
+      name === 'size' &&
+      newValue !== null &&
+      parseNoteSize(newValue) === null
+    ) {
+      console.warn(`[music-chord] size="${newValue}" isn't normal or cue`);
+    }
     if (name === 'phonemes') {
       const phonemeWarning = phonemesWarning(newValue);
       if (phonemeWarning !== null) {
@@ -1894,6 +1925,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       name === 'chord' ||
       name === 'accidental-reminder' ||
       name === 'stem-mark' ||
+      name === 'size' ||
       name === 'arpeggio' ||
       name === 'arpeggio-for' ||
       name === 'arpeggio-hairpin' ||
@@ -2209,6 +2241,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         phonemes: this.#drawnByStaff ? null : parsePhonemes(this.phonemes),
         breathMark: this.#drawnByStaff ? null : this.breathMark,
         bends: this.#standaloneBends(),
+        scale: this.#scale(),
       });
       chordSvg.setAttribute('overflow', 'visible');
       // An unpitched tone takes no ledger line.
@@ -2317,6 +2350,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         phonemes: this.#drawnByStaff ? null : parsePhonemes(this.phonemes),
         breathMark: this.#drawnByStaff ? null : this.breathMark,
         bends: this.#standaloneBends(),
+        scale: this.#scale(),
       });
       chordSvg.setAttribute('overflow', 'visible');
 
@@ -2385,7 +2419,13 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     const geometries = (
       toneNoteheads.length > 0 ? toneNoteheads : (['normal'] as const)
     ).map((notehead) =>
-      noteHeadGeometry(this.#stemUp, this.duration, this.#noFlags, notehead)
+      noteHeadGeometry(
+        this.#stemUp,
+        this.duration,
+        this.#noFlags,
+        notehead,
+        this.#scale()
+      )
     );
     const widest = geometries.reduce((a, b) =>
       b.halfWidth > a.halfWidth ? b : a
@@ -2396,10 +2436,12 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       stemUp: this.#stemUp,
       noFlags: this.#noFlags,
       noteheads: toneNoteheads,
+      scale: this.#scale(),
     };
     return {
       cxPx: widest.cx * NOTE_SCALE,
       halfWidthPx: widest.halfWidth * NOTE_SCALE,
+      scale: this.#scale(),
       all: chordHeadExtentPx(heads),
       tones: staffYCoordinates.flatMap((staffY, index) =>
         (unpitched[index] ?? null) === null

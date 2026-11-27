@@ -119,6 +119,7 @@ import {
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   NOTE_SVG_WIDTH,
   noteHeadCenterShiftPx,
+  noteSizeScale,
 } from './svgCreator/note';
 
 export type ConnectorKind =
@@ -642,16 +643,22 @@ const TIE_NOTEHEAD_OFFSET_PX = 5;
 // place.
 const headCenterShiftPx = (note: NoteLikeElementType): number => {
   if (isChordNodeName(note.tagName)) {
-    const { duration, toneNoteheads } = note as unknown as ChordElementType;
-    return noteHeadCenterShiftPx(duration, toneNoteheads?.[0]);
+    const { duration, toneNoteheads, size } =
+      note as unknown as ChordElementType;
+    return noteHeadCenterShiftPx(
+      duration,
+      toneNoteheads?.[0],
+      noteSizeScale(size ?? 'normal')
+    );
   }
   if (!isNoteNodeName(note.tagName)) {
     return 0;
   }
-  const { duration } = stemSourceOf(note) as unknown as NoteElementType;
+  const { duration, size } = stemSourceOf(note) as unknown as NoteElementType;
   return noteHeadCenterShiftPx(
     duration,
-    (note as unknown as NoteElementType).notehead
+    (note as unknown as NoteElementType).notehead,
+    noteSizeScale(size ?? 'normal')
   );
 };
 
@@ -962,7 +969,9 @@ const tieStartNudgePx = (note: NoteLikeElementType): number => {
       NOTE_SVG_WIDTH / 2 +
       computeGraceFootprintWidth(
         trillFinish,
-        trillCapableNote.resolvedTrillFinishAccidentals
+        trillCapableNote.resolvedTrillFinishAccidentals,
+        [],
+        noteSizeScale(trillCapableNote.size ?? 'normal')
       );
   }
   // A tie from a dotted note starts after its dots; any trill decoration

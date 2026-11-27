@@ -6,6 +6,7 @@ import {
 import type { AccidentalType } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
+  CUE_SCALE,
   STAFF_LINE_SPACING,
   TRILL_ACCIDENTAL_GAP_PX,
   TRILL_ACCIDENTAL_SCALE,
@@ -17,7 +18,6 @@ import {
   TRILL_SIGN_HEIGHT_PX,
   TRILL_WAVE_HEIGHT_PX,
   TRILL_WRITTEN_NOTE_GAP_PX,
-  TRILL_WRITTEN_NOTE_SCALE,
 } from '../notationDimensions';
 import { createAccidentalSvg } from './accidental';
 import { NOTE_HEAD_RADIUS_PX } from './note';
@@ -276,7 +276,7 @@ function createTrillParenthesis(
 
 const TRILL_WRITTEN_NOTE_STYLE: WrittenNoteStyle = {
   classPrefix: 'trill-written',
-  scale: TRILL_WRITTEN_NOTE_SCALE,
+  scale: CUE_SCALE,
   parenthesisWidthPx: TRILL_PARENTHESIS_STROKE_WIDTH,
   gapPx: TRILL_PARENTHESIS_NOTE_GAP_PX,
   // Reads NOTE_HEAD_RADIUS_PX when called: note.ts imports this file, so it
@@ -287,8 +287,7 @@ const TRILL_WRITTEN_NOTE_STYLE: WrittenNoteStyle = {
         ? { above: 0, below: 0 }
         : accidentalArrowOverhangs(accidental);
     return (
-      (NOTE_HEAD_RADIUS_PX * 0.75 + Math.max(above, below)) *
-        TRILL_WRITTEN_NOTE_SCALE +
+      (NOTE_HEAD_RADIUS_PX * 0.75 + Math.max(above, below)) * CUE_SCALE +
       TRILL_PARENTHESIS_OVERSHOOT_PX
     );
   },

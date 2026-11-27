@@ -236,6 +236,22 @@ describe('detectCombinableGroups', () => {
     ).toHaveLength(0);
   });
 
+  it('combines notes only at one size', () => {
+    const cue = note('C', 4);
+    cue.setAttribute('size', 'cue');
+    const otherCue = note('E', 4);
+    otherCue.setAttribute('size', 'cue');
+    const combine = (first: NoteElementType, second: NoteElementType) =>
+      detectCombinableGroups(
+        new Map([
+          [1, voiceInput([first], [0])],
+          [2, voiceInput([second], [0])],
+        ])
+      ).length;
+    expect(combine(cue, note('E', 4))).toBe(0);
+    expect(combine(cue, otherCue)).toBe(1);
+  });
+
   it('never combines a note with a bend contour', () => {
     const contoured = note('C', 4);
     contoured.setAttribute('bend-contour', 'G4');

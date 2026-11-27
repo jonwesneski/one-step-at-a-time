@@ -25,6 +25,7 @@ import type {
   Note,
   NoteheadType,
   NoteLetter,
+  NoteSize,
   Octave,
   OctaveContinuationMode,
   OctaveDisplayMode,
@@ -207,6 +208,8 @@ export interface INoteElement {
   set accidentalReminder(value: AccidentalReminder | boolean | null);
   /** A mark through the stem. */
   stemMark: StemMark | null;
+  // Own `size`, else the closest `<music-voice>`'s.
+  size: NoteSize;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
   // Alias for decrescendo — always mirrors it.
@@ -465,6 +468,8 @@ export interface IChordElement {
   set accidentalReminder(value: AccidentalReminder | boolean | null);
   /** A mark through the stem. */
   stemMark: StemMark | null;
+  // Own `size`, else the closest `<music-voice>`'s.
+  size: NoteSize;
   crescendo: HairpinRole | null;
   decrescendo: HairpinRole | null;
   // Alias for decrescendo — always mirrors it.

@@ -21,6 +21,7 @@ import type {
   MeasureEndBarline,
   MeasureNumberDisplay,
   Note,
+  NoteSize,
   NoteheadType,
   Octave,
   OctaveContinuationMode,
@@ -67,7 +68,9 @@ import {
   GRACE_TYPES,
   MEASURE_END_BARLINES,
   MEASURE_NUMBER_DISPLAYS,
+  MUSIC_VOICE,
   NOTEHEADS,
+  NOTE_SIZES,
   OCTAVES,
   OCTAVE_CONTINUATION_MODES,
   OCTAVE_DISPLAY_MODES,
@@ -431,6 +434,20 @@ export const parseUnpitched = (
     : value !== null && VALID_UNPITCHED_PLACEMENTS.has(value)
     ? (value as UnpitchedPlacement)
     : null;
+
+export const parseNoteSize = (value: string | null): NoteSize | null =>
+  value !== null && (NOTE_SIZES as string[]).includes(value)
+    ? (value as NoteSize)
+    : null;
+
+/** An element's own `size`, else its closest `<music-voice>`'s. */
+export const resolveNoteSize = (
+  own: string | null,
+  element: Element
+): NoteSize =>
+  parseNoteSize(own) ??
+  parseNoteSize(element.closest(MUSIC_VOICE)?.getAttribute('size') ?? null) ??
+  'normal';
 
 export const parseStemMark = (value: string | null): StemMark | null =>
   value !== null && (STEM_MARKS as string[]).includes(value)

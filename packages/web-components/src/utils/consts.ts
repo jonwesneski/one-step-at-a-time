@@ -23,6 +23,7 @@ import type {
   Mode,
   Note,
   NoteheadType,
+  NoteSize,
   Octave,
   OctaveContinuationMode,
   OctaveDisplayMode,
@@ -483,6 +484,8 @@ export const UNPITCHED_PLACEMENTS: UnpitchedPlacement[] = [
 ];
 
 export const STEM_MARKS: StemMark[] = ['cross'];
+
+export const NOTE_SIZES: NoteSize[] = ['normal', 'cue'];
 
 export const ACCIDENTAL_REMINDERS: AccidentalReminder[] = [
   'bracketed',

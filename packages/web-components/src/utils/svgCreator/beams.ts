@@ -47,6 +47,7 @@ import {
   type TremoloBeamSegment,
 } from '../../rules/tremoloRules';
 import type {
+  ChordElementType,
   NoteChordOrRestElementType,
   NoteElementType,
 } from '../../types/elements';
@@ -69,6 +70,7 @@ import {
   NOTE_HEAD_CX_STEM_DOWN_PX,
   NOTE_HEAD_CX_STEM_UP_PX,
   NOTE_HEAD_RADIUS_PX,
+  NOTE_SCALE,
   NOTE_STEM_TIP_Y_OFFSET,
   NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
   NOTE_STEM_X_OFFSET,
@@ -76,6 +78,7 @@ import {
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
   NOTEHEAD_WIDTH_PX,
+  stemTipPosition,
 } from './note';
 import { tremoloBeamPoints } from './tremolo';
 
@@ -87,6 +90,8 @@ export type NoteYPosition = {
   lowestHeadStaffY: number;
   /** See BeamPlacementNote.minimumStemPx. */
   minimumStemPx?: number;
+  /** A cue note's size; a beam group is all one size. */
+  scale?: number;
 };
 
 interface NoteData {
@@ -98,6 +103,7 @@ interface NoteData {
   /** Number of beams on this note (= flag count): 1 = eighth, 2 = sixteenth, etc. */
   beamCount: number;
   stemUp: boolean;
+  scale: number;
   minimumStemPx?: number;
 }
 
@@ -117,7 +123,7 @@ class BeamLine {
 // the base length, measured from the head nearest the beam (beamed notes
 // render noFlags, so no per-tail extension applies).
 function baseStemTipY(position: NoteYPosition): number {
-  const { stemUp, highestHeadStaffY, lowestHeadStaffY } = position;
+  const { stemUp, highestHeadStaffY, lowestHeadStaffY, scale = 1 } = position;
   const y =
     STAFF_Y_PADDING +
     (stemUp ? lowestHeadStaffY : highestHeadStaffY) -
@@ -126,7 +132,8 @@ function baseStemTipY(position: NoteYPosition): number {
     ? NOTE_STEM_TIP_Y_OFFSET
     : NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN;
   const spread = lowestHeadStaffY - highestHeadStaffY;
-  return y + tipOffset + (stemUp ? -spread : spread);
+  const shortening = (1 - scale) * BASE_STEM_LENGTH_PX;
+  return y + tipOffset + (stemUp ? shortening - spread : spread - shortening);
 }
 
 // Offset from the note Y map to the beams container, read off a stem tip so
@@ -136,10 +143,21 @@ function staffYToContainerY(note: {
   tipY: number;
   highestHeadStaffY: number;
   lowestHeadStaffY: number;
+  scale?: number;
 }): number {
+  const base = (note.scale ?? 1) * BASE_STEM_LENGTH_PX;
   return note.stemUp
-    ? note.tipY + BASE_STEM_LENGTH_PX - note.highestHeadStaffY
-    : note.tipY - BASE_STEM_LENGTH_PX - note.lowestHeadStaffY;
+    ? note.tipY + base - note.highestHeadStaffY
+    : note.tipY - base - note.lowestHeadStaffY;
+}
+
+// The stem's x in a note's box (px).
+function stemXInBox(stemUp: boolean, scale: number): number {
+  return scale === 1
+    ? stemUp
+      ? NOTE_STEM_X_OFFSET
+      : NOTE_STEM_X_OFFSET_STEM_DOWN
+    : stemTipPosition(stemUp, 'eighth', true, 0, scale).x * NOTE_SCALE;
 }
 
 // What BeamRenderer needs from each group it owns: a beam group or a
@@ -189,6 +207,14 @@ class BeamGroupRenderer implements GroupRenderer {
 
   #isKneed(): boolean {
     return this.#notes.some((note) => note.stemUp !== this.#notes[0].stemUp);
+  }
+
+  #scale(): number {
+    return this.#notes[0].scale;
+  }
+
+  #thickness(): number {
+    return this.#scale() * BEAM_THICKNESS_PX;
   }
 
   #stemXs(): number[] {
@@ -255,6 +281,7 @@ class BeamGroupRenderer implements GroupRenderer {
           })),
           stemUp,
           obstacles,
+          scale: this.#scale(),
         })
       );
       this.#hasFittingPlacement = true;
@@ -285,7 +312,7 @@ class BeamGroupRenderer implements GroupRenderer {
       (note.beamCount - 1) * this.#placement.levelOffset;
     return note.stemUp
       ? top + Math.min(0, deepestLevelOffset)
-      : top + BEAM_THICKNESS_PX + Math.max(0, deepestLevelOffset);
+      : top + this.#thickness() + Math.max(0, deepestLevelOffset);
   }
 
   /**
@@ -323,7 +350,7 @@ class BeamGroupRenderer implements GroupRenderer {
     const deepestLevelOffset = (maxBeamCount - 1) * this.#placement.levelOffset;
     return above
       ? top + Math.min(0, deepestLevelOffset)
-      : top + BEAM_THICKNESS_PX + Math.max(0, deepestLevelOffset);
+      : top + this.#thickness() + Math.max(0, deepestLevelOffset);
   }
 
   setX(globalIndex: number, x: number): void {
@@ -331,10 +358,8 @@ class BeamGroupRenderer implements GroupRenderer {
     if (localIndex === -1) {
       return;
     }
-    const xOffset = this.#notes[localIndex].stemUp
-      ? NOTE_STEM_X_OFFSET
-      : NOTE_STEM_X_OFFSET_STEM_DOWN;
-    this.#notes[localIndex].x = x + xOffset;
+    const note = this.#notes[localIndex];
+    note.x = x + stemXInBox(note.stemUp, note.scale);
   }
 
   /** Updates all beam polygon points using the current x/y positions. */
@@ -346,24 +371,26 @@ class BeamGroupRenderer implements GroupRenderer {
     // Corners run outer-left, inner-left, inner-right, outer-right, where the
     // outer edge faces away from the direction the beams stack in.
     const outerIsTop = levelOffset > 0;
+    const thickness = this.#thickness();
+    const fractionalLength = this.#scale() * NOTEHEAD_WIDTH_PX;
 
     this.#beamLines.forEach((beamLine, i) => {
       const noteX1 = xs[beamLine.fromNoteIndex];
       const noteX2 = xs[beamLine.toNoteIndex];
       const x1 =
         beamLine.fractionalBeamSide === 'left'
-          ? noteX1 - NOTEHEAD_WIDTH_PX
+          ? noteX1 - fractionalLength
           : noteX1;
       const x2 =
         beamLine.fractionalBeamSide === 'right'
-          ? noteX2 + NOTEHEAD_WIDTH_PX
+          ? noteX2 + fractionalLength
           : noteX2;
       const levelShift = beamLine.beamLevel * levelOffset;
       const top1 = this.#primaryTopAt(x1) + levelShift;
       const top2 = this.#primaryTopAt(x2) + levelShift;
       const [outer1, inner1, inner2, outer2] = outerIsTop
-        ? [top1, top1 + BEAM_THICKNESS_PX, top2 + BEAM_THICKNESS_PX, top2]
-        : [top1 + BEAM_THICKNESS_PX, top1, top2, top2 + BEAM_THICKNESS_PX];
+        ? [top1, top1 + thickness, top2 + thickness, top2]
+        : [top1 + thickness, top1, top2, top2 + thickness];
       beamPolygons[i].setAttribute(
         'points',
         `${x1},${outer1} ${x1},${inner1} ${x2},${inner2} ${x2},${outer2}`
@@ -440,12 +467,14 @@ class TremoloGroupRenderer implements GroupRenderer {
     );
   }
 
+  #scale(): number {
+    return this.#members[0].scale ?? 1;
+  }
+
   #stemXs(): number[] {
     const noteXs = this.#noteXs();
     return this.#members.map(
-      (member, i) =>
-        noteXs[i] +
-        (member.stemUp ? NOTE_STEM_X_OFFSET : NOTE_STEM_X_OFFSET_STEM_DOWN)
+      (member, i) => noteXs[i] + stemXInBox(member.stemUp, this.#scale())
     );
   }
 
@@ -466,6 +495,7 @@ class TremoloGroupRenderer implements GroupRenderer {
       stemUp,
       attached: this.#attached,
       total: this.#total,
+      scale: this.#scale(),
     });
     this.#beams = layout.beams.map((beam) => ({
       ...beam,
@@ -483,23 +513,28 @@ class TremoloGroupRenderer implements GroupRenderer {
     const firstIsLower =
       first.highestHeadStaffY + first.lowestHeadStaffY >
       second.highestHeadStaffY + second.lowestHeadStaffY;
+    const scale = this.#scale();
+    const radius = scale * NOTE_HEAD_RADIUS_PX;
+    // A cue head keeps its left edge.
     const headCenterX = (member: TremoloMember, noteX: number): number =>
       noteX +
-      (member.stemUp ? NOTE_HEAD_CX_STEM_UP_PX : NOTE_HEAD_CX_STEM_DOWN_PX);
+      (member.stemUp ? NOTE_HEAD_CX_STEM_UP_PX : NOTE_HEAD_CX_STEM_DOWN_PX) -
+      (NOTE_HEAD_RADIUS_PX - radius);
     return resolveBetweenTremoloBeams({
       from: {
-        edgeX: headCenterX(first, noteXs[0]) + NOTE_HEAD_RADIUS_PX,
+        edgeX: headCenterX(first, noteXs[0]) + radius,
         centerY:
           (firstIsLower ? first.highestHeadStaffY : first.lowestHeadStaffY) +
           toContainerY,
       },
       to: {
-        edgeX: headCenterX(second, noteXs[1]) - NOTE_HEAD_RADIUS_PX,
+        edgeX: headCenterX(second, noteXs[1]) - radius,
         centerY:
           (firstIsLower ? second.lowestHeadStaffY : second.highestHeadStaffY) +
           toContainerY,
       },
       strokes: this.#total,
+      scale,
     });
   }
 
@@ -510,7 +545,7 @@ class TremoloGroupRenderer implements GroupRenderer {
     }
     const member = this.#members[localIndex];
     const top = this.#primaryTops[localIndex];
-    const edge = member.stemUp ? top : top + BEAM_THICKNESS_PX;
+    const edge = member.stemUp ? top : top + this.#scale() * BEAM_THICKNESS_PX;
     // An attached beam takes the tip STEM_OVERLAP_PX inside it, like any
     // beam; detached beams leave the stem level with the outermost one.
     const overlap = this.#attached > 0 ? STEM_OVERLAP_PX : 0;
@@ -529,7 +564,9 @@ class TremoloGroupRenderer implements GroupRenderer {
     const deepestLevelOffset = (this.#total - 1) * this.#levelOffset;
     return above
       ? top + Math.min(0, deepestLevelOffset)
-      : top + BEAM_THICKNESS_PX + Math.max(0, deepestLevelOffset);
+      : top +
+          this.#scale() * BEAM_THICKNESS_PX +
+          Math.max(0, deepestLevelOffset);
   }
 
   setX(globalIndex: number, x: number): void {
@@ -547,7 +584,10 @@ class TremoloGroupRenderer implements GroupRenderer {
     this.#recomputePlacement();
     const polygons = this.svgGroup.querySelectorAll('polygon');
     this.#beams.forEach((beam, i) => {
-      polygons[i].setAttribute('points', tremoloBeamPoints(beam));
+      polygons[i].setAttribute(
+        'points',
+        tremoloBeamPoints(beam, this.#scale() * BEAM_THICKNESS_PX)
+      );
     });
   }
 }
@@ -573,6 +613,7 @@ class BeamGroup {
       lowestHeadStaffY: NaN,
       beamCount,
       stemUp: true,
+      scale: 1,
     }));
     this.#globalIndices = globalIndices;
     // Beam structure is derived only from flag counts and computed once at
@@ -601,6 +642,7 @@ class BeamGroup {
     const { stemUp, highestHeadStaffY, lowestHeadStaffY, minimumStemPx } =
       position;
     const note = this.#notes[localIndex];
+    note.scale = position.scale ?? 1;
     note.tipY = baseStemTipY(position);
     note.highestHeadStaffY = highestHeadStaffY;
     note.lowestHeadStaffY = lowestHeadStaffY;
@@ -845,6 +887,7 @@ export class BeamsBuilder {
       let pendingFlagCounts: number[] = [];
       let pendingNoteIndices: number[] = [];
       let pendingHasTremolo = false;
+      let pendingCue = false;
 
       for (let i = 0; i < elements.length; i++) {
         const elOffset = elementOffsets[i];
@@ -883,12 +926,15 @@ export class BeamsBuilder {
         if (flagCount !== undefined) {
           const hasTremolo =
             parseTremolo(elements[i].getAttribute('tremolo')) !== null;
+          const cue =
+            (elements[i] as NoteElementType | ChordElementType).size === 'cue';
           // A non-adjacent index means a non-beamable note broke the run.
           if (
             pendingNoteIndices.length > 0 &&
             (pendingNoteIndices[pendingNoteIndices.length - 1] !== i - 1 ||
               (hasTremolo !== pendingHasTremolo &&
                 !flutterTonguedIndices.has(hasTremolo ? i : i - 1)) ||
+              cue !== pendingCue ||
               barlineBetween(i - 1, i))
           ) {
             flushRun(pendingFlagCounts, pendingNoteIndices);
@@ -898,6 +944,7 @@ export class BeamsBuilder {
           pendingFlagCounts.push(flagCount);
           pendingNoteIndices.push(i);
           pendingHasTremolo = hasTremolo;
+          pendingCue = cue;
         } else {
           flushRun(pendingFlagCounts, pendingNoteIndices);
           pendingFlagCounts = [];

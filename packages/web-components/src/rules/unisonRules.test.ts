@@ -72,6 +72,21 @@ describe('canShareNotehead', () => {
     );
   });
 
+  it('never shares a head between a cue and a full-size part', () => {
+    expect(
+      canShareNotehead(
+        part(1, 'up', 'quarter', { scale: 0.75 }),
+        part(2, 'down', 'quarter')
+      )
+    ).toBe(false);
+    expect(
+      canShareNotehead(
+        part(1, 'up', 'quarter', { scale: 0.75 }),
+        part(2, 'down', 'quarter', { scale: 0.75 })
+      )
+    ).toBe(true);
+  });
+
   it('never shares an unpitched head', () => {
     expect(
       canShareNotehead(

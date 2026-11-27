@@ -36,6 +36,7 @@ import type {
   Mode,
   Note,
   NoteheadType,
+  NoteSize,
   Octave,
   OctaveContinuationMode,
   OctaveDisplayMode,
@@ -100,6 +101,7 @@ type DrumNotationProps = {
   'articulation-repeat'?: boolean;
   stress?: StressType;
   'stem-mark'?: StemMark;
+  size?: NoteSize;
   'stem-direction'?: StemDirection;
   'beam-group'?: string;
   'shared-stem-for'?: string;
@@ -200,7 +202,10 @@ declare module 'react' {
         'technique-text-placement'?: TextPlacement;
         'technique-text-style'?: TextStyle;
       };
-      'music-voice': WebComponentProps;
+      'music-voice': WebComponentProps & {
+        /** `cue` draws every note and chord in the voice at ¾ size. */
+        size?: NoteSize;
+      };
       'music-tremolo': WebComponentProps & {
         strokes?: TremoloStrokeCount;
         'beam-attach'?: TremoloBeamAttach;
@@ -243,6 +248,7 @@ declare module 'react' {
         'technique-text-style'?: TextStyle;
         'accidental-reminder'?: boolean | AccidentalReminder;
         'stem-mark'?: StemMark;
+        size?: NoteSize;
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;
@@ -333,6 +339,7 @@ declare module 'react' {
         unpitched?: boolean | UnpitchedPlacement;
         'accidental-reminder'?: boolean | AccidentalReminder;
         'stem-mark'?: StemMark;
+        size?: NoteSize;
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
         diminuendo?: HairpinRole;

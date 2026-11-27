@@ -499,3 +499,21 @@ describe('kneed beams', () => {
     ).toBe(false);
   });
 });
+
+describe('resolveBeamPlacement at cue size', () => {
+  it('steps its beams and shortens its stems to ¾', () => {
+    for (const stemUp of [true, false]) {
+      const heads = stemUp ? [F4, F4] : [E5, E5];
+      const cue = resolveBeamPlacement({
+        notes: notesOf({ heads, stemUp, beamCount: 2 }),
+        stemUp,
+        scale: 0.75,
+      });
+      expect(Math.abs(cue.levelOffset)).toBeCloseTo(0.75 * BEAM_STEP_PX);
+      // The beam is placed on a quarter-space grid.
+      expect(
+        Math.abs(cue.longestStemPx - 0.75 * spaces(3.5))
+      ).toBeLessThanOrEqual(spaces(1 / 8));
+    }
+  });
+});

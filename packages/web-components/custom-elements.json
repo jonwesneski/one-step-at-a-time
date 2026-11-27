@@ -742,6 +742,23 @@
             },
             {
               "kind": "field",
+              "name": "size",
+              "type": {
+                "text": "NoteSize"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#scale",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              }
+            },
+            {
+              "kind": "field",
               "name": "crescendo",
               "type": {
                 "text": "HairpinRole | null"
@@ -1706,6 +1723,13 @@
                 "text": "StemMark"
               },
               "description": "`cross` draws a small × through the stem, near its end (see `<music-note>`)."
+            },
+            {
+              "name": "size",
+              "type": {
+                "text": "NoteSize"
+              },
+              "description": "`cue` draws the chord at ¾ size (see `<music-note>`). Unset, a chord takes its `<music-voice>`'s `size`."
             },
             {
               "name": "quarter-tone"
@@ -3948,6 +3972,31 @@
             },
             {
               "kind": "field",
+              "name": "size",
+              "type": {
+                "text": "NoteSize"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#scale",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "crescendo",
               "type": {
                 "text": "HairpinRole | null"
@@ -5528,6 +5577,17 @@
               }
             },
             {
+              "name": "size",
+              "type": {
+                "text": "NoteSize"
+              },
+              "description": "`cue` draws the chord at ¾ size (see `<music-note>`). Unset, a chord takes its `<music-voice>`'s `size`.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
               "name": "quarter-tone",
               "inheritedFrom": {
                 "name": "ChordElement",
@@ -6726,6 +6786,31 @@
               "name": "stemMark",
               "type": {
                 "text": "StemMark | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "size",
+              "type": {
+                "text": "NoteSize"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#scale",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
               },
               "inheritedFrom": {
                 "name": "NoteElement",
@@ -8619,6 +8704,17 @@
                 "text": "StemMark"
               },
               "description": "`cross` draws a small × through the stem, near its end: air blown through the instrument with the given fingering. With tremolo strokes it stands between them and the head.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "size",
+              "type": {
+                "text": "NoteSize"
+              },
+              "description": "`cue` draws the note at ¾ size (head, stem, tails, beams, dots, accidental and marks), e.g. for sung or hummed pitches; the head keeps its place on the stave. Unset, a note takes its `<music-voice>`'s `size`. A cue note never beams with a full-size one. On a chord's own note it is ignored: set it on the chord.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -10600,6 +10696,23 @@
             },
             {
               "kind": "field",
+              "name": "size",
+              "type": {
+                "text": "NoteSize"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#scale",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              }
+            },
+            {
+              "kind": "field",
               "name": "crescendo",
               "type": {
                 "text": "HairpinRole | null"
@@ -11816,6 +11929,13 @@
                 "text": "StemMark"
               },
               "description": "`cross` draws a small × through the stem, near its end: air blown through the instrument with the given fingering. With tremolo strokes it stands between them and the head."
+            },
+            {
+              "name": "size",
+              "type": {
+                "text": "NoteSize"
+              },
+              "description": "`cue` draws the note at ¾ size (head, stem, tails, beams, dots, accidental and marks), e.g. for sung or hummed pitches; the head keeps its place on the stave. Unset, a note takes its `<music-voice>`'s `size`. A cue note never beams with a full-size one. On a chord's own note it is ignored: set it on the chord."
             },
             {
               "name": "grace-notehead",
@@ -30100,7 +30220,7 @@
       "declarations": [
         {
           "kind": "class",
-          "description": "Groups one contrapuntal voice's entire ordered note/chord/rest/tuplet/\ntremolo/arpeggio subtree within a `<music-staff>`. A staff either has zero\n`<music-voice>` children (a single, implicit voice) or two-or-three,\nwrapping every one of its active voices in\nsibling order: the 1st `<music-voice>` is voice 1 (always stems up), the\n2nd is voice 2 (always stems down), the 3rd is voice 3 (contextual\ndirection). Voice number is never authored on the element itself — it is\nresolved by the staff from sibling position, see utils/slotElements.ts.\n\nThe wrapper is layout-only (no shadow DOM, no attributes); the staff\nflattens each voice's children itself (flattenStaffSlotElements).",
+          "description": "Groups one contrapuntal voice's entire ordered note/chord/rest/tuplet/\ntremolo/arpeggio subtree within a `<music-staff>`. A staff either has zero\n`<music-voice>` children (a single, implicit voice) or two-or-three,\nwrapping every one of its active voices in\nsibling order: the 1st `<music-voice>` is voice 1 (always stems up), the\n2nd is voice 2 (always stems down), the 3rd is voice 3 (contextual\ndirection). Voice number is never authored on the element itself — it is\nresolved by the staff from sibling position, see utils/slotElements.ts.\n\nThe wrapper is layout-only (no shadow DOM); the staff flattens each\nvoice's children itself (flattenStaffSlotElements).",
           "name": "VoiceElement",
           "members": [
             {
@@ -30158,6 +30278,15 @@
               "type": {
                 "text": "CustomEvent"
               }
+            }
+          ],
+          "attributes": [
+            {
+              "name": "size",
+              "type": {
+                "text": "NoteSize"
+              },
+              "description": "`cue` draws every note and chord in the voice at ¾ size, e.g. sung or hummed pitches beside played ones. A note's or chord's own `size` wins."
             }
           ],
           "superclass": {

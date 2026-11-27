@@ -105,6 +105,17 @@ describe('resolveCrossStaffTremoloGroups', () => {
     expect(warnings).toHaveLength(1);
   });
 
+  it('drops a group with a cue-sized member', () => {
+    const { groups, warnings } = resolveCrossStaffTremoloGroups([
+      entry({
+        members: [{ ...member('C6'), cue: true }, member('rest', true)],
+      }),
+      bottom(),
+    ]);
+    expect(groups).toEqual([]);
+    expect(warnings[0]).toContain('cue');
+  });
+
   it('keeps a good group when another drops', () => {
     const { groups } = resolveCrossStaffTremoloGroups([
       entry(),

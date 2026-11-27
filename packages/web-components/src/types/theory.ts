@@ -468,6 +468,9 @@ export type UnpitchedPlacement = 'top' | 'bottom' | 'written';
 /** A mark through a note's stem: `cross`, air through the instrument. */
 export type StemMark = 'cross';
 
+/** A note's size: `cue` draws it at ¾, as sung or optional notes. */
+export type NoteSize = 'normal' | 'cue';
+
 /**
  * How a reminder accidental is drawn: `bracketed` (in parentheses) or `plain`.
  */
