@@ -1,6 +1,8 @@
 import { ChordElement } from '../chord/chord';
 import {
   DRUM_CHORD_ATTRIBUTES,
+  DRUM_HEADLESS_WARNING,
+  drumAttributeValue,
   PITCH_ONLY_CHORD_ATTRIBUTES,
   unsupportedDrumAttributes,
 } from '../rules/percussionRules';
@@ -16,7 +18,7 @@ const SUPPORTED = new Set(DRUM_CHORD_ATTRIBUTES);
  *
  * @customElement music-drum-chord
  * @attr {DurationType} duration - Note value for every stroke, optionally dotted. Defaults to `quarter`.
- * @attr {NoteheadType} notehead - Notehead for every stroke that doesn't take one from its instrument or set its own.
+ * @attr {NoteheadType} notehead - Notehead for every stroke that doesn't take one from its instrument or set its own. `none` is ignored, with a warning.
  * @attr {'start' | 'continue' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie, `continue` for the middle of a tie chain (tied into and on to the next), or `laissez-vibrer` (alias `lv`) for a "let ring" tie.
  * @attr {boolean} lv-label - Adds an "l.v." label to a `laissez-vibrer` tie.
  * @attr {TieStyle} tie-style - `dotted` draws the tie this chord starts as a dotted line. Defaults to `solid`.
@@ -60,11 +62,24 @@ export class DrumChordElement extends ChordElement {
   }
 
   protected override readAttribute(name: string): string | null {
-    return SUPPORTED.has(name) ? this.getAttribute(name) : null;
+    return SUPPORTED.has(name)
+      ? drumAttributeValue(name, this.getAttribute(name))
+      : null;
   }
 
   protected override readsAttribute(name: string): boolean {
-    return SUPPORTED.has(name) && this.hasAttribute(name);
+    return SUPPORTED.has(name) && this.readAttribute(name) !== null;
+  }
+
+  override attributeChangedCallback(
+    name: string,
+    oldValue: string | null,
+    newValue: string | null
+  ): void {
+    super.attributeChangedCallback(name, oldValue, newValue);
+    if (name === 'notehead' && newValue === 'none' && oldValue !== newValue) {
+      console.warn(`[${MUSIC_DRUM_CHORD}] ${DRUM_HEADLESS_WARNING}`);
+    }
   }
 
   override connectedCallback(): void {

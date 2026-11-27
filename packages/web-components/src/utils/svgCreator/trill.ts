@@ -10,6 +10,7 @@ import {
   STAFF_LINE_SPACING,
   TRILL_ACCIDENTAL_GAP_PX,
   TRILL_ACCIDENTAL_SCALE,
+  TRILL_DOUBLE_WAVE_HEIGHT_PX,
   TRILL_NOTCH_HEIGHT_PX,
   TRILL_PARENTHESIS_BOW_PX,
   TRILL_PARENTHESIS_NOTE_GAP_PX,
@@ -134,15 +135,17 @@ const NOMINAL_TRILL_PITCH_PX = WIGGLE_TRILL_ADVANCE * STAFF_LINE_SPACING;
 const appendTrillTile = (
   parent: SVGGElement,
   translateX: number,
-  pitchPx: number
+  translateY: number,
+  pitchPx: number,
+  waveHeightPx: number
 ): void => {
   const path = document.createElementNS(SVG_NS, 'path');
   path.setAttribute('d', WIGGLE_TRILL_PATH_D);
   path.setAttribute(
     'transform',
-    `translate(${translateX} 0) scale(${pitchPx / WIGGLE_TRILL_ADVANCE} ${
-      TRILL_WAVE_HEIGHT_PX / WIGGLE_TRILL_NATURAL_HEIGHT
-    })`
+    `translate(${translateX} ${translateY}) scale(${
+      pitchPx / WIGGLE_TRILL_ADVANCE
+    } ${waveHeightPx / WIGGLE_TRILL_NATURAL_HEIGHT})`
   );
   path.setAttribute('fill', 'currentColor');
   path.classList.add('trill-wave-tile');
@@ -156,6 +159,8 @@ export type TrillLineProps = {
   endX: number;
   /** Local-space Y at which the line's bottom edge sits — matches the sign's `bottomY`. */
   bottomY: number;
+  /** `trill-line="double"`: two thinner lines spanning the sign's height. */
+  double?: boolean;
 };
 
 /**
@@ -168,23 +173,35 @@ export function createTrillLineSvg({
   startX,
   endX,
   bottomY,
+  double = false,
 }: TrillLineProps): SVGGElement | null {
   const spanWidth = endX - startX;
   if (spanWidth <= 0) {
     return null;
   }
 
+  const waveHeight = double
+    ? TRILL_DOUBLE_WAVE_HEIGHT_PX
+    : TRILL_WAVE_HEIGHT_PX;
+  // The lower line stands on `bottomY`; a double's upper one is level with
+  // the sign's top.
+  const rowTops = double ? [0, waveHeight - TRILL_SIGN_HEIGHT_PX] : [0];
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('trill-line');
+  if (double) {
+    group.classList.add('trill-line-double');
+  }
   group.setAttribute(
     'transform',
-    `translate(${startX} ${bottomY - TRILL_WAVE_HEIGHT_PX})`
+    `translate(${startX} ${bottomY - waveHeight})`
   );
 
   const tileCount = Math.max(1, Math.round(spanWidth / NOMINAL_TRILL_PITCH_PX));
   const pitchPx = spanWidth / tileCount;
-  for (let i = 0; i < tileCount; i++) {
-    appendTrillTile(group, i * pitchPx, pitchPx);
+  for (const rowTop of rowTops) {
+    for (let i = 0; i < tileCount; i++) {
+      appendTrillTile(group, i * pitchPx, rowTop, pitchPx, waveHeight);
+    }
   }
 
   return group;
@@ -233,14 +250,18 @@ export function createTrillContinuationSignSvg({
 /** Vertical end-notch marking an explicit `trill-stop` — drawn at the line's cut-off X. */
 export function createTrillNotchSvg(
   x: number,
-  bottomY: number
+  bottomY: number,
+  double = false
 ): SVGLineElement {
   const notch = document.createElementNS(SVG_NS, 'line');
   notch.classList.add('trill-notch');
   notch.setAttribute('x1', `${x}`);
   notch.setAttribute('y1', `${bottomY}`);
   notch.setAttribute('x2', `${x}`);
-  notch.setAttribute('y2', `${bottomY - TRILL_NOTCH_HEIGHT_PX}`);
+  notch.setAttribute(
+    'y2',
+    `${bottomY - (double ? TRILL_SIGN_HEIGHT_PX : TRILL_NOTCH_HEIGHT_PX)}`
+  );
   notch.setAttribute('stroke', 'currentColor');
   notch.setAttribute('stroke-width', '1.4');
   return notch;

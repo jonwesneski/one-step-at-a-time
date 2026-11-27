@@ -26,6 +26,7 @@ import {
   type ResolvedBend,
 } from '../../rules/glissandoRules';
 import { GraceNoteDescriptor } from '../../rules/graceRules';
+import { isHeadless } from '../../rules/noteheadRules';
 import {
   durationToBase,
   durationToDotCount,
@@ -35,6 +36,7 @@ import {
   resolveStrokePlacement,
   STAFF_BAND,
   stemEndingFor,
+  stemMarkHalfHeightPx,
   TREMOLO_STROKE_HALF_HEIGHT_PX,
 } from '../../rules/tremoloRules';
 import type {
@@ -58,7 +60,6 @@ import {
   GRACE_MAIN_GAP_PX,
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
-  STEM_CROSS_SIZE_PX,
   STEM_OVERLAP_PX,
   TREMOLO_NUMERAL_GAP_PX,
   TRILL_ABOVE_STAFF_GAP_PX,
@@ -98,7 +99,7 @@ import {
   type NoteProps,
 } from './note';
 import { createStandalonePhonemesSvg } from './phonemes';
-import { createStemCrossSvg } from './stemMark';
+import { createStemMarkSvg } from './stemMark';
 import {
   appendTechniqueLabels,
   appendTechniqueTextBelow,
@@ -170,7 +171,7 @@ export const createChordSvg = ({
   trillFinishSlur = 'to-main',
   augmentationDotRows = null,
   tremoloStrokeCount = 0,
-  stemCross = false,
+  stemMark = null,
   tremoloTuplet = null,
   articulationRepeatCount = 1,
   tremoloLabel = null,
@@ -332,11 +333,11 @@ export const createChordSvg = ({
   } else if (!stemless && !noStem) {
     inkBottomY = Math.max(inkBottomY, stemOuterY);
   }
-  if ((tremoloStrokeCount > 0 || stemCross) && (stemless || !noStem)) {
-    const { centerYs, crossCenterY } = resolveStrokePlacement({
+  if ((tremoloStrokeCount > 0 || stemMark !== null) && (stemless || !noStem)) {
+    const { centerYs, markCenterY } = resolveStrokePlacement({
       headY: nearestHeadY,
       stemUp,
-      stemCross,
+      stemMark,
       strokeCount: tremoloStrokeCount,
       staff: STAFF_BAND,
       stemLengthPx: stemless ? null : nearestHeadStemLengthPx,
@@ -353,11 +354,14 @@ export const createChordSvg = ({
       chordToneHeadCenterY(y, stemUp, base, noFlags)
     );
     svg.setAttribute('overflow', 'visible');
-    if (crossCenterY !== null) {
-      const crossY = chordToneHeadCenterY(crossCenterY, stemUp, base, noFlags);
-      svg.appendChild(createStemCrossSvg(centerX, crossY, scale));
+    if (stemMark !== null && markCenterY !== null) {
+      const crossY = chordToneHeadCenterY(markCenterY, stemUp, base, noFlags);
+      svg.appendChild(createStemMarkSvg(stemMark, centerX, crossY, scale));
       if (stemless && stemUp) {
-        inkTopY = Math.min(inkTopY, crossY - (scale * STEM_CROSS_SIZE_PX) / 2);
+        inkTopY = Math.min(
+          inkTopY,
+          crossY - scale * stemMarkHalfHeightPx(stemMark)
+        );
       }
     }
     if (strokeYs.length > 0) {
@@ -910,11 +914,10 @@ export function chordAugmentationDotLayout({
   scale = 1,
 }: ChordDotLayoutInput): NoteDotLayout | null {
   const dotCount = durationToDotCount[duration];
-  if (
-    dotCount === 0 ||
-    staffYCoordinates.length === 0 ||
-    rowStaffYs?.length === 0
-  ) {
+  const headedYs = staffYCoordinates.filter(
+    (_, index) => !isHeadless(noteheads[index] ?? null)
+  );
+  if (dotCount === 0 || headedYs.length === 0 || rowStaffYs?.length === 0) {
     return null;
   }
   const headInput = {
@@ -929,9 +932,9 @@ export function chordAugmentationDotLayout({
     chordHeadDisplacements(headInput).map((d) => [d.noteIndex, d.xOffset])
   );
   const { right: headRightX } = chordHeadExtentPx(headInput);
-  const rowCentersY = (
-    rowStaffYs ?? resolveChordDotStaffYs(staffYCoordinates)
-  ).map((staffY) => STAFF_Y_PADDING + staffY - NOTE_HEAD_Y_OFFSET_CORRECTION);
+  const rowCentersY = (rowStaffYs ?? resolveChordDotStaffYs(headedYs)).map(
+    (staffY) => STAFF_Y_PADDING + staffY - NOTE_HEAD_Y_OFFSET_CORRECTION
+  );
   let leftX = headRightX + scale * AUGMENTATION_DOT_NOTEHEAD_GAP_PX;
 
   const stemNote = chordStemNote(staffYCoordinates, stemUp, duration, noFlags);
@@ -993,17 +996,24 @@ function undisplacedHeadExtentPx(
   };
 }
 
-/** The heads a chord moves aside, each clear of the head a step from it. */
+/**
+ * The heads a chord moves aside, each clear of the head a step from it. A
+ * headless tone has nothing to move or to clear.
+ */
 export function chordHeadDisplacements(
   input: ChordHeadExtentInput
 ): NoteDisplacement[] {
-  return computeAdjacentDisplacements(
-    input.staffYCoordinates,
-    input.stemUp,
-    input.staffYCoordinates.map((_, index) =>
-      undisplacedHeadExtentPx(input, index)
-    )
+  const headed = input.staffYCoordinates.flatMap((_, index) =>
+    isHeadless(input.noteheads?.[index] ?? null) ? [] : [index]
   );
+  return computeAdjacentDisplacements(
+    headed.map((index) => input.staffYCoordinates[index]),
+    input.stemUp,
+    headed.map((index) => undisplacedHeadExtentPx(input, index))
+  ).map((displacement) => ({
+    ...displacement,
+    noteIndex: headed[displacement.noteIndex],
+  }));
 }
 
 /** Left and right ink edges (chord-SVG px) of one tone's head, displaced or not. */

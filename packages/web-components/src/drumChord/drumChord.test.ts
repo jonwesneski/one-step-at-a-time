@@ -45,6 +45,20 @@ describe(MUSIC_DRUM_CHORD, () => {
     );
   });
 
+  it('refuses a headless notehead with a warning', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const chord = makeDrumChord(
+      `<${MUSIC_DRUM_NOTE} instrument="snare"></${MUSIC_DRUM_NOTE}>` +
+        `<${MUSIC_DRUM_NOTE} instrument="kick" notehead="none"></${MUSIC_DRUM_NOTE}>`,
+      'notehead="none"'
+    );
+    expect(chord.notehead).toBe('normal');
+    expect(chord.toneNoteheads).toEqual(['normal', 'normal']);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('notehead="none" is ignored')
+    );
+  });
+
   it('ignores a chord symbol and other pitch-dependent attributes', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const chord = makeDrumChord('', 'chord="Cmaj7" arpeggio="up"');

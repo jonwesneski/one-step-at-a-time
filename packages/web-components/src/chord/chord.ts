@@ -16,6 +16,8 @@ import {
   GraceNoteDescriptor,
 } from '../rules/graceRules';
 import {
+  graceNoteheadWarning,
+  isHeadless,
   resolveChordToneNoteheads,
   triangleUnsupportedWarning,
 } from '../rules/noteheadRules';
@@ -204,7 +206,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this chord starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement.
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
  * @attr {AccidentalReminder} accidental-reminder - Shows every tone's accidental already in force as a reminder: bare or `bracketed` in parentheses, `plain` without. A slotted `<music-note>`'s own `accidental-reminder` marks just that tone, and its own `unpitched` makes that tone unpitched.
- * @attr {StemMark} stem-mark - `cross` draws a small × through the stem, near its end (see `<music-note>`).
+ * @attr {StemMark} stem-mark - `cross` draws a small × through the stem, near its end; `multiphonic` an M (see `<music-note>`).
  * @attr {NoteSize} size - `cue` draws the chord at ¾ size (see `<music-note>`). Unset, a chord takes its `<music-voice>`'s `size`.
  * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin.
  * @attr {'start' | 'end'} decrescendo - Start or end of a decrescendo hairpin.
@@ -226,7 +228,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {'auto' | 'none'} grace-slur - Whether to draw the slur from the grace group to the chord. Defaults to `auto`.
  * @attr {DynamicMarking} grace-dynamic - A single dynamic for the whole grace group.
  * @attr {boolean} trill - Marks a trill start: draws the "tr" sign above the stave. Requires a staff (absent on a standalone chord). The wavy line spans forward through this chord's own `tie` chain — set `trill` once, not on every tied chord.
- * @attr {'auto' | 'none'} trill-line - `auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value).
+ * @attr {TrillLineMode} trill-line - `auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value); `double` draws two lines after the sign, a double trill.
  * @attr {boolean} trill-stop - Draws a vertical end-notch here instead of letting the line run to the next notehead.
  * @attr {ConventionalAccidentalType} trill-accidental - Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature (the chord's topmost note). Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set.
  * @attr {Note} trill-note - Full override of the trilling pitch (letter + accidental), rendered as a small written notehead in parentheses after the chord's own notehead column — required when the trilling pitch shares the reference note's own letter (a chromatic/semitone trill) or otherwise isn't the plain diatonic neighbor. Wins over `trill-accidental` when both are set.
@@ -244,8 +246,8 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone chord).
  * @attr {string} shared-stem-for - `id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone chord).
  * @attr {string} slur-group - `id` shared by every breakpoint note/chord of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone chord).
- * @attr {NoteheadType} notehead - Notehead shape for every tone: `normal` (default), `x`, `diamond`, or `diamond-white` (see `<music-note>`). A slotted `<music-note>`'s own `notehead` overrides it for that tone — e.g. an artificial harmonic: a normal stopped note plus a `diamond-white` ("harmonic") touched note. `triangle-up` / `triangle-down` are not supported on chords (a normal head is drawn, with a warning).
- * @attr {string} grace-notehead - Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. The property also accepts a `(NoteheadType | null)[]`.
+ * @attr {NoteheadType} notehead - Notehead shape for every tone: `normal` (default), `x`, `x-plain`, `diamond`, `diamond-white` or `none` (see `<music-note>`); a tone with `none` draws no head, accidental, dot or ledger line. A slotted `<music-note>`'s own `notehead` overrides it for that tone — e.g. an artificial harmonic: a normal stopped note plus a `diamond-white` ("harmonic") touched note. `triangle-up` / `triangle-down` are not supported on chords (a normal head is drawn, with a warning).
+ * @attr {string} grace-notehead - Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles and `none` are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`.
  * @attr {TremoloValue} tremolo - Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the chord's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the chord's own). A semibreve chord takes them above or below its heads. The stem lengthens to carry them. Ignored on a `<music-tremolo>` member.
  * @attr {number} tremolo-tuplet - Tuplet numeral for a measured tremolo, drawn beyond the stem's end: the number of notes the chord stands for (`3`, `5`, `6`, …). Needs a `tremolo` stroke count.
  * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one; `flz` / `flt` / `frull` mark a flutter-tongued single-note tremolo and run on over later tremolos until `ord` / `nat` / `norm` ("ord.") or another label, which goes on the ordinary note a flutter-tongued tie runs into.
@@ -1702,10 +1704,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       const warning =
         name === 'notehead'
           ? triangleUnsupportedWarning([this.notehead], 'a chord')
-          : triangleUnsupportedWarning(
-              this.graceNotehead ?? [],
-              'a grace note'
-            );
+          : graceNoteheadWarning(this.graceNotehead ?? []);
       if (warning) {
         console.warn(`[music-chord] ${warning}`);
       }
@@ -2229,7 +2228,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         trillFinishNotes: this.#buildTrillFinishDescriptors(this.notes),
         trillFinishSlur: this.trillFinishSlur,
         tremoloStrokeCount: this.#tremoloStrokeCount(),
-        stemCross: this.stemMark === 'cross',
+        stemMark: this.stemMark,
         tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
         articulationRepeatCount: this.#repeatCount(),
         tremoloLabel: this.#drawnByStaff ? null : this.tremoloLabel,
@@ -2244,9 +2243,10 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         scale: this.#scale(),
       });
       chordSvg.setAttribute('overflow', 'visible');
-      // An unpitched tone takes no ledger line.
+      // An unpitched or headless tone takes no ledger line.
       const unpitched = this.toneUnpitched;
-      const pitched = (_: unknown, i: number) => unpitched[i] === null;
+      const pitched = (_: unknown, i: number) =>
+        unpitched[i] === null && !isHeadless(toneNoteheads[i] ?? null);
       addLedgerLines(
         chordSvg,
         this.#staffYCoordinates.filter(pitched),
@@ -2292,7 +2292,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       const unpitched = this.toneUnpitched;
       const noteAccidentals = this.#resolveStandaloneNoteAccidentals().map(
         (accidental, i) =>
-          unpitched[i] !== null
+          unpitched[i] !== null || isHeadless(toneNoteheads[i] ?? null)
             ? null
             : reminders[i] !== null
             ? accidental ?? 'natural'
@@ -2322,7 +2322,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         // Standalone, nothing else lengthens the stem for tremolo strokes.
         stemExtension: unbeamedTremoloStemExtensionPx({
           tremolo: this.tremolo,
-          stemCross: this.stemMark === 'cross',
+          stemMark: this.stemMark,
           duration: this.duration,
           headYs: standaloneYCoordinates,
           stemUp,
@@ -2338,7 +2338,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         trillFinishNotes: this.#buildTrillFinishDescriptors(notes),
         trillFinishSlur: this.trillFinishSlur,
         tremoloStrokeCount: this.#tremoloStrokeCount(),
-        stemCross: this.stemMark === 'cross',
+        stemMark: this.stemMark,
         tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
         articulationRepeatCount: this.#repeatCount(),
         tremoloLabel: this.#drawnByStaff ? null : this.tremoloLabel,

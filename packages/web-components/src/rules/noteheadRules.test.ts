@@ -5,6 +5,9 @@ import {
 } from '../utils/notationDimensions';
 import {
   forcedStemUp,
+  graceNoteheadWarning,
+  headlessDurationWarning,
+  isHeadless,
   isTriangle,
   resolveChordToneNoteheads,
   resolveGraceNoteheads,
@@ -30,6 +33,11 @@ describe('resolveNoteheadGlyph', () => {
     ['x', 'half', 'circle-x'],
     ['x', 'whole', 'circle-x'],
     ['x', 'double-whole', 'circle-x'],
+    ['x-plain', 'quarter', 'x'],
+    ['x-plain', 'half', 'x'],
+    ['x-plain', 'whole', 'x'],
+    ['none', 'quarter', null],
+    ['none', 'half', null],
     ['diamond', 'sixteenth', 'diamond-black'],
     ['diamond', 'quarter', 'diamond-black'],
     ['diamond', 'half', 'diamond-white'],
@@ -65,11 +73,21 @@ describe('triangle helpers', () => {
     expect(forcedStemUp(null)).toBeNull();
   });
 
-  it('suppresses ledger lines and accidentals only for triangles', () => {
+  it('suppresses ledger lines and accidentals only for triangles and headless stems', () => {
     expect(suppressesLedgerLines('triangle-up')).toBe(true);
     expect(suppressesAccidental('triangle-down')).toBe(true);
+    expect(suppressesLedgerLines('none')).toBe(true);
+    expect(suppressesAccidental('none')).toBe(true);
     expect(suppressesLedgerLines('x')).toBe(false);
     expect(suppressesAccidental('diamond')).toBe(false);
+    expect(isHeadless('none')).toBe(true);
+    expect(isHeadless('x-plain')).toBe(false);
+  });
+
+  it('warns about a headless note with no stem', () => {
+    expect(headlessDurationWarning('none', 'whole')).toMatch(/needs a stem/);
+    expect(headlessDurationWarning('none', 'half')).toBeNull();
+    expect(headlessDurationWarning('normal', 'whole')).toBeNull();
   });
 
   it('warns about stemless triangles only', () => {
@@ -107,11 +125,25 @@ describe('chord and grace noteheads', () => {
     expect(triangleUnsupportedWarning(['x', null], 'a chord')).toBeNull();
   });
 
-  it('aligns grace noteheads by index and rejects triangles', () => {
+  it('aligns grace noteheads by index and rejects triangles and headless stems', () => {
     expect(resolveGraceNoteheads(['x', null, 'triangle-up'], 4)).toEqual([
       'x',
       'normal',
       'normal',
+      'normal',
+    ]);
+    expect(resolveGraceNoteheads(['none', 'x-plain'], 2)).toEqual([
+      'normal',
+      'x-plain',
+    ]);
+    expect(graceNoteheadWarning(['x', 'none'])).toMatch(/needs its head/);
+    expect(graceNoteheadWarning(['triangle-up'])).toMatch(/a grace note/);
+    expect(graceNoteheadWarning(['x', null])).toBeNull();
+  });
+
+  it('lets a chord tone be headless', () => {
+    expect(resolveChordToneNoteheads('normal', ['none', null])).toEqual([
+      'none',
       'normal',
     ]);
   });

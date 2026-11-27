@@ -8,6 +8,7 @@ import {
   STAFF_TOP_LINE_Y,
   STEM_CROSS_END_INSET_PX,
   STEM_CROSS_SIZE_PX,
+  STEM_MULTIPHONIC_HEIGHT_PX,
   TREMOLO_BEAM_MAX_LENGTH_PX,
   TREMOLO_BEAM_MIN_LENGTH_PX,
   TREMOLO_BEAM_STEM_GAP_PX,
@@ -37,6 +38,7 @@ import {
   STAFF_BAND,
   stemEndingFor,
   stemlessTremoloReachPx,
+  stemMarkHalfHeightPx,
   TREMOLO_NUMERAL_EXTENT_PX,
   tremoloBeamCounts,
   tremoloConsistencyWarnings,
@@ -793,27 +795,27 @@ describe('a stem cross', () => {
       stemLengthPx: BASE_STEM_LENGTH_PX,
       ending: { kind: 'plain' },
       canLengthenStem: true,
-      stemCross: true,
+      stemMark: 'cross',
       ...input,
     });
 
   it('stands a space in from a plain stem’s end, without lengthening it', () => {
     const placement = cross();
     expect(placement.centerYs).toEqual([]);
-    expect(placement.crossCenterY).toBeCloseTo(
+    expect(placement.markCenterY).toBeCloseTo(
       E4 - BASE_STEM_LENGTH_PX + STEM_CROSS_END_INSET_PX
     );
     expect(placement.stemFloorPx).toBeCloseTo(BASE_STEM_LENGTH_PX);
   });
 
   it('keeps clear of a tail’s root and the beams', () => {
-    const plain = cross().crossCenterY ?? 0;
+    const plain = cross().markCenterY ?? 0;
     const tailed = cross({ ending: { kind: 'tail', flagCount: 1 } });
     const beamed = cross({ ending: { kind: 'beam', beamCount: 2 } });
-    expect(tailed.crossCenterY).toBeGreaterThan(plain);
-    expect(beamed.crossCenterY).toBeGreaterThan(plain);
+    expect(tailed.markCenterY).toBeGreaterThan(plain);
+    expect(beamed.markCenterY).toBeGreaterThan(plain);
     expect(E4 - BASE_STEM_LENGTH_PX + TREMOLO_TAIL_ROOM_PX).toBeLessThanOrEqual(
-      (tailed.crossCenterY ?? 0) - STEM_CROSS_SIZE_PX / 2
+      (tailed.markCenterY ?? 0) - STEM_CROSS_SIZE_PX / 2
     );
   });
 
@@ -821,45 +823,45 @@ describe('a stem cross', () => {
     const short = 15;
     const lengthened = cross({ stemLengthPx: short });
     expect(lengthened.stemFloorPx).toBeGreaterThan(short);
-    expect(E4 - (lengthened.crossCenterY ?? 0)).toBeGreaterThan(
+    expect(E4 - (lengthened.markCenterY ?? 0)).toBeGreaterThan(
       STEM_CROSS_SIZE_PX
     );
     const drawn = cross({ stemLengthPx: short, canLengthenStem: false });
-    expect(E4 - (drawn.crossCenterY ?? 0)).toBeLessThan(short);
+    expect(E4 - (drawn.markCenterY ?? 0)).toBeLessThan(short);
   });
 
   it('goes between tremolo strokes and the head', () => {
     const placement = cross({ strokeCount: 2, headY: C5, stemUp: false });
     const [first] = placement.centerYs;
-    expect(placement.crossCenterY).toBeGreaterThan(C5);
-    expect(placement.crossCenterY).toBeLessThan(first - HALF_HEIGHT);
+    expect(placement.markCenterY).toBeGreaterThan(C5);
+    expect(placement.markCenterY).toBeLessThan(first - HALF_HEIGHT);
     expect(
       first -
         HALF_HEIGHT -
-        ((placement.crossCenterY ?? 0) + STEM_CROSS_SIZE_PX / 2)
+        ((placement.markCenterY ?? 0) + STEM_CROSS_SIZE_PX / 2)
     ).toBeGreaterThan(0);
   });
 
   it('takes a stemless head’s notional stem side and counts as its ink', () => {
     const placement = cross({ stemLengthPx: null, stemUp: false, headY: C5 });
-    expect(placement.crossCenterY).toBeGreaterThan(C5);
+    expect(placement.markCenterY).toBeGreaterThan(C5);
     expect(
       stemlessTremoloReachPx({
         tremolo: null,
-        stemCross: true,
+        stemMark: 'cross',
         tuplet: null,
         duration: 'whole',
         headY: C5,
         stemUp: false,
       })
-    ).toBeCloseTo((placement.crossCenterY ?? 0) - C5 + STEM_CROSS_SIZE_PX / 2);
+    ).toBeCloseTo((placement.markCenterY ?? 0) - C5 + STEM_CROSS_SIZE_PX / 2);
   });
 
   it('makes a beamed or unbeamed stem long enough', () => {
     expect(
       unbeamedTremoloStemExtensionPx({
         tremolo: null,
-        stemCross: true,
+        stemMark: 'cross',
         duration: 'sixteenth',
         headYs: [E4],
         stemUp: true,
@@ -870,7 +872,7 @@ describe('a stem cross', () => {
     expect(
       beamedTremoloMinimumStemPx({
         tremolo: null,
-        stemCross: true,
+        stemMark: 'cross',
         duration: 'sixteenth',
         nearestHeadY: E4,
         stemUp: true,
@@ -884,5 +886,63 @@ describe('a stem cross', () => {
         stemUp: true,
       })
     ).toBeUndefined();
+  });
+});
+
+describe('a multiphonic M through the stem', () => {
+  const placed = (
+    stemMark: 'cross' | 'multiphonic',
+    input: Partial<Parameters<typeof resolveStrokePlacement>[0]> = {}
+  ) =>
+    resolveStrokePlacement({
+      headY: E4,
+      stemUp: true,
+      strokeCount: 0,
+      staff: STAFF_BAND,
+      stemLengthPx: BASE_STEM_LENGTH_PX,
+      ending: { kind: 'plain' },
+      canLengthenStem: true,
+      stemMark,
+      ...input,
+    });
+
+  it('leaves as much plain stem past it as the cross does', () => {
+    const extra =
+      stemMarkHalfHeightPx('multiphonic') - stemMarkHalfHeightPx('cross');
+    expect(placed('multiphonic').markCenterY).toBeCloseTo(
+      (placed('cross').markCenterY ?? 0) + extra
+    );
+    expect(placed('multiphonic').stemFloorPx).toBeCloseTo(BASE_STEM_LENGTH_PX);
+  });
+
+  it('keeps its taller ink clear of the head, lengthening a short stem further', () => {
+    const half = stemMarkHalfHeightPx('multiphonic');
+    expect(half).toBeCloseTo(STEM_MULTIPHONIC_HEIGHT_PX / 2);
+    const multiphonic = placed('multiphonic', { stemLengthPx: 15 });
+    const cross = placed('cross', { stemLengthPx: 15 });
+    expect(multiphonic.stemFloorPx).toBeGreaterThan(cross.stemFloorPx);
+    expect(E4 - (multiphonic.markCenterY ?? 0) - half).toBeGreaterThan(0);
+  });
+
+  it('counts as a stemless head’s ink by its own height', () => {
+    expect(
+      stemlessTremoloReachPx({
+        tremolo: null,
+        stemMark: 'multiphonic',
+        tuplet: null,
+        duration: 'whole',
+        headY: C5,
+        stemUp: false,
+      })
+    ).toBeGreaterThan(
+      stemlessTremoloReachPx({
+        tremolo: null,
+        stemMark: 'cross',
+        tuplet: null,
+        duration: 'whole',
+        headY: C5,
+        stemUp: false,
+      })
+    );
   });
 });

@@ -2452,6 +2452,38 @@ describe('staffNotationBase stems', () => {
     expect(b4.stemUp).toBe(false);
   });
 
+  it('beams and stems headless notes as if they had heads', () => {
+    const run = (notehead: string) =>
+      renderStaff(
+        ['A3', 'A3', 'A3', 'A3'].map(() => ({
+          note: 'A',
+          octave: '3',
+          duration: 'thirtysecond',
+          notehead,
+        }))
+      );
+    const headed = run('normal');
+    const headless = run('none');
+    expect(headless.map((note) => note.stemUp)).toEqual(
+      headed.map((note) => note.stemUp)
+    );
+    expect(headless.map((note) => note.stemExtension)).toEqual(
+      headed.map((note) => note.stemExtension)
+    );
+    expect(headless.every((note) => note.noFlags)).toBe(true);
+    expect(headless[0].shadowRoot.querySelector('.ledger-line')).toBeNull();
+    expect(headed[0].shadowRoot.querySelector('.ledger-line')).not.toBeNull();
+  });
+
+  it('gives an unbeamed headless note below the stave no ledger-line stem floor', () => {
+    const [headed, headless] = renderStaff([
+      { note: 'A', octave: '3', duration: 'eighth' },
+      { tag: MUSIC_REST, duration: 'eighth' },
+      { note: 'A', octave: '3', duration: 'eighth', notehead: 'none' },
+    ]).filter((element) => element.tagName !== MUSIC_REST.toUpperCase());
+    expect(headless.stemExtension).toBeLessThan(headed.stemExtension);
+  });
+
   it('extends a stem to the middle line past the first ledger line', () => {
     const [a5, c6, c4, a3] = renderStaff([
       quarter('A', '5'),

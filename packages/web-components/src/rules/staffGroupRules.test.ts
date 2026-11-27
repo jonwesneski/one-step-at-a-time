@@ -106,14 +106,41 @@ describe('resolveStaffGroups', () => {
     expect(warnings).toHaveLength(0);
   });
 
-  it('warns and skips when a group-id matches only one staff', () => {
+  it('brackets one staff alone when its group-id matches only it', () => {
     const { groups, warnings } = resolveStaffGroups([
-      { group: 'bracket', groupId: 'choir' },
+      { group: 'bracket', groupId: 'cor' },
       { group: null, groupId: null },
     ]);
-    expect(groups).toHaveLength(0);
+    expect(groups).toEqual([{ index: 0, count: 1, group: 'bracket' }]);
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('brackets one staff alone with no next sibling, or before a grouped one', () => {
+    const { groups, warnings } = resolveStaffGroups([
+      { group: 'bracket', groupId: null },
+      { group: null, groupId: null },
+      { group: 'bracket', groupId: null },
+      { group: 'bracket', groupId: 'clarinets' },
+      { group: 'bracket', groupId: 'clarinets' },
+      { group: 'bracket', groupId: null },
+    ]);
+    expect(groups).toEqual([
+      { index: 0, count: 2, group: 'bracket' },
+      { index: 2, count: 1, group: 'bracket' },
+      { index: 3, count: 2, group: 'bracket' },
+      { index: 5, count: 1, group: 'bracket' },
+    ]);
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('still warns about a brace alone', () => {
+    const { groups, warnings } = resolveStaffGroups([
+      { group: 'grand', groupId: null },
+      { group: 'bracket', groupId: 'winds' },
+    ]);
+    expect(groups).toEqual([{ index: 1, count: 1, group: 'bracket' }]);
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain('matched only one staff');
+    expect(warnings[0]).toContain('ambiguous pairing');
   });
 
   it('warns and skips when a group-id reappears in a separate, non-contiguous run', () => {
@@ -163,5 +190,14 @@ describe('connectedBarlineGaps', () => {
         [true, true, false]
       )
     ).toEqual([[1, 2]]);
+  });
+
+  it('adds no gap for a bracket around one staff', () => {
+    expect(
+      connectedBarlineGaps(
+        [{ index: 1, count: 1, group: 'bracket' }],
+        [false, false]
+      )
+    ).toEqual([]);
   });
 });

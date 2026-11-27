@@ -1909,6 +1909,50 @@ describe(`${MUSIC_CHORD} notehead`, () => {
   });
 });
 
+describe(`${MUSIC_CHORD} headless tone`, () => {
+  const toneWithoutHead = async (
+    notes: { value: Note; octave: Octave }[],
+    toneIndex: number
+  ): Promise<ChordElementType> => {
+    const chord = renderChordByNotes(makeStaff(), notes);
+    chord
+      .querySelectorAll(MUSIC_NOTE)
+      [toneIndex].setAttribute('notehead', 'none');
+    await Promise.resolve();
+    return chord;
+  };
+
+  it('draws no head or ledger line for that tone, and keeps the others', async () => {
+    const chord = await toneWithoutHead(
+      [
+        { value: 'C', octave: 4 },
+        { value: 'E', octave: 4 },
+        { value: 'G', octave: 4 },
+      ],
+      0
+    );
+    expect(chord.toneNoteheads).toEqual(['none', 'normal', 'normal']);
+    expect(chord.shadowRoot!.querySelectorAll('.head')).toHaveLength(2);
+    expect(chord.shadowRoot!.querySelectorAll('.ledger-line')).toHaveLength(0);
+    expect(chord.shadowRoot!.querySelector('.stem')).not.toBeNull();
+  });
+
+  it('shows no accidental for it and moves no head aside for it', async () => {
+    const chord = await toneWithoutHead(
+      [
+        { value: 'F#', octave: 4 },
+        { value: 'G', octave: 4 },
+      ],
+      0
+    );
+    expect(chord.shadowRoot!.querySelector('.accidental')).toBeNull();
+    const placed = Array.from(
+      chord.shadowRoot!.querySelectorAll('svg.chord > svg')
+    ).map((svg) => svg.getAttribute('x'));
+    expect(placed.every((x) => x === null)).toBe(true);
+  });
+});
+
 describe(`${MUSIC_CHORD} stem length`, () => {
   const renderChord = (
     staffYCoordinates: number[],

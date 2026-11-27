@@ -37,7 +37,7 @@ import {
   STAFF_LINE_SPACING,
 } from '../utils/notationDimensions';
 import type { ObstacleRect } from './connectorPlacementRules';
-import { isTriangle } from './noteheadRules';
+import { isHeadless, suppressesAccidental } from './noteheadRules';
 import { MINOR_TO_RELATIVE_MAJOR } from './theoryConsts';
 import { tiedInto } from './tieRules';
 
@@ -228,14 +228,14 @@ export function computeNoteAccidentals(
         graceShowAccidentals,
         noteElement
       );
-      // A triangle's or an unpitched note's nominal pitch is undefined, so like
-      // a tied note it neither shows an accidental nor changes the measure's
-      // state. A triangle's ornaments do.
+      // A triangle's or an unpitched note's nominal pitch is undefined, and a
+      // headless stem has no head to mark, so like a tied note it neither
+      // shows an accidental nor changes the measure's state. Their ornaments do.
       // A dotted tie across a barline is not literal enough to carry the
       // accidental, so its end note shows it again.
       if (
         (tiedInto(noteElement.tie) && !noteElement.dottedTieAcrossBarline) ||
-        isTriangle(noteElement.notehead) ||
+        suppressesAccidental(noteElement.notehead) ||
         noteElement.unpitched != null
       ) {
         noteShowAccidentals.set(noteElement, null);
@@ -298,8 +298,12 @@ export function computeNoteAccidentals(
       const reminders = chordElement.toneAccidentalReminders;
       const quarterTones = chordElement.toneQuarterTones;
       const unpitched = chordElement.toneUnpitched ?? [];
+      const noteheads = chordElement.toneNoteheads ?? [];
       chordElement.notes.forEach((chordNote, toneIndex) => {
-        if (unpitched[toneIndex] != null) {
+        if (
+          unpitched[toneIndex] != null ||
+          isHeadless(noteheads[toneIndex] ?? null)
+        ) {
           accidentals.push(null);
           parenthesized.push(false);
           return;

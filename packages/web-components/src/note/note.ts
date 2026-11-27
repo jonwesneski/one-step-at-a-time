@@ -32,6 +32,8 @@ import {
 } from '../rules/graceRules';
 import {
   forcedStemUp,
+  graceNoteheadWarning,
+  headlessDurationWarning,
   isTriangle,
   suppressesAccidental,
   suppressesLedgerLines,
@@ -223,7 +225,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
  * @attr {AccidentalReminder} accidental-reminder - Shows the accidental already in force as a reminder, e.g. at the start of a repeated section: bare or `bracketed` in parentheses, "(♮)", `plain` without. An accidental that is required anyway draws plainly.
  * @attr {UnpitchedPlacement} unpitched - Marks an unpitched sound (breath, key or valve noise): no accidental or ledger line, and no effect on later accidentals. `top` draws it in the space above the stave, `bottom` below it, and bare or `written` at its `note`/`octave` (which `top` and `bottom` don't need). Ignored on a triangle notehead. Its grace notes stand at the same place.
- * @attr {StemMark} stem-mark - `cross` draws a small × through the stem, near its end: air blown through the instrument with the given fingering. With tremolo strokes it stands between them and the head.
+ * @attr {StemMark} stem-mark - `cross` draws a small × through the stem, near its end: air blown through the instrument with the given fingering. `multiphonic` draws an M there: a multiphonic on the written pitch. With tremolo strokes either stands between them and the head.
  * @attr {NoteSize} size - `cue` draws the note at ¾ size (head, stem, tails, beams, dots, accidental and marks), e.g. for sung or hummed pitches; the head keeps its place on the stave. Unset, a note takes its `<music-voice>`'s `size`. A cue note never beams with a full-size one. On a chord's own note it is ignored: set it on the chord.
  * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin spanning to another note.
  * @attr {'start' | 'end'} decrescendo - Start or end of a decrescendo hairpin.
@@ -245,7 +247,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {'auto' | 'none'} grace-slur - Whether to draw the slur from the grace group to the main note. Defaults to `auto`.
  * @attr {DynamicMarking} grace-dynamic - A single dynamic for the whole grace group, independent of `dynamic`.
  * @attr {boolean} trill - Marks a trill start: draws the "tr" sign above the stave. Requires a staff (absent on a standalone note). The wavy line spans forward through this note's own `tie` chain — set `trill` once, not on every tied note.
- * @attr {'auto' | 'none'} trill-line - `auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value).
+ * @attr {TrillLineMode} trill-line - `auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value); `double` draws two lines after the sign, a double trill.
  * @attr {boolean} trill-stop - Draws a vertical end-notch here instead of letting the line run to the next notehead.
  * @attr {ConventionalAccidentalType} trill-accidental - Overrides only the accidental of the trilling (auxiliary) pitch — normally the diatonic upper neighbor as modified by the key signature. Never changes the letter itself. Ignored (with a warning) when `trill-note` is also set.
  * @attr {Note} trill-note - Full override of the trilling pitch (letter + accidental), rendered as a small written notehead in parentheses after the main notehead — required when the trilling pitch shares this note's own letter (a chromatic/semitone trill) or otherwise isn't the plain diatonic neighbor. Wins over `trill-accidental` when both are set.
@@ -263,8 +265,8 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note). Ignored, with a warning, on a `triangle-up`/`triangle-down` note.
  * @attr {string} shared-stem-for - `id` of the other-staff note/chord this one shares a single stem with (both hands occasionally playing the same beat simultaneously in otherwise single-part writing). Requires a `<music-measure>` ancestor with an adjacent staff (absent on a standalone note).
  * @attr {string} slur-group - `id` shared by every breakpoint note of one continuous multi-leg cross-staff phrase slur (only the first/last note of each leg — never the notes still covered by their own staff's ordinary beam); consecutive members, ordered by real rendered position, are each connected by their own slur curve. Requires a `<music-measure>` or `<music-composition>` ancestor (absent on a standalone note).
- * @attr {NoteheadType} notehead - Notehead shape: `normal` (default); `x` ("x-head", circled at half-note length and longer — a dead / muted (ghost) note, cymbal or cross-stick, spoken text, indefinite pitch); `diamond` (black or white by duration — guitar harmonics, silently depressed piano keys); `diamond-white` (white at every duration — the "harmonic" notehead for bowed strings and woodwinds, also multiphonics and unvoiced vocal sounds); `triangle-up` / `triangle-down` ("highest / lowest possible note"). A triangle ignores `note`/`octave`: inside a staff it is placed outside the stave (or beyond the run of notes it follows), never takes ledger lines, an accidental or a beam, and its stem always points away from its tip. Standalone, a triangle draws at the note's own position.
- * @attr {string} grace-notehead - Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`.
+ * @attr {NoteheadType} notehead - Notehead shape: `normal` (default); `x` ("x-head", circled at half-note length and longer — a dead / muted (ghost) note, cymbal or cross-stick, spoken text, indefinite pitch); `x-plain` (a cross never circled, for multiphonics); `diamond` (black or white by duration — guitar harmonics, silently depressed piano keys); `diamond-white` (white at every duration — the "harmonic" notehead for bowed strings and woodwinds, also multiphonics and unvoiced vocal sounds); `triangle-up` / `triangle-down` ("highest / lowest possible note"). A triangle ignores `note`/`octave`: inside a staff it is placed outside the stave (or beyond the run of notes it follows), never takes ledger lines, an accidental or a beam, and its stem always points away from its tip. Standalone, a triangle draws at the note's own position. `none` draws the stem alone, from where the head would stand (key clicks, clapped keys): no head, ledger line, accidental, dot or arpeggio, while the pitch still sets the stem and beam; it needs a stem, so a semibreve warns.
+ * @attr {string} grace-notehead - Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles and `none` are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`.
  * @attr {TremoloValue} tremolo - Single-note tremolo: `1`–`4` strokes through the stem (each stroke halves the repeated value, on top of the note's own tails or beams), or `unmeasured` for the standard unmeasured indication (three beams' worth, counting the note's own). A semibreve takes them above or below its head. The stem lengthens to carry them. Ignored on a `<music-tremolo>` member.
  * @attr {number} tremolo-tuplet - Tuplet numeral for a measured tremolo, drawn beyond the stem's end: the number of notes the note stands for (`3`, `5`, `6`, …). Needs a `tremolo` stroke count.
  * @attr {TremoloLabel} tremolo-label - Technique label above the stave: `trem` ("trem.") marks the start of an unmeasured tremolo passage, `non-trem` ("non trem.") the first measured or plain note after one; `flz` / `flt` / `frull` mark a flutter-tongued single-note tremolo and run on over later tremolos until `ord` / `nat` / `norm` ("ord.") or another label, which goes on the ordinary note a flutter-tongued tie runs into.
@@ -1164,7 +1166,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     }
     return unbeamedTremoloStemExtensionPx({
       tremolo: this.tremolo,
-      stemCross: this.stemMark === 'cross',
+      stemMark: this.stemMark,
       duration: this.duration,
       headYs: [0],
       stemUp: this.stemUp,
@@ -1699,10 +1701,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
           ? this.parentElement?.closest(CHORD_TAGS)
             ? triangleUnsupportedWarning([this.notehead], 'a chord tone')
             : null
-          : triangleUnsupportedWarning(
-              this.graceNotehead ?? [],
-              'a grace note'
-            );
+          : graceNoteheadWarning(this.graceNotehead ?? []);
       if (warning) {
         console.warn(`[music-note] ${warning}`);
       }
@@ -2238,7 +2237,9 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
     `;
 
     const notehead = this.notehead;
-    const durationWarning = triangleDurationWarning(notehead, this.duration);
+    const durationWarning =
+      triangleDurationWarning(notehead, this.duration) ??
+      headlessDurationWarning(notehead, this.duration);
     if (durationWarning && durationWarning !== this.#lastNoteheadWarning) {
       console.warn(`[music-note] ${durationWarning}`);
     }
@@ -2301,7 +2302,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
         this.tremolo === null
           ? 0
           : resolveStrokeCount(this.tremolo, this.duration),
-      stemCross: this.stemMark === 'cross',
+      stemMark: this.stemMark,
       tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
       articulationRepeatCount: this.#repeatCount(),
       tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,

@@ -60,6 +60,16 @@ describe('resolveTrillSpans', () => {
     expect(span.hasLine).toBe(false);
   });
 
+  it('`trill-line="double"` keeps the line and marks it double', () => {
+    const [single] = resolveTrillSpans([note({ trill: true }), note()]);
+    const [double] = resolveTrillSpans([
+      note({ trill: true, trillLine: 'double' }),
+      note(),
+    ]);
+    expect(single.double).toBe(false);
+    expect(double).toMatchObject({ hasLine: true, double: true });
+  });
+
   it('extends through a tie chain to the last tied element', () => {
     const elements = [
       note({ trill: true, tie: 'start' }),

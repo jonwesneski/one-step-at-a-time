@@ -140,4 +140,4 @@ export {
   createStandalonePhonemesSvg,
   phonemeArrowY,
 } from './phonemes';
-export { createStemCrossSvg } from './stemMark';
+export { createStemCrossSvg, createStemMarkSvg } from './stemMark';

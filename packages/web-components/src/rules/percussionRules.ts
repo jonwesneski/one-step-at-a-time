@@ -138,3 +138,12 @@ export function unsupportedDrumAttributes(
 ): string[] {
   return authored.filter((name) => pitchOnly.includes(name));
 }
+
+// A drum's position is its instrument, so a drum note always shows a head.
+export const drumAttributeValue = (
+  name: string,
+  value: string | null
+): string | null => (name === 'notehead' && value === 'none' ? null : value);
+
+export const DRUM_HEADLESS_WARNING =
+  'notehead="none" is ignored: a drum is placed by its instrument, so it keeps a head';

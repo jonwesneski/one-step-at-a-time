@@ -15,6 +15,7 @@ import {
 import { layoutBends, type ResolvedBend } from '../../rules/glissandoRules';
 import {
   forcedStemUp,
+  isHeadless,
   resolveNoteheadGlyph,
   suppressesAccidental,
   type NoteheadGlyph,
@@ -30,6 +31,7 @@ import {
   resolveStrokePlacement,
   STAFF_BAND,
   stemEndingFor,
+  stemMarkHalfHeightPx,
   TREMOLO_STROKE_HALF_HEIGHT_PX,
 } from '../../rules/tremoloRules';
 import type {
@@ -42,6 +44,7 @@ import type {
   HairpinKind,
   NoteheadType,
   NoteSize,
+  StemMark,
   StressType,
   TremoloLabel,
 } from '../../types/theory';
@@ -66,7 +69,6 @@ import {
   STACKED_TAIL_LENGTH_PX,
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
-  STEM_CROSS_SIZE_PX,
   STEM_OVERLAP_PX,
   STEM_STROKE_WIDTH_PX,
   TREMOLO_NUMERAL_GAP_PX,
@@ -91,7 +93,7 @@ import {
   placeNoteheadGlyph,
   type NoteheadPlacement,
 } from './noteheads';
-import { createStemCrossSvg } from './stemMark';
+import { createStemMarkSvg } from './stemMark';
 import {
   appendTechniqueLabels,
   appendTechniqueTextBelow,
@@ -239,7 +241,7 @@ export type NoteProps = {
   // Tremolo strokes to draw (resolved from the `tremolo` value); 0 for none.
   tremoloStrokeCount?: number;
   // A `stem-mark="cross"`.
-  stemCross?: boolean;
+  stemMark?: StemMark | null;
   // Tuplet numeral beyond the stem's end (or the strokes on a stemless head).
   tremoloTuplet?: number | null;
   // Times the articulation's length mark repeats across a row.
@@ -316,7 +318,7 @@ export const createNoteSvg = ({
   augmentationDotShiftPx = 0,
   omitsHead = false,
   tremoloStrokeCount = 0,
-  stemCross = false,
+  stemMark = null,
   tremoloTuplet = null,
   articulationRepeatCount = 1,
   tremoloLabel = null,
@@ -454,8 +456,9 @@ export const createNoteSvg = ({
   }
   headHitZone.setAttribute('fill', 'transparent');
   headHitZone.setAttribute('stroke', 'none');
+  const headless = isHeadless(notehead);
   // The shared head of a unison is drawn by the other voice's note.
-  if (!omitsHead) {
+  if (!omitsHead && !headless) {
     g.appendChild(headHitZone);
     if (headGeometry.glyph && headGeometry.placement) {
       // Glyph outlines can reach past the 32x60 viewport (a stem-down
@@ -485,7 +488,7 @@ export const createNoteSvg = ({
     }
   }
 
-  if (durationToBase[duration] === 'double-whole') {
+  if (durationToBase[duration] === 'double-whole' && !headless) {
     const headCx = headGeometry.cx;
     const headCy = headGeometry.cy;
     const barHalfHeight = headGeometry.halfHeight + 20 * scale;
@@ -567,14 +570,14 @@ export const createNoteSvg = ({
   } else if (!stemless && !noStem) {
     inkBottomY = Math.max(inkBottomY, stemTipY * NOTE_SCALE);
   }
-  if ((tremoloStrokeCount > 0 || stemCross) && (stemless || !noStem)) {
+  if ((tremoloStrokeCount > 0 || stemMark !== null) && (stemless || !noStem)) {
     // Standalone, the head stands in for staff Y 0 and nothing snaps to lines.
     const headStaffY = staffY ?? 0;
     const ending = stemEndingFor(duration, noFlags);
-    const { centerYs, crossCenterY } = resolveStrokePlacement({
+    const { centerYs, markCenterY } = resolveStrokePlacement({
       headY: headStaffY,
       stemUp,
-      stemCross,
+      stemMark,
       strokeCount: tremoloStrokeCount,
       staff: staffY === null ? null : STAFF_BAND,
       stemLengthPx: stemless
@@ -588,11 +591,14 @@ export const createNoteSvg = ({
     const strokeX = (stemless ? headGeometry.cx : stemX) * NOTE_SCALE;
     const strokeYs = centerYs.map((y) => headCenterPxY + y - headStaffY);
     svg.setAttribute('overflow', 'visible');
-    if (crossCenterY !== null) {
-      const crossY = headCenterPxY + crossCenterY - headStaffY;
-      svg.appendChild(createStemCrossSvg(strokeX, crossY, scale));
+    if (stemMark !== null && markCenterY !== null) {
+      const crossY = headCenterPxY + markCenterY - headStaffY;
+      svg.appendChild(createStemMarkSvg(stemMark, strokeX, crossY, scale));
       if (stemless && stemUp) {
-        inkTopY = Math.min(inkTopY, crossY - (scale * STEM_CROSS_SIZE_PX) / 2);
+        inkTopY = Math.min(
+          inkTopY,
+          crossY - scale * stemMarkHalfHeightPx(stemMark)
+        );
       }
     }
     if (strokeYs.length > 0) {
@@ -761,7 +767,7 @@ export const createNoteSvg = ({
     );
   }
 
-  if (arpeggio && qualifiedElementName === 'svg') {
+  if (arpeggio && qualifiedElementName === 'svg' && !headless) {
     const headCenterY = headGeometry.cy * NOTE_SCALE;
     const headLeftX = (headGeometry.cx - headGeometry.halfWidth) * NOTE_SCALE;
     const accidentalLeftX =
@@ -892,7 +898,7 @@ export function noteAugmentationDotLayout({
   scale = 1,
 }: NoteDotLayoutInput): NoteDotLayout | null {
   const dotCount = durationToDotCount[duration];
-  if (dotCount === 0 || rowStaffYs?.length === 0) {
+  if (dotCount === 0 || rowStaffYs?.length === 0 || isHeadless(notehead)) {
     return null;
   }
   const stemUp = forcedStemUp(notehead) ?? requestedStemUp;

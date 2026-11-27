@@ -3475,6 +3475,68 @@ describe('unpitched, stem-mark and plain reminders', () => {
   });
 });
 
+describe('headless notes and the multiphonic M', () => {
+  it('draws only the stem of a headless note: no head, ledger line, accidental or dot', () => {
+    const staff = makeStaff();
+    const note = renderNote(staff, 'F#', 6, 'dotted-quarter');
+    expect(note.shadowRoot!.querySelector('.head')).not.toBeNull();
+    expect(note.shadowRoot!.querySelectorAll('.ledger-line').length).toBe(3);
+    note.setAttribute('notehead', 'none');
+    expect(note.shadowRoot!.querySelector('.head')).toBeNull();
+    expect(note.shadowRoot!.querySelector('.head-hit-zone')).toBeNull();
+    expect(note.shadowRoot!.querySelectorAll('.ledger-line').length).toBe(0);
+    expect(note.shadowRoot!.querySelector('.accidental')).toBeNull();
+    expect(note.shadowRoot!.querySelector('.augmentation-dots')).toBeNull();
+    expect(note.shadowRoot!.querySelector('.stem')).not.toBeNull();
+    expect((note as NoteElementType).augmentationDotsRightEdgePx).toBeNull();
+  });
+
+  it('warns about a headless semibreve and a headless grace note', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('duration', 'whole');
+    note.setAttribute('notehead', 'none');
+    note.setAttribute('grace', 'D');
+    note.setAttribute('grace-notehead', 'none');
+    document.body.appendChild(note);
+    const messages = warn.mock.calls.map(([message]) => String(message));
+    expect(messages.some((m) => m.includes('needs a stem'))).toBe(true);
+    expect(messages.some((m) => m.includes('needs its head'))).toBe(true);
+    expect(note.shadowRoot!.querySelector('.grace-head')).not.toBeNull();
+    warn.mockRestore();
+  });
+
+  it('draws a plain cross at every value', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('duration', 'half');
+    note.setAttribute('notehead', 'x');
+    document.body.appendChild(note);
+    const circled = note.shadowRoot!.querySelector('.head')!.getAttribute('d');
+    note.setAttribute('notehead', 'x-plain');
+    const plain = note.shadowRoot!.querySelector('.head')!.getAttribute('d');
+    note.setAttribute('duration', 'quarter');
+    note.setAttribute('notehead', 'x');
+    expect(plain).not.toBe(circled);
+    expect(note.shadowRoot!.querySelector('.head')!.getAttribute('d')).toBe(
+      plain
+    );
+  });
+
+  it('draws an M through the stem, standalone and in a staff', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.stemMark = 'multiphonic';
+    document.body.appendChild(note);
+    expect(note.getAttribute('stem-mark')).toBe('multiphonic');
+    expect(note.shadowRoot!.querySelector('.stem-multiphonic')).not.toBeNull();
+    expect(note.shadowRoot!.querySelector('.stem-cross')).toBeNull();
+    const inStaff = renderNote(makeStaff(), 'A', 4);
+    inStaff.setAttribute('stem-mark', 'multiphonic');
+    expect(
+      inStaff.shadowRoot!.querySelector('.stem-multiphonic')
+    ).not.toBeNull();
+  });
+});
+
 describe('technique-text and dynamic-text', () => {
   const textOf = (note: Element): Element | null =>
     note.shadowRoot!.querySelector('.technique-text');

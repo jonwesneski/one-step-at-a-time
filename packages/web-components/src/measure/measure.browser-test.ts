@@ -644,6 +644,17 @@ test.describe(`${MUSIC_MEASURE} group connectors`, () => {
     expect(glyphs[0].className).toContain('bracket');
   });
 
+  test('a bracket before a grouped staff encloses its staff alone', async ({
+    page,
+  }) => {
+    await buildMeasureWithStaves(page, [null, 'bracket', 'grand', null]);
+    const glyphs = await readGroupConnectorGlyphs(page);
+    expect(glyphs.map((glyph) => glyph.className)).toEqual([
+      expect.stringContaining('bracket'),
+      expect.stringContaining('brace'),
+    ]);
+  });
+
   test('two independent grand-staff pairs in one measure render two brace glyphs', async ({
     page,
   }) => {

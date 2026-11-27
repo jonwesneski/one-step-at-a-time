@@ -1,6 +1,8 @@
 import { NoteElement } from '../note/note';
 import {
+  DRUM_HEADLESS_WARNING,
   DRUM_NOTE_ATTRIBUTES,
+  drumAttributeValue,
   parsePercussionInstrument,
   PERCUSSION_INSTRUMENT_MAP,
   PITCH_ONLY_NOTE_ATTRIBUTES,
@@ -22,7 +24,7 @@ const SUPPORTED = new Set(DRUM_NOTE_ATTRIBUTES);
  * @customElement music-drum-note
  * @attr {PercussionInstrument} instrument - Drumset instrument: `kick`, `snare`, `hi-hat`, `ride`, `crash`, `floor-tom`, `mid-tom`, `high-tom` or `hi-hat-pedal`. Sets the staff position and notehead (x for cymbals).
  * @attr {DurationType} duration - Note value, optionally dotted (`dotted-quarter`). Defaults to `quarter`.
- * @attr {NoteheadType} notehead - Overrides the instrument's notehead, e.g. `x` on the snare for a cross-stick.
+ * @attr {NoteheadType} notehead - Overrides the instrument's notehead, e.g. `x` on the snare for a cross-stick. `none` is ignored, with a warning: a drum keeps its head.
  * @attr {'start' | 'continue' | 'end' | 'laissez-vibrer'} tie - Start or end of a tie, `continue` for the middle of a tie chain (tied into and on to the next), or `laissez-vibrer` (alias `lv`) for a "let ring" tie, as on a crash.
  * @attr {boolean} lv-label - Adds an "l.v." label to a `laissez-vibrer` tie.
  * @attr {TieStyle} tie-style - `dotted` draws the tie this note starts as a dotted line. Defaults to `solid`.
@@ -74,11 +76,24 @@ export class DrumNoteElement extends NoteElement implements IDrumNoteElement {
   }
 
   protected override readAttribute(name: string): string | null {
-    return SUPPORTED.has(name) ? this.getAttribute(name) : null;
+    return SUPPORTED.has(name)
+      ? drumAttributeValue(name, this.getAttribute(name))
+      : null;
   }
 
   protected override readsAttribute(name: string): boolean {
-    return SUPPORTED.has(name) && this.hasAttribute(name);
+    return SUPPORTED.has(name) && this.readAttribute(name) !== null;
+  }
+
+  override attributeChangedCallback(
+    name: string,
+    oldValue: string | null,
+    newValue: string | null
+  ): void {
+    super.attributeChangedCallback(name, oldValue, newValue);
+    if (name === 'notehead' && newValue === 'none' && oldValue !== newValue) {
+      console.warn(`[${MUSIC_DRUM_NOTE}] ${DRUM_HEADLESS_WARNING}`);
+    }
   }
 
   protected override get staffPosition(): StaffPosition | null {

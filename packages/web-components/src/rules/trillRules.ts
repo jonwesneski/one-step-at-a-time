@@ -41,6 +41,8 @@ export type TrillLineSpan = {
   lastTiedIndex: number;
   /** Whether a wavy line (or end-notch) should be drawn at all — false only when `trill-line="none"` explicitly suppresses it (sign only). */
   hasLine: boolean;
+  /** `trill-line="double"`: two lines after the one sign. */
+  double: boolean;
   /**
    * Index the wavy line runs up to (exclusive) — the next element in the
    * stream after `lastTiedIndex`, whose own left edge (or accidental) the
@@ -126,6 +128,7 @@ function buildTrillSpan(
     startIndex,
     lastTiedIndex,
     hasLine,
+    double: source.trillLine === 'double',
     endBeforeIndex,
     stopped,
     writtenNoteAnchorIndex,

@@ -1722,7 +1722,7 @@
               "type": {
                 "text": "StemMark"
               },
-              "description": "`cross` draws a small × through the stem, near its end (see `<music-note>`)."
+              "description": "`cross` draws a small × through the stem, near its end; `multiphonic` an M (see `<music-note>`)."
             },
             {
               "name": "size",
@@ -1877,9 +1877,9 @@
             {
               "name": "trill-line",
               "type": {
-                "text": "'auto' | 'none'"
+                "text": "TrillLineMode"
               },
-              "description": "`auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value)."
+              "description": "`auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value); `double` draws two lines after the sign, a double trill."
             },
             {
               "name": "trill-stop",
@@ -2012,14 +2012,14 @@
               "type": {
                 "text": "NoteheadType"
               },
-              "description": "Notehead shape for every tone: `normal` (default), `x`, `diamond`, or `diamond-white` (see `<music-note>`). A slotted `<music-note>`'s own `notehead` overrides it for that tone — e.g. an artificial harmonic: a normal stopped note plus a `diamond-white` (\"harmonic\") touched note. `triangle-up` / `triangle-down` are not supported on chords (a normal head is drawn, with a warning)."
+              "description": "Notehead shape for every tone: `normal` (default), `x`, `x-plain`, `diamond`, `diamond-white` or `none` (see `<music-note>`); a tone with `none` draws no head, accidental, dot or ledger line. A slotted `<music-note>`'s own `notehead` overrides it for that tone — e.g. an artificial harmonic: a normal stopped note plus a `diamond-white` (\"harmonic\") touched note. `triangle-up` / `triangle-down` are not supported on chords (a normal head is drawn, with a warning)."
             },
             {
               "name": "grace-notehead",
               "type": {
                 "text": "string"
               },
-              "description": "Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. The property also accepts a `(NoteheadType | null)[]`."
+              "description": "Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles and `none` are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`."
             },
             {
               "name": "tremolo",
@@ -5141,7 +5141,7 @@
               "type": {
                 "text": "NoteheadType"
               },
-              "description": "Notehead for every stroke that doesn't take one from its instrument or set its own.",
+              "description": "Notehead for every stroke that doesn't take one from its instrument or set its own. `none` is ignored, with a warning.",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -5570,7 +5570,7 @@
               "type": {
                 "text": "StemMark"
               },
-              "description": "`cross` draws a small × through the stem, near its end (see `<music-note>`).",
+              "description": "`cross` draws a small × through the stem, near its end; `multiphonic` an M (see `<music-note>`).",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -5762,9 +5762,9 @@
             {
               "name": "trill-line",
               "type": {
-                "text": "'auto' | 'none'"
+                "text": "TrillLineMode"
               },
-              "description": "`auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value).",
+              "description": "`auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value); `double` draws two lines after the sign, a double trill.",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -5929,7 +5929,7 @@
               "type": {
                 "text": "string"
               },
-              "description": "Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. The property also accepts a `(NoteheadType | null)[]`.",
+              "description": "Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles and `none` are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`.",
               "inheritedFrom": {
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
@@ -7911,7 +7911,7 @@
               "type": {
                 "text": "NoteheadType"
               },
-              "description": "Overrides the instrument's notehead, e.g. `x` on the snare for a cross-stick.",
+              "description": "Overrides the instrument's notehead, e.g. `x` on the snare for a cross-stick. `none` is ignored, with a warning: a drum keeps its head.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -8525,9 +8525,9 @@
             {
               "name": "trill-line",
               "type": {
-                "text": "'auto' | 'none'"
+                "text": "TrillLineMode"
               },
-              "description": "`auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value).",
+              "description": "`auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value); `double` draws two lines after the sign, a double trill.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -8703,7 +8703,7 @@
               "type": {
                 "text": "StemMark"
               },
-              "description": "`cross` draws a small × through the stem, near its end: air blown through the instrument with the given fingering. With tremolo strokes it stands between them and the head.",
+              "description": "`cross` draws a small × through the stem, near its end: air blown through the instrument with the given fingering. `multiphonic` draws an M there: a multiphonic on the written pitch. With tremolo strokes either stands between them and the head.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -8725,7 +8725,7 @@
               "type": {
                 "text": "string"
               },
-              "description": "Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`.",
+              "description": "Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles and `none` are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -11791,9 +11791,9 @@
             {
               "name": "trill-line",
               "type": {
-                "text": "'auto' | 'none'"
+                "text": "TrillLineMode"
               },
-              "description": "`auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value)."
+              "description": "`auto` (default) draws the wavy extension line, matching standard practice; `none` suppresses it (e.g. bare sign only on an isolated, untied note-value); `double` draws two lines after the sign, a double trill."
             },
             {
               "name": "trill-stop",
@@ -11926,7 +11926,7 @@
               "type": {
                 "text": "NoteheadType"
               },
-              "description": "Notehead shape: `normal` (default); `x` (\"x-head\", circled at half-note length and longer — a dead / muted (ghost) note, cymbal or cross-stick, spoken text, indefinite pitch); `diamond` (black or white by duration — guitar harmonics, silently depressed piano keys); `diamond-white` (white at every duration — the \"harmonic\" notehead for bowed strings and woodwinds, also multiphonics and unvoiced vocal sounds); `triangle-up` / `triangle-down` (\"highest / lowest possible note\"). A triangle ignores `note`/`octave`: inside a staff it is placed outside the stave (or beyond the run of notes it follows), never takes ledger lines, an accidental or a beam, and its stem always points away from its tip. Standalone, a triangle draws at the note's own position."
+              "description": "Notehead shape: `normal` (default); `x` (\"x-head\", circled at half-note length and longer — a dead / muted (ghost) note, cymbal or cross-stick, spoken text, indefinite pitch); `x-plain` (a cross never circled, for multiphonics); `diamond` (black or white by duration — guitar harmonics, silently depressed piano keys); `diamond-white` (white at every duration — the \"harmonic\" notehead for bowed strings and woodwinds, also multiphonics and unvoiced vocal sounds); `triangle-up` / `triangle-down` (\"highest / lowest possible note\"). A triangle ignores `note`/`octave`: inside a staff it is placed outside the stave (or beyond the run of notes it follows), never takes ledger lines, an accidental or a beam, and its stem always points away from its tip. Standalone, a triangle draws at the note's own position. `none` draws the stem alone, from where the head would stand (key clicks, clapped keys): no head, ledger line, accidental, dot or arpeggio, while the pitch still sets the stem and beam; it needs a stem, so a semibreve warns."
             },
             {
               "name": "unpitched",
@@ -11940,7 +11940,7 @@
               "type": {
                 "text": "StemMark"
               },
-              "description": "`cross` draws a small × through the stem, near its end: air blown through the instrument with the given fingering. With tremolo strokes it stands between them and the head."
+              "description": "`cross` draws a small × through the stem, near its end: air blown through the instrument with the given fingering. `multiphonic` draws an M there: a multiphonic on the written pitch. With tremolo strokes either stands between them and the head."
             },
             {
               "name": "size",
@@ -11954,7 +11954,7 @@
               "type": {
                 "text": "string"
               },
-              "description": "Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`."
+              "description": "Comma-separated `NoteheadType` per grace note, aligned by index with `grace`; empty slots are `normal`. Triangles and `none` are not supported on grace notes. The property also accepts a `(NoteheadType | null)[]`."
             },
             {
               "name": "tremolo",

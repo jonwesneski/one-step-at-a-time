@@ -125,6 +125,7 @@ import {
   resolveStemTipY,
   resolveTriangleStaffYs,
   resolveUnpitchedStaffY,
+  suppressesLedgerLines,
   type TrianglePlacementEntry,
 } from './rules/noteheadRules';
 import {
@@ -2724,7 +2725,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
         entryScale(element) *
         unbeamedTremoloStemExtensionPx({
           tremolo: element.tremolo,
-          stemCross: element.stemMark === 'cross',
+          stemMark: element.stemMark,
           duration: element.duration,
           headYs,
           stemUp: stemDirections[i],
@@ -2735,7 +2736,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
             durationToFlagCountMap.get(element.duration) ?? 0,
             !(
               isNoteNodeName(element.nodeName) &&
-              isTriangle((element as NoteElementType).notehead)
+              suppressesLedgerLines((element as NoteElementType).notehead)
             )
           ),
         })
@@ -2780,7 +2781,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
       return tremoloInkPastStemPx({
         tremolo: noteOrChord.tremolo ?? null,
-        stemCross: noteOrChord.stemMark === 'cross',
+        stemMark: noteOrChord.stemMark,
         tuplet: noteOrChord.tremoloTuplet ?? null,
         duration: element.duration,
         headY: stemDirections[i] ? Math.min(...headYs) : Math.max(...headYs),
@@ -7670,7 +7671,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           reach,
           stemlessTremoloReachPx({
             tremolo: noteOrChord.tremolo ?? null,
-            stemCross: noteOrChord.stemMark === 'cross',
+            stemMark: noteOrChord.stemMark,
             tuplet: noteOrChord.tremoloTuplet ?? null,
             duration: noteOrChord.duration,
             headY:
@@ -8305,12 +8306,17 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       const startX = signStartX + TRILL_SIGN_WIDTH_PX + TRILL_SIGN_LINE_GAP_PX;
       const y = TRILL_ABOVE_STAFF_BOTTOM_Y - lift;
 
-      const line = createTrillLineSvg({ startX, endX, bottomY: y });
+      const line = createTrillLineSvg({
+        startX,
+        endX,
+        bottomY: y,
+        double: span.double,
+      });
       if (line) {
         container.appendChild(line);
       }
       if (span.stopped) {
-        container.appendChild(createTrillNotchSvg(endX, y));
+        container.appendChild(createTrillNotchSvg(endX, y, span.double));
       }
     }
 

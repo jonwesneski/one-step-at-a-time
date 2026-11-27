@@ -1,6 +1,7 @@
 import type {
   ArticulationType,
   DurationType,
+  StemMark,
   TremoloBeamAttach,
   TremoloLabel,
   TremoloValue,
@@ -20,6 +21,7 @@ import {
   STEM_CROSS_HEAD_GAP_PX,
   STEM_CROSS_SIZE_PX,
   STEM_CROSS_STROKE_GAP_PX,
+  STEM_MULTIPHONIC_HEIGHT_PX,
   TREMOLO_BEAM_MAX_LENGTH_PX,
   TREMOLO_BEAM_MIN_LENGTH_PX,
   TREMOLO_BEAM_STEM_GAP_PX,
@@ -290,8 +292,8 @@ export type StrokePlacementInput = {
    * strokes stay on the stem as it is.
    */
   canLengthenStem: boolean;
-  /** A `stem-mark="cross"` on the stem, between the strokes and the head. */
-  stemCross?: boolean;
+  /** A `stem-mark` on the stem, between the strokes and the head. */
+  stemMark?: StemMark | null;
 };
 
 export type StrokePlacement = {
@@ -299,15 +301,18 @@ export type StrokePlacement = {
   centerYs: number[];
   /** Shortest base-length stem (px) that carries the strokes; 0 when stemless. */
   stemFloorPx: number;
-  /** The stem cross's centre, or null without one. */
-  crossCenterY: number | null;
+  /** The stem mark's centre, or null without one. */
+  markCenterY: number | null;
 };
 
-const STEM_CROSS_HALF_PX = STEM_CROSS_SIZE_PX / 2;
+/** Half the height (px) of a stem mark's ink along the stem. */
+export const stemMarkHalfHeightPx = (mark: StemMark): number =>
+  (mark === 'multiphonic' ? STEM_MULTIPHONIC_HEIGHT_PX : STEM_CROSS_SIZE_PX) /
+  2;
 
-// How far (px) the cross's centre stays from the head's.
-const STEM_CROSS_NEAREST_PX =
-  STAFF_Y_STEP + STEM_CROSS_HEAD_GAP_PX + STEM_CROSS_HALF_PX;
+// How far (px) the mark's centre stays from the head's.
+const stemMarkNearestPx = (mark: StemMark): number =>
+  STAFF_Y_STEP + STEM_CROSS_HEAD_GAP_PX + stemMarkHalfHeightPx(mark);
 
 /**
  * Where the strokes go, and how long the stem must be to carry them. Strokes
@@ -321,53 +326,52 @@ const STEM_CROSS_NEAREST_PX =
 export function resolveStrokePlacement(
   input: StrokePlacementInput
 ): StrokePlacement {
-  if (!input.stemCross) {
-    return { ...placeStrokes(input, 0), crossCenterY: null };
+  const mark = input.stemMark ?? null;
+  if (mark === null) {
+    return { ...placeStrokes(input, 0), markCenterY: null };
   }
   const { headY, stemUp, strokeCount, stemLengthPx, ending, canLengthenStem } =
     input;
+  const half = stemMarkHalfHeightPx(mark);
+  const nearest = stemMarkNearestPx(mark);
   const outward = stemUp ? -1 : 1;
   if (strokeCount > 0) {
-    // The strokes keep to the stem's end; the cross stands inside them.
+    // The strokes keep to the stem's end; the mark stands inside them.
     const strokes = placeStrokes(
       input,
-      STEM_CROSS_NEAREST_PX +
-        STEM_CROSS_HALF_PX +
-        STEM_CROSS_STROKE_GAP_PX +
-        TREMOLO_STROKE_HALF_HEIGHT_PX
+      nearest + half + STEM_CROSS_STROKE_GAP_PX + TREMOLO_STROKE_HALF_HEIGHT_PX
     );
     const first = outward * (strokes.centerYs[0] - headY);
     return {
       ...strokes,
-      crossCenterY:
+      markCenterY:
         headY +
         outward *
           (first -
             TREMOLO_STROKE_HALF_HEIGHT_PX -
             STEM_CROSS_STROKE_GAP_PX -
-            STEM_CROSS_HALF_PX),
+            half),
     };
   }
   if (stemLengthPx === null) {
     return {
       centerYs: [],
       stemFloorPx: 0,
-      crossCenterY: headY + outward * STEM_CROSS_NEAREST_PX,
+      markCenterY: headY + outward * nearest,
     };
   }
-  // A space in from a plain stem's end; clear of a tail's root or the beams.
+  // A plain stem reaches as far past any mark as past a cross centred a
+  // space in from its end; a tail's root or the beams are cleared instead.
   const endRoom =
     ending.kind === 'plain'
-      ? STEM_CROSS_END_INSET_PX - STEM_CROSS_HALF_PX
+      ? STEM_CROSS_END_INSET_PX - stemMarkHalfHeightPx('cross')
       : stemEndRoomPx(ending);
-  const atStemEnd = stemLengthPx - endRoom - STEM_CROSS_HALF_PX;
-  const center = canLengthenStem
-    ? Math.max(atStemEnd, STEM_CROSS_NEAREST_PX)
-    : atStemEnd;
+  const atStemEnd = stemLengthPx - endRoom - half;
+  const center = canLengthenStem ? Math.max(atStemEnd, nearest) : atStemEnd;
   return {
     centerYs: [],
-    stemFloorPx: center + STEM_CROSS_HALF_PX + endRoom,
-    crossCenterY: headY + outward * center,
+    stemFloorPx: center + half + endRoom,
+    markCenterY: headY + outward * center,
   };
 }
 
@@ -375,7 +379,7 @@ export function resolveStrokePlacement(
 function placeStrokes(
   input: StrokePlacementInput,
   minFirstPx: number
-): Omit<StrokePlacement, 'crossCenterY'> {
+): Omit<StrokePlacement, 'markCenterY'> {
   const {
     headY,
     stemUp,
@@ -503,7 +507,7 @@ export function tremoloStemFloorPx(
  */
 export function unbeamedTremoloStemExtensionPx(input: {
   tremolo: TremoloValue | null;
-  stemCross?: boolean;
+  stemMark?: StemMark | null;
   duration: DurationType;
   headYs: readonly number[];
   stemUp: boolean;
@@ -511,9 +515,9 @@ export function unbeamedTremoloStemExtensionPx(input: {
   stemExtensionPx: number;
 }): number {
   const { tremolo, duration, headYs, stemUp, staff, stemExtensionPx } = input;
-  const stemCross = input.stemCross ?? false;
+  const stemMark = input.stemMark ?? null;
   if (
-    (tremolo === null && !stemCross) ||
+    (tremolo === null && stemMark === null) ||
     headYs.length === 0 ||
     isStemlessDuration(duration)
   ) {
@@ -522,7 +526,7 @@ export function unbeamedTremoloStemExtensionPx(input: {
   const floor = tremoloStemFloorPx({
     headY: stemUp ? Math.min(...headYs) : Math.max(...headYs),
     stemUp,
-    stemCross,
+    stemMark,
     strokeCount: tremolo === null ? 0 : resolveStrokeCount(tremolo, duration),
     staff,
     stemLengthPx: BASE_STEM_LENGTH_PX + stemExtensionPx,
@@ -537,14 +541,14 @@ export function unbeamedTremoloStemExtensionPx(input: {
  */
 export function beamedTremoloMinimumStemPx(input: {
   tremolo: TremoloValue | null;
-  stemCross?: boolean;
+  stemMark?: StemMark | null;
   duration: DurationType;
   nearestHeadY: number;
   stemUp: boolean;
 }): number | undefined {
   const { tremolo, duration, nearestHeadY, stemUp } = input;
-  const stemCross = input.stemCross ?? false;
-  if (tremolo === null && !stemCross) {
+  const stemMark = input.stemMark ?? null;
+  if (tremolo === null && stemMark === null) {
     return undefined;
   }
   const ending = stemEndingFor(duration, true);
@@ -552,7 +556,7 @@ export function beamedTremoloMinimumStemPx(input: {
   return tremoloStemFloorPx({
     headY: nearestHeadY,
     stemUp,
-    stemCross,
+    stemMark,
     strokeCount: tremolo === null ? 0 : resolveStrokeCount(tremolo, duration),
     staff: STAFF_BAND,
     stemLengthPx:
@@ -615,7 +619,7 @@ export function tremoloConsistencyWarnings(input: {
 
 type TremoloInkInput = {
   tremolo: TremoloValue | null;
-  stemCross?: boolean;
+  stemMark?: StemMark | null;
   tuplet: number | null;
   duration: DurationType;
   /** The head nearest the stem's open end. */
@@ -629,14 +633,14 @@ type TremoloInkInput = {
  */
 export function stemlessTremoloReachPx(input: TremoloInkInput): number {
   const { tremolo, tuplet, duration, headY, stemUp } = input;
-  const stemCross = input.stemCross ?? false;
-  if (tremolo === null && !stemCross) {
+  const stemMark = input.stemMark ?? null;
+  if (tremolo === null && stemMark === null) {
     return 0;
   }
-  const { centerYs, crossCenterY } = resolveStrokePlacement({
+  const { centerYs, markCenterY } = resolveStrokePlacement({
     headY,
     stemUp,
-    stemCross,
+    stemMark,
     strokeCount: tremolo === null ? 0 : resolveStrokeCount(tremolo, duration),
     staff: STAFF_BAND,
     stemLengthPx: null,
@@ -648,7 +652,8 @@ export function stemlessTremoloReachPx(input: TremoloInkInput): number {
       ? TREMOLO_NUMERAL_EXTENT_PX
       : 0;
   return centerYs.length === 0
-    ? Math.abs((crossCenterY ?? headY) - headY) + STEM_CROSS_HALF_PX
+    ? Math.abs((markCenterY ?? headY) - headY) +
+        (stemMark === null ? 0 : stemMarkHalfHeightPx(stemMark))
     : Math.abs(centerYs[centerYs.length - 1] - headY) +
         TREMOLO_STROKE_HALF_HEIGHT_PX +
         numeral;

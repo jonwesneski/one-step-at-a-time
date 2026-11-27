@@ -361,10 +361,12 @@ export const STRESSES: StressType[] = ['stressed', 'unstressed'];
 export const NOTEHEADS: NoteheadType[] = [
   'normal',
   'x',
+  'x-plain',
   'diamond',
   'diamond-white',
   'triangle-up',
   'triangle-down',
+  'none',
 ];
 
 export const PERCUSSION_INSTRUMENTS: PercussionInstrument[] = [
@@ -422,7 +424,7 @@ export const GRACE_DURATIONS: GraceDuration[] = [
 
 export const GRACE_SLURS: GraceSlur[] = ['auto', 'none'];
 
-export const TRILL_LINE_MODES: TrillLineMode[] = ['auto', 'none'];
+export const TRILL_LINE_MODES: TrillLineMode[] = ['auto', 'none', 'double'];
 
 export const OCTAVE_SHIFT_AMOUNTS: OctaveShiftAmount[] = [
   '8va',
@@ -484,7 +486,7 @@ export const UNPITCHED_PLACEMENTS: UnpitchedPlacement[] = [
   'written',
 ];
 
-export const STEM_MARKS: StemMark[] = ['cross'];
+export const STEM_MARKS: StemMark[] = ['cross', 'multiphonic'];
 
 export const NOTE_SIZES: NoteSize[] = ['normal', 'cue'];
 

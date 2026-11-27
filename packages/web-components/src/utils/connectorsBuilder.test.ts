@@ -365,9 +365,9 @@ describe('partitionByVoice', () => {
     expect(byVoice.get(2)).toEqual([noteInVoice2]);
   });
 
-  it('regression: two voices both sustaining an open (for-less) tie across a measure boundary — partitioning prevents the LIFO stack from mispairing them', () => {
-    // Both voices tie across the barline. An unpartitioned walk would pair
-    // measure 2 voice 1's `end` with measure 1 voice 2's `start`.
+  it('regression: two voices both sustaining an open (for-less) tie on one pitch across a measure boundary — partitioning prevents the stack from mispairing them', () => {
+    // Both voices tie the same pitch across the barline. An unpartitioned walk
+    // would pair measure 2 voice 1's `end` with measure 1 voice 2's `start`.
     const m1Voice1 = document.createElement(MUSIC_VOICE);
     const m1Voice2 = document.createElement(MUSIC_VOICE);
     const m1Staff = document.createElement(MUSIC_STAFF);
@@ -377,9 +377,9 @@ describe('partitionByVoice', () => {
     const root = document.createElement('div');
 
     const v1Start = makeNote({ note: 'C', octave: '4', tie: 'start' });
-    const v2Start = makeNote({ note: 'E', octave: '4', tie: 'start' });
+    const v2Start = makeNote({ note: 'C', octave: '4', tie: 'start' });
     const v1End = makeNote({ note: 'C', octave: '4', tie: 'end' });
-    const v2End = makeNote({ note: 'E', octave: '4', tie: 'end' });
+    const v2End = makeNote({ note: 'C', octave: '4', tie: 'end' });
 
     m1Voice1.append(v1Start);
     m1Voice2.append(v2Start);
@@ -391,7 +391,7 @@ describe('partitionByVoice', () => {
     document.body.appendChild(root);
 
     // Without partitioning, pairing the flat document-order list directly
-    // mispairs voice 1's end with voice 2's start (LIFO stack top).
+    // mispairs voice 1's end with voice 2's start (the latest start of its pitch).
     const unpartitionedPairs = pairConnectors(collectNoteLikeElements(root));
     expect(unpartitionedPairs).toHaveLength(2);
     expect(unpartitionedPairs.find((p) => p.end === v1End)?.start).toBe(
@@ -509,6 +509,98 @@ describe('pairConnectors', () => {
     const pairs = pairConnectors([a, b]);
     expect(pairs).toHaveLength(1);
     expect(warn).toHaveBeenCalled();
+  });
+
+  describe('chords tied tone by tone', () => {
+    const tiedChord = (tones: string[], tie: string): HTMLElement => {
+      const chord = document.createElement(MUSIC_CHORD);
+      chord.setAttribute('duration', 'half');
+      for (const tone of tones) {
+        chord.append(
+          makeNote({ note: tone.slice(0, -1), octave: tone.slice(-1), tie })
+        );
+      }
+      return chord;
+    };
+    const pitchWarnings = () =>
+      (console.warn as jest.Mock).mock.calls.filter(([message]) =>
+        String(message).includes('different pitches')
+      );
+    const pairedPitches = (pairs: ConnectorPair[]) =>
+      pairs.map((pair) => [
+        (pair.start as NoteElementType).note,
+        (pair.end as NoteElementType).note,
+      ]);
+
+    it.each([[['C4', 'E4', 'G4']], [['C4', 'E4', 'G4', 'C5']]])(
+      'pairs %j level, inside one bar',
+      (tones) => {
+        const root = document.createElement('div');
+        root.append(tiedChord(tones, 'start'), tiedChord(tones, 'end'));
+        const pairs = pairConnectors(collectNoteLikeElements(root));
+        expect(pairs).toHaveLength(tones.length);
+        for (const pair of pairs) {
+          const start = pair.start as NoteElementType;
+          const end = pair.end as NoteElementType;
+          expect([end.note, end.octave]).toEqual([start.note, start.octave]);
+        }
+        expect(pitchWarnings()).toHaveLength(0);
+      }
+    );
+
+    it('pairs level over a barline', () => {
+      const root = document.createElement('div');
+      const tones = ['C4', 'E4', 'G4'];
+      for (const tie of ['start', 'end']) {
+        const measure = document.createElement(MUSIC_MEASURE);
+        const staff = document.createElement(MUSIC_STAFF);
+        staff.append(tiedChord(tones, tie));
+        measure.append(staff);
+        root.append(measure);
+      }
+      const pairs = pairConnectors(collectNoteLikeElements(root));
+      expect(pairedPitches(pairs).sort()).toEqual([
+        ['C', 'C'],
+        ['E', 'E'],
+        ['G', 'G'],
+      ]);
+      expect(pitchWarnings()).toHaveLength(0);
+    });
+
+    it('still warns about an end no start matches', () => {
+      const root = document.createElement('div');
+      root.append(
+        tiedChord(['C4', 'E4', 'G4'], 'start'),
+        tiedChord(['C4', 'F4', 'G4'], 'end')
+      );
+      const pairs = pairConnectors(collectNoteLikeElements(root));
+      expect(pairs).toHaveLength(3);
+      expect(pitchWarnings()).toHaveLength(1);
+    });
+
+    it('carries a chain on through tie="continue" by pitch', () => {
+      const root = document.createElement('div');
+      root.append(
+        tiedChord(['C4', 'E4', 'G4'], 'start'),
+        tiedChord(['C4', 'E4', 'G4'], 'continue'),
+        tiedChord(['C4', 'E4', 'G4'], 'end')
+      );
+      const pairs = pairConnectors(collectNoteLikeElements(root));
+      expect(pairs).toHaveLength(6);
+      expect(pairedPitches(pairs).every(([a, b]) => a === b)).toBe(true);
+      expect(pitchWarnings()).toHaveLength(0);
+    });
+
+    it('ties a chord tone to a lone note of its pitch', () => {
+      const root = document.createElement('div');
+      const chord = tiedChord(['C4', 'E4', 'G4'], 'start');
+      const lone = makeNote({ note: 'C', octave: '4', tie: 'end' });
+      root.append(chord, lone);
+      const pairs = pairConnectors(collectNoteLikeElements(root));
+      expect(pairs.find((pair) => pair.end === lone)?.start).toBe(
+        chord.children[0]
+      );
+    });
   });
 
   it('warns on orphan end (no matching start)', () => {

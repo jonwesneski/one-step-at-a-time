@@ -46,6 +46,12 @@ import {
   splitGlissandoAcrossRows,
 } from '../rules/glissandoRules';
 import { computeGraceFootprintWidth } from '../rules/graceRules';
+import {
+  matchTieStart,
+  tiedInto,
+  type TiePitch,
+  tiePitchesMatch,
+} from '../rules/tieRules';
 import type {
   ArpeggioElementType,
   ChordElementType,
@@ -102,6 +108,7 @@ import {
   parseGlissandoShape,
   parseSlurStyle,
   parseTieStyle,
+  parseTieValue,
 } from './parsers';
 import {
   BULGE_STEP_PX,
@@ -463,6 +470,27 @@ const validateTiePitch = (
   return undefined;
 };
 
+const tiePitchOf = (note: NoteLikeElementType): TiePitch | null => {
+  if (note.tagName.toLowerCase() === MUSIC_GUITAR_NOTE) {
+    const guitar = note as unknown as { string: number; fret: number | string };
+    return { kind: 'fret', string: guitar.string, fret: guitar.fret };
+  }
+  if (!isNoteNodeName(note.tagName)) {
+    return null;
+  }
+  const element = note as NoteElementType;
+  const placement = element.unpitched ?? null;
+  if (placement !== null && placement !== 'written') {
+    return { kind: 'placement', placement };
+  }
+  return {
+    kind: 'pitch',
+    note: element.note,
+    octave: element.octave ?? null,
+    quarterTone: element.quarterTone ?? null,
+  };
+};
+
 export const pairConnectors = (
   notes: readonly NoteLikeElementType[]
 ): ConnectorPair[] => {
@@ -545,6 +573,21 @@ export const pairConnectors = (
               `[connectorsBuilder] ${kind} end with for="${forId}" has no matching start; falling back to stack top`
             );
           }
+        }
+
+        if (!startEntry && kind === 'tie' && stack.length > 0) {
+          const open = stack.map((entry) => tiePitchOf(entry.note));
+          const end = tiePitchOf(note);
+          const laterEnds = open.some((start) => tiePitchesMatch(start, end))
+            ? []
+            : notes
+                .slice(noteIndex + 1)
+                .filter((later) =>
+                  tiedInto(parseTieValue(later.getAttribute('tie')))
+                )
+                .map(tiePitchOf);
+          const index = matchTieStart(open, end, laterEnds);
+          startEntry = stack.splice(index, 1)[0];
         }
 
         if (!startEntry) {

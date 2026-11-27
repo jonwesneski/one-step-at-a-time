@@ -2347,12 +2347,15 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
               startX: lineStartX,
               endX: lineEndX,
               bottomY: y,
+              double: span.double,
             });
             if (line) {
               overlay.appendChild(line);
             }
             if (segment.stopAtLocalIndex !== null) {
-              overlay.appendChild(createTrillNotchSvg(lineEndX, y));
+              overlay.appendChild(
+                createTrillNotchSvg(lineEndX, y, span.double)
+              );
             }
           }
         }

@@ -270,6 +270,8 @@ export type StressType = 'stressed' | 'unstressed';
  * - `x`              crossed head ("x-head"), circled at half-note length and
  *                    longer. Read as a dead / muted (ghost) note, a cymbal or
  *                    cross-stick, spoken text, or indefinite pitch.
+ * - `x-plain`        a cross at every duration, never circled: multiphonics,
+ *                    and any cross that must not read as a circled one.
  * - `diamond`        black or white by duration: guitar harmonics, silently
  *                    depressed piano keys.
  * - `diamond-white`  white at every duration: the "harmonic" notehead for
@@ -278,14 +280,18 @@ export type StressType = 'stressed' | 'unstressed';
  * - `triangle-up` /
  *   `triangle-down`  "highest / lowest possible note". The staff places it
  *                    outside the stave and forces the stem away from the tip.
+ * - `none`           no head: the stem alone, from where the head would stand
+ *                    (key clicks, clapped keys). Not on drums or grace notes.
  */
 export type NoteheadType =
   | 'normal'
   | 'x'
+  | 'x-plain'
   | 'diamond'
   | 'diamond-white'
   | 'triangle-up'
-  | 'triangle-down';
+  | 'triangle-down'
+  | 'none';
 
 /**
  * Arpeggio (rolled / spread chord) sign, drawn as a vertical wavy line left of
@@ -363,9 +369,10 @@ export type EndingNumbering = 'consecutive' | 'duplicate';
 /**
  * `'auto'` (default) draws the wavy extension line, matching standard
  * engraving practice; `'none'` suppresses it for the rare case an engraver
- * wants the bare sign only on an isolated, untied note-value.
+ * wants the bare sign only on an isolated, untied note-value; `'double'` draws
+ * two lines after the one sign, a double trill (two keys alternating).
  */
-export type TrillLineMode = 'auto' | 'none';
+export type TrillLineMode = 'auto' | 'none' | 'double';
 
 /**
  * Controls how a trill's line restates itself after a system break, once its
@@ -471,8 +478,11 @@ export type BreathMark = 'tick' | 'comma';
  */
 export type UnpitchedPlacement = 'top' | 'bottom' | 'written';
 
-/** A mark through a note's stem: `cross`, air through the instrument. */
-export type StemMark = 'cross';
+/**
+ * A mark through a note's stem: `cross`, air through the instrument;
+ * `multiphonic`, an M asking for a multiphonic on the written pitch.
+ */
+export type StemMark = 'cross' | 'multiphonic';
 
 /** A note's size: `cue` draws it at ¾, as sung or optional notes. */
 export type NoteSize = 'normal' | 'cue';

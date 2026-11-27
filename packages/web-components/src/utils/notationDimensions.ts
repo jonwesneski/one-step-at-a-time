@@ -1523,6 +1523,12 @@ export const TRILL_ABOVE_STAFF_GAP_PX = STAFF_LINE_SPACING * 0.6;
 /** Rendered peak-to-peak vertical height (px) of the wavy line. */
 export const TRILL_WAVE_HEIGHT_PX = STAFF_LINE_SPACING * 0.9;
 
+/**
+ * Wave height (px) of each line of a double trill; the two span the sign's
+ * height, the upper level with its top. = 0.55 × STAFF_LINE_SPACING
+ */
+export const TRILL_DOUBLE_WAVE_HEIGHT_PX = STAFF_LINE_SPACING * 0.55;
+
 /** Gap (px) between the sign's right edge and the wavy line's start. */
 export const TRILL_SIGN_LINE_GAP_PX = STAFF_LINE_SPACING * 0.3;
 
@@ -1766,6 +1772,12 @@ export const TREMOLO_STROKE_END_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
 
 /** Height and width (px) of a stem's `cross`. = 0.9 × STAFF_LINE_SPACING */
 export const STEM_CROSS_SIZE_PX = STAFF_LINE_SPACING * 0.9;
+
+/** Width (px) of a stem's multiphonic `M`. = 2.4 × STAFF_LINE_SPACING */
+export const STEM_MULTIPHONIC_WIDTH_PX = STAFF_LINE_SPACING * 2.4;
+
+/** Height (px) of a stem's multiphonic `M`. = 1.3 × STAFF_LINE_SPACING */
+export const STEM_MULTIPHONIC_HEIGHT_PX = STAFF_LINE_SPACING * 1.3;
 
 /** Stroke width (px) of a stem cross's arms. = 0.1 × STAFF_LINE_SPACING */
 export const STEM_CROSS_STROKE_WIDTH_PX = STAFF_LINE_SPACING * 0.1;
