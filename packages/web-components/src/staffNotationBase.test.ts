@@ -28,6 +28,7 @@ import {
   MIDDLE_STAFF_Y,
   MIN_NOTE_WIDTH,
   MIN_STEM_LENGTH_PX,
+  SIGN_STAFF_CLEARANCE_PX,
   STAFF_BOTTOM_LINE_Y,
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
@@ -1755,6 +1756,83 @@ describe('staffNotationBase reported widths', () => {
     row.style.display = 'flex';
     document.body.appendChild(row);
     expect(ownMinWidth(renderStaff(shortEnd, row).staff)).toMatch(/^\d+px$/);
+  });
+});
+
+describe('staffNotationBase signs', () => {
+  const renderNotes = (markup: string) => {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    staff.innerHTML = markup;
+    document.body.appendChild(staff);
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  };
+  const notesOf = (staff: any) =>
+    Array.from(staff.querySelectorAll(MUSIC_NOTE)) as any[];
+  const textY = (staff: any) =>
+    Number(
+      staff.shadowRoot
+        .querySelector('.technique-labels-container .technique-text')
+        .getAttribute('y')
+    );
+
+  it('lifts technique text over a sign, and the staff’s top margin with it', () => {
+    const note = (sign: string) =>
+      `<music-note note="E" octave="5" duration="quarter" technique-text="slap" ${sign}></music-note>`;
+    const plain = renderNotes(note(''));
+    const signed = renderNotes(note('sign="plus,circle"'));
+    expect(textY(signed)).toBeLessThan(textY(plain));
+    expect(parseFloat(signed.style.marginTop || '0')).toBeGreaterThan(
+      parseFloat(plain.style.marginTop || '0')
+    );
+  });
+
+  it('stands clear above the stave, and lines up a beamed run', () => {
+    const staff = renderNotes(
+      ['C4', 'E4', 'G4', 'B4']
+        .map(
+          (pitch) =>
+            `<music-note note="${pitch[0]}" octave="${pitch[1]}" duration="eighth" sign="plus"></music-note>`
+        )
+        .join('')
+    );
+    const bottoms = notesOf(staff).map((note) => note.signPlacement.bottomY);
+    expect(new Set(bottoms).size).toBe(1);
+    expect(bottoms[0]).toBeLessThanOrEqual(
+      STAFF_TOP_LINE_Y - SIGN_STAFF_CLEARANCE_PX
+    );
+  });
+
+  it('moves a stem-down note’s tenuto out of the stave under its plus (±)', () => {
+    const staff = renderNotes(
+      '<music-note note="B" octave="4" duration="quarter" stem-direction="down" articulation="tenuto" sign="plus"></music-note>' +
+        '<music-note note="B" octave="4" duration="quarter" stem-direction="down" articulation="tenuto"></music-note>'
+    );
+    const [signed, plain] = notesOf(staff);
+    expect(signed.signPlacement.articulationLiftPx).toBeGreaterThan(0);
+    expect(plain.signPlacement).toBeNull();
+    const tenutoY = (note: any) =>
+      Number(
+        note.shadowRoot.querySelector('.articulations line').getAttribute('y1')
+      );
+    expect(tenutoY(signed)).toBeLessThan(tenutoY(plain));
+  });
+
+  it('forgets its placement when the sign is removed', () => {
+    const staff = renderNotes(
+      '<music-note note="G" octave="4" duration="quarter" sign="circle"></music-note>'
+    );
+    const [note] = notesOf(staff);
+    expect(note.signPlacement).not.toBeNull();
+    note.removeAttribute('sign');
+    staff.shadowRoot
+      .querySelector('slot')
+      .dispatchEvent(new Event('slotchange'));
+    expect(note.signPlacement).toBeNull();
+    expect(note.shadowRoot.querySelector('.signs')).toBeNull();
   });
 });
 

@@ -27,6 +27,7 @@ import {
 } from '../../rules/glissandoRules';
 import { GraceNoteDescriptor } from '../../rules/graceRules';
 import { isHeadless } from '../../rules/noteheadRules';
+import { signStackHeightPx } from '../../rules/signRules';
 import {
   durationToBase,
   durationToDotCount,
@@ -58,6 +59,7 @@ import {
   BREATH_MARK_INK_GAP_PX,
   BREATH_MARK_STANDALONE_GAP_PX,
   GRACE_MAIN_GAP_PX,
+  SIGN_GAP_PX,
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
   STEM_OVERLAP_PX,
@@ -99,6 +101,7 @@ import {
   type NoteProps,
 } from './note';
 import { createStandalonePhonemesSvg } from './phonemes';
+import { createSignsSvg } from './signs';
 import { createStemMarkSvg } from './stemMark';
 import {
   appendTechniqueLabels,
@@ -172,6 +175,8 @@ export const createChordSvg = ({
   augmentationDotRows = null,
   tremoloStrokeCount = 0,
   stemMark = null,
+  signs = null,
+  signPlacement = null,
   tremoloTuplet = null,
   articulationRepeatCount = 1,
   tremoloLabel = null,
@@ -385,6 +390,17 @@ export const createChordSvg = ({
     }
   }
   const labelHead = noteHeadGeometry(stemUp, base, noFlags, 'normal', scale);
+  if (signs !== null) {
+    const signsBottomY =
+      signPlacement !== null
+        ? chordToneHeadCenterY(signPlacement.bottomY, stemUp, base, noFlags)
+        : inkTopY - SIGN_GAP_PX;
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(
+      createSignsSvg(signs, labelHead.cx * NOTE_SCALE, signsBottomY)
+    );
+    inkTopY = Math.min(inkTopY, signsBottomY - signStackHeightPx(signs));
+  }
   const labelLeftX = (labelHead.cx - labelHead.halfWidth) * NOTE_SCALE;
   appendTechniqueLabels(
     svg,
@@ -777,7 +793,11 @@ export const createChordSvg = ({
     stress,
     stemUp,
     noteHeadCenterX,
-    noteHeadCenterY,
+    noteHeadCenterY:
+      noteHeadCenterY -
+      (signs !== null && !stemUp && articulationStemAnchorBeamLevels === null
+        ? (signPlacement?.articulationLiftPx ?? 0) / NOTE_SCALE
+        : 0),
     stemAnchor:
       articulationStemAnchorBeamLevels !== null
         ? stemBeamJunctionPosition(

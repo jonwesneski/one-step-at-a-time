@@ -386,6 +386,22 @@ export function articulationStackDepth(
 }
 
 /**
+ * How far (600-unit space) from the notehead's centre the nearest
+ * notehead-anchored mark's ink starts; 0 with no marks.
+ */
+export function articulationStackNearDepth(
+  articulation: ArticulationType | null | undefined,
+  stress: StressType | null | undefined,
+  scale = 1
+): number {
+  const { rows } = markRows(articulation, stress);
+  if (rows.length === 0) {
+    return 0;
+  }
+  return scale * (headAnchoredOffsets(rows)[0] - rows[0].extent.towardHead);
+}
+
+/**
  * Build the articulation marks for one note/chord as an SVG <g> in the note's
  * 600-unit coordinate space. The combined `articulation` value is split into its
  * accent prefix and length/hold token. All marks are placed on the side opposite

@@ -545,7 +545,7 @@ test.describe('multi-voice staff', () => {
 
     // Neither the trill sign nor the line overlaps voice 1's notehead/stem;
     // they're checked separately since two code paths draw them
-    // (#trillLineLiftClearingOtherVoices).
+    // (#trillLineLift).
     for (const noteRect of result.voice1NoteRects) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- checked above
       expect(rectsOverlap(result.signRect!, noteRect)).toBe(false);

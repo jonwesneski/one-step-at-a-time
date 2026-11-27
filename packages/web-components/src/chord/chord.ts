@@ -22,6 +22,7 @@ import {
   triangleUnsupportedWarning,
 } from '../rules/noteheadRules';
 import { parsePhonemes, phonemesWarning } from '../rules/phonemeRules';
+import { parseSigns, signWarning } from '../rules/signRules';
 import { textAttributeWarning } from '../rules/techniqueTextRules';
 import { durationToDotCount } from '../rules/theoryConsts';
 import { generateYCoordinates, getChordNotes } from '../rules/theoryHelpers';
@@ -45,6 +46,7 @@ import type {
   IChordElement,
   NoteElementType,
   NoteLetterOctave,
+  SignPlacement,
   TieValue,
 } from '../types/elements';
 import type {
@@ -68,6 +70,7 @@ import type {
   Note,
   NoteheadType,
   NoteLetter,
+  NoteSign,
   NoteSize,
   Octave,
   OctaveContinuationMode,
@@ -206,6 +209,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this chord starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement.
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
  * @attr {AccidentalReminder} accidental-reminder - Shows every tone's accidental already in force as a reminder: bare or `bracketed` in parentheses, `plain` without. A slotted `<music-note>`'s own `accidental-reminder` marks just that tone, and its own `unpitched` makes that tone unpitched.
+ * @attr {string} sign - Comma-separated signs above the chord, stacked upward in that order (see `<music-note>`), centred on its main head column.
  * @attr {StemMark} stem-mark - `cross` draws a small × through the stem, near its end; `multiphonic` an M (see `<music-note>`).
  * @attr {NoteSize} size - `cue` draws the chord at ¾ size (see `<music-note>`). Unset, a chord takes its `<music-voice>`'s `size`.
  * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin.
@@ -294,6 +298,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'dynamic-reminder',
       'accidental-reminder',
       'stem-mark',
+      'sign',
       'size',
       'quarter-tone',
       'crescendo',
@@ -356,6 +361,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
   #stemExtension = 0;
   #dottedTieAcrossBarline = false;
   #trillSignExtraLift = 0;
+  #signPlacement: SignPlacement | null = null;
   #articulationStemAnchorBeamLevels: number | null = null;
   #augmentationDotRows: number[] | null = null;
   #noFlags = false;
@@ -471,6 +477,24 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       return;
     }
     this.#trillSignExtraLift = v;
+    this.#scheduleRender();
+  }
+
+  // Where the staff puts this chord's signs; null standalone.
+  get signPlacement(): SignPlacement | null {
+    return this.#signPlacement;
+  }
+  set signPlacement(v: SignPlacement | null) {
+    if (
+      v === this.#signPlacement ||
+      (v !== null &&
+        this.#signPlacement !== null &&
+        v.bottomY === this.#signPlacement.bottomY &&
+        v.articulationLiftPx === this.#signPlacement.articulationLiftPx)
+    ) {
+      return;
+    }
+    this.#signPlacement = v;
     this.#scheduleRender();
   }
 
@@ -802,6 +826,16 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       this.removeAttribute('stem-mark');
     } else {
       this.setAttribute('stem-mark', value);
+    }
+  }
+  get sign(): NoteSign[] | null {
+    return parseSigns(this.readAttribute('sign'));
+  }
+  set sign(value: NoteSign[] | null) {
+    if (value === null || value.length === 0) {
+      this.removeAttribute('sign');
+    } else {
+      this.setAttribute('sign', value.join(','));
     }
   }
 
@@ -1742,6 +1776,12 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         console.warn(`[music-chord] ${phonemeWarning}`);
       }
     }
+    if (name === 'sign') {
+      const warning = signWarning(newValue);
+      if (warning !== null) {
+        console.warn(`[music-chord] ${warning}`);
+      }
+    }
     if (
       name === 'breath-mark' &&
       newValue !== null &&
@@ -1924,6 +1964,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       name === 'chord' ||
       name === 'accidental-reminder' ||
       name === 'stem-mark' ||
+      name === 'sign' ||
       name === 'size' ||
       name === 'arpeggio' ||
       name === 'arpeggio-for' ||
@@ -2229,6 +2270,8 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         trillFinishSlur: this.trillFinishSlur,
         tremoloStrokeCount: this.#tremoloStrokeCount(),
         stemMark: this.stemMark,
+        signs: this.sign,
+        signPlacement: this.#signPlacement,
         tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
         articulationRepeatCount: this.#repeatCount(),
         tremoloLabel: this.#drawnByStaff ? null : this.tremoloLabel,
@@ -2339,6 +2382,8 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
         trillFinishSlur: this.trillFinishSlur,
         tremoloStrokeCount: this.#tremoloStrokeCount(),
         stemMark: this.stemMark,
+        signs: this.sign,
+        signPlacement: this.#signPlacement,
         tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
         articulationRepeatCount: this.#repeatCount(),
         tremoloLabel: this.#drawnByStaff ? null : this.tremoloLabel,

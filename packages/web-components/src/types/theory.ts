@@ -484,6 +484,14 @@ export type UnpitchedPlacement = 'top' | 'bottom' | 'written';
  */
 export type StemMark = 'cross' | 'multiphonic';
 
+/**
+ * A sign above a note, by shape: `circle` ○ (a harmonic, two for a double
+ * harmonic; horn open; a bright timbre), `filled` ● (a dark timbre), `half` ◑, its
+ * right half filled (between the two), `plus` + (a key slap or clapped key; horn stopped),
+ * `cross` × (a key slap).
+ */
+export type NoteSign = 'circle' | 'filled' | 'half' | 'plus' | 'cross';
+
 /** A note's size: `cue` draws it at ¾, as sung or optional notes. */
 export type NoteSize = 'normal' | 'cue';
 

@@ -23,6 +23,7 @@ import type {
   Mode,
   Note,
   NoteheadType,
+  NoteSign,
   NoteSize,
   Octave,
   OctaveContinuationMode,
@@ -487,6 +488,14 @@ export const UNPITCHED_PLACEMENTS: UnpitchedPlacement[] = [
 ];
 
 export const STEM_MARKS: StemMark[] = ['cross', 'multiphonic'];
+
+export const NOTE_SIGNS: NoteSign[] = [
+  'circle',
+  'filled',
+  'half',
+  'plus',
+  'cross',
+];
 
 export const NOTE_SIZES: NoteSize[] = ['normal', 'cue'];
 

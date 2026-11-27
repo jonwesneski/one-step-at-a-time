@@ -42,6 +42,7 @@ import {
   unpitchedWarnings,
 } from '../rules/noteheadRules';
 import { parsePhonemes, phonemesWarning } from '../rules/phonemeRules';
+import { parseSigns, signWarning } from '../rules/signRules';
 import { textAttributeWarning } from '../rules/techniqueTextRules';
 import {
   articulationRepeatCount,
@@ -59,6 +60,7 @@ import type {
   GraceOctavesType,
   GraceQuarterTonesType,
   INoteElement,
+  SignPlacement,
   StaffPosition,
   TieValue,
   UnisonPart,
@@ -83,6 +85,7 @@ import type {
   Note,
   NoteheadType,
   NoteLetter,
+  NoteSign,
   NoteSize,
   Octave,
   OctaveContinuationMode,
@@ -165,6 +168,7 @@ import {
   NOTE_EVENTS,
   OCTAVES,
   STAFF_TAGS,
+  STEM_MARKS,
   TREMOLO_LABELS,
 } from '../utils/consts';
 import { MaybeHTMLElement } from '../utils/maybeHTMLElement';
@@ -225,6 +229,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
  * @attr {AccidentalReminder} accidental-reminder - Shows the accidental already in force as a reminder, e.g. at the start of a repeated section: bare or `bracketed` in parentheses, "(♮)", `plain` without. An accidental that is required anyway draws plainly.
  * @attr {UnpitchedPlacement} unpitched - Marks an unpitched sound (breath, key or valve noise): no accidental or ledger line, and no effect on later accidentals. `top` draws it in the space above the stave, `bottom` below it, and bare or `written` at its `note`/`octave` (which `top` and `bottom` don't need). Ignored on a triangle notehead. Its grace notes stand at the same place.
+ * @attr {string} sign - Comma-separated signs above the note, stacked upward in that order: `circle` ○ (a harmonic, two for a double harmonic; horn open; a bright timbre), `filled` ● (a dark timbre), `half` ◑ (between them), `plus` + (a key slap or clapped key; horn stopped), `cross` × (a key slap). Always above, outside an articulation there (`articulation="tenuto" sign="plus"` draws ±), clear of the stave; the signs of neighbouring notes line up level. Unknown entries are dropped with a warning; on a chord's own note it is ignored (set it on the chord). The property is a `NoteSign[]`.
  * @attr {StemMark} stem-mark - `cross` draws a small × through the stem, near its end: air blown through the instrument with the given fingering. `multiphonic` draws an M there: a multiphonic on the written pitch. With tremolo strokes either stands between them and the head.
  * @attr {NoteSize} size - `cue` draws the note at ¾ size (head, stem, tails, beams, dots, accidental and marks), e.g. for sung or hummed pitches; the head keeps its place on the stave. Unset, a note takes its `<music-voice>`'s `size`. A cue note never beams with a full-size one. On a chord's own note it is ignored: set it on the chord.
  * @attr {'start' | 'end'} crescendo - Start or end of a crescendo hairpin spanning to another note.
@@ -352,6 +357,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       'notehead',
       'unpitched',
       'stem-mark',
+      'sign',
       'size',
       'grace-notehead',
       'tremolo',
@@ -370,6 +376,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
   #stemExtension = 0;
   #dottedTieAcrossBarline = false;
   #trillSignExtraLift = 0;
+  #signPlacement: SignPlacement | null = null;
   #articulationStemAnchorBeamLevels: number | null = null;
   #augmentationDotRows: number[] | null = null;
   #unisonPart: UnisonPart | null = null;
@@ -491,6 +498,24 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       return;
     }
     this.#trillSignExtraLift = v;
+    this.#scheduleRender();
+  }
+
+  // Where the staff puts this note's signs; null standalone.
+  get signPlacement(): SignPlacement | null {
+    return this.#signPlacement;
+  }
+  set signPlacement(v: SignPlacement | null) {
+    if (
+      v === this.#signPlacement ||
+      (v !== null &&
+        this.#signPlacement !== null &&
+        v.bottomY === this.#signPlacement.bottomY &&
+        v.articulationLiftPx === this.#signPlacement.articulationLiftPx)
+    ) {
+      return;
+    }
+    this.#signPlacement = v;
     this.#scheduleRender();
   }
 
@@ -831,6 +856,17 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       this.removeAttribute('stem-mark');
     } else {
       this.setAttribute('stem-mark', value);
+    }
+  }
+
+  get sign(): NoteSign[] | null {
+    return parseSigns(this.readAttribute('sign'));
+  }
+  set sign(value: NoteSign[] | null) {
+    if (value === null || value.length === 0) {
+      this.removeAttribute('sign');
+    } else {
+      this.setAttribute('sign', value.join(','));
     }
   }
 
@@ -1732,6 +1768,12 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
         console.warn(`[music-note] ${phonemeWarning}`);
       }
     }
+    if (name === 'sign') {
+      const warning = signWarning(newValue);
+      if (warning !== null) {
+        console.warn(`[music-note] ${warning}`);
+      }
+    }
     if (
       name === 'breath-mark' &&
       newValue !== null &&
@@ -1934,6 +1976,7 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
       name === 'notehead' ||
       name === 'unpitched' ||
       name === 'stem-mark' ||
+      name === 'sign' ||
       name === 'size' ||
       name === 'grace-type' ||
       name === 'grace-duration' ||
@@ -2045,8 +2088,12 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
         ? [
             `stem-mark="${this.readAttribute(
               'stem-mark'
-            )}" isn't cross; drawing no mark`,
+            )}" isn't ${STEM_MARKS.join(' or ')}; drawing no mark`,
           ]
+        : []),
+      ...(this.readAttribute('sign') !== null &&
+      isChordNodeName(this.parentElement?.nodeName ?? '')
+        ? ["sign on a chord's note is ignored; set it on the chord"]
         : []),
       ...unpitchedWarnings({
         value: this.readAttribute('unpitched'),
@@ -2303,6 +2350,8 @@ export class NoteElement extends MaybeHTMLElement implements INoteElement {
           ? 0
           : resolveStrokeCount(this.tremolo, this.duration),
       stemMark: this.stemMark,
+      signs: this.sign,
+      signPlacement: this.#signPlacement,
       tremoloTuplet: drawnTremoloTuplet(this.tremolo, this.tremoloTuplet),
       articulationRepeatCount: this.#repeatCount(),
       tremoloLabel: this.closest(STAFF_TAGS) ? null : this.tremoloLabel,

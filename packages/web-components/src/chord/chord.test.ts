@@ -1953,6 +1953,28 @@ describe(`${MUSIC_CHORD} headless tone`, () => {
   });
 });
 
+describe(`${MUSIC_CHORD} signs`, () => {
+  it('draws a double harmonic over the chord, standalone and in a staff', () => {
+    const chord = document.createElement(MUSIC_CHORD) as ChordElementType;
+    chord.setAttribute('chord', 'C' satisfies Chord);
+    chord.sign = ['circle', 'circle'];
+    document.body.appendChild(chord);
+    expect(chord.getAttribute('sign')).toBe('circle,circle');
+    expect(
+      chord.shadowRoot!.querySelectorAll('.signs .sign-circle')
+    ).toHaveLength(2);
+    const inStaff = renderChordByNotes(makeStaff(), [
+      { value: 'F#', octave: 5 },
+      { value: 'C#', octave: 6 },
+    ]);
+    inStaff.setAttribute('sign', 'circle,circle');
+    expect(inStaff.signPlacement).not.toBeNull();
+    expect(
+      inStaff.shadowRoot!.querySelectorAll('.signs .sign-circle')
+    ).toHaveLength(2);
+  });
+});
+
 describe(`${MUSIC_CHORD} stem length`, () => {
   const renderChord = (
     staffYCoordinates: number[],

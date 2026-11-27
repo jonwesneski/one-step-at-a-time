@@ -278,6 +278,15 @@
             },
             {
               "kind": "field",
+              "name": "#signPlacement",
+              "privacy": "private",
+              "type": {
+                "text": "SignPlacement | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
               "name": "#articulationStemAnchorBeamLevels",
               "privacy": "private",
               "type": {
@@ -528,6 +537,13 @@
             },
             {
               "kind": "field",
+              "name": "signPlacement",
+              "type": {
+                "text": "SignPlacement | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "articulationStemAnchorBeamLevels",
               "type": {
                 "text": "number | null"
@@ -738,6 +754,13 @@
               "name": "stemMark",
               "type": {
                 "text": "StemMark | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sign",
+              "type": {
+                "text": "NoteSign[] | null"
               }
             },
             {
@@ -1723,6 +1746,13 @@
                 "text": "StemMark"
               },
               "description": "`cross` draws a small × through the stem, near its end; `multiphonic` an M (see `<music-note>`)."
+            },
+            {
+              "name": "sign",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated signs above the chord, stacked upward in that order (see `<music-note>`), centred on its main head column."
             },
             {
               "name": "size",
@@ -3341,6 +3371,19 @@
             },
             {
               "kind": "field",
+              "name": "#signPlacement",
+              "privacy": "private",
+              "type": {
+                "text": "SignPlacement | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#articulationStemAnchorBeamLevels",
               "privacy": "private",
               "type": {
@@ -3630,6 +3673,17 @@
               "name": "trillSignExtraLift",
               "type": {
                 "text": "number"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "signPlacement",
+              "type": {
+                "text": "SignPlacement | null"
               },
               "inheritedFrom": {
                 "name": "ChordElement",
@@ -3964,6 +4018,17 @@
               "name": "stemMark",
               "type": {
                 "text": "StemMark | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sign",
+              "type": {
+                "text": "NoteSign[] | null"
               },
               "inheritedFrom": {
                 "name": "ChordElement",
@@ -5346,6 +5411,17 @@
               }
             },
             {
+              "name": "sign",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated signs above, stacked upward (see `<music-note>`): `circle` ○, `filled` ●, `half` ◑, `plus` +, `cross` ×.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
               "name": "stem-direction",
               "type": {
                 "text": "StemDirection"
@@ -6142,6 +6218,19 @@
             },
             {
               "kind": "field",
+              "name": "#signPlacement",
+              "privacy": "private",
+              "type": {
+                "text": "SignPlacement | null"
+              },
+              "default": "null",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#articulationStemAnchorBeamLevels",
               "privacy": "private",
               "type": {
@@ -6445,6 +6534,17 @@
               "name": "trillSignExtraLift",
               "type": {
                 "text": "number"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "signPlacement",
+              "type": {
+                "text": "SignPlacement | null"
               },
               "inheritedFrom": {
                 "name": "NoteElement",
@@ -6786,6 +6886,17 @@
               "name": "stemMark",
               "type": {
                 "text": "StemMark | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sign",
+              "type": {
+                "text": "NoteSign[] | null"
               },
               "inheritedFrom": {
                 "name": "NoteElement",
@@ -8110,6 +8221,17 @@
                 "text": "'stressed' | 'unstressed'"
               },
               "description": "Stress mark.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "sign",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated signs above, stacked upward (see `<music-note>`): `circle` ○, `filled` ●, `half` ◑, `plus` +, `cross` ×.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -10235,6 +10357,15 @@
             },
             {
               "kind": "field",
+              "name": "#signPlacement",
+              "privacy": "private",
+              "type": {
+                "text": "SignPlacement | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "field",
               "name": "#articulationStemAnchorBeamLevels",
               "privacy": "private",
               "type": {
@@ -10491,6 +10622,13 @@
             },
             {
               "kind": "field",
+              "name": "signPlacement",
+              "type": {
+                "text": "SignPlacement | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "articulationStemAnchorBeamLevels",
               "type": {
                 "text": "number | null"
@@ -10704,6 +10842,13 @@
               "name": "stemMark",
               "type": {
                 "text": "StemMark | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "sign",
+              "type": {
+                "text": "NoteSign[] | null"
               }
             },
             {
@@ -11943,6 +12088,13 @@
               "description": "`cross` draws a small × through the stem, near its end: air blown through the instrument with the given fingering. `multiphonic` draws an M there: a multiphonic on the written pitch. With tremolo strokes either stands between them and the head."
             },
             {
+              "name": "sign",
+              "type": {
+                "text": "string"
+              },
+              "description": "Comma-separated signs above the note, stacked upward in that order: `circle` ○ (a harmonic, two for a double harmonic; horn open; a bright timbre), `filled` ● (a dark timbre), `half` ◑ (between them), `plus` + (a key slap or clapped key; horn stopped), `cross` × (a key slap). Always above, outside an articulation there (`articulation=\"tenuto\" sign=\"plus\"` draws ±), clear of the stave; the signs of neighbouring notes line up level. Unknown entries are dropped with a warning; on a chord's own note it is ignored (set it on the chord). The property is a `NoteSign[]`."
+            },
+            {
               "name": "size",
               "type": {
                 "text": "NoteSize"
@@ -12837,6 +12989,26 @@
             {
               "kind": "field",
               "name": "#crossVoiceElements",
+              "privacy": "private",
+              "default": "new Set<NoteElementType | ChordElementType>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#signTopYs",
+              "privacy": "private",
+              "default": "new Map<Element, number>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#signedElements",
               "privacy": "private",
               "default": "new Set<NoteElementType | ChordElementType>()",
               "inheritedFrom": {
@@ -17593,6 +17765,42 @@
             },
             {
               "kind": "method",
+              "name": "#layoutSigns",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#signTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#entryInkY",
               "privacy": "private",
               "return": {
@@ -17618,6 +17826,10 @@
                   "type": {
                     "text": "boolean"
                   }
+                },
+                {
+                  "name": "withSigns",
+                  "default": "true"
                 }
               ],
               "inheritedFrom": {
@@ -17918,7 +18130,7 @@
             },
             {
               "kind": "method",
-              "name": "#trillLineLiftClearingOtherVoices",
+              "name": "#trillLineLift",
               "privacy": "private",
               "return": {
                 "type": {
@@ -22648,6 +22860,26 @@
             },
             {
               "kind": "field",
+              "name": "#signTopYs",
+              "privacy": "private",
+              "default": "new Map<Element, number>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#signedElements",
+              "privacy": "private",
+              "default": "new Set<NoteElementType | ChordElementType>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#unisonReserves",
               "privacy": "private",
               "default": "new Map<VoiceKey, Map<number, number>>()",
@@ -27350,6 +27582,42 @@
             },
             {
               "kind": "method",
+              "name": "#layoutSigns",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#signTopY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#entryInkY",
               "privacy": "private",
               "return": {
@@ -27375,6 +27643,10 @@
                   "type": {
                     "text": "boolean"
                   }
+                },
+                {
+                  "name": "withSigns",
+                  "default": "true"
                 }
               ],
               "inheritedFrom": {
@@ -27675,7 +27947,7 @@
             },
             {
               "kind": "method",
-              "name": "#trillLineLiftClearingOtherVoices",
+              "name": "#trillLineLift",
               "privacy": "private",
               "return": {
                 "type": {

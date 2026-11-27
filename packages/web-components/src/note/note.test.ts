@@ -26,6 +26,7 @@ import {
   ARPEGGIO_VERTICAL_OVERSHOOT_PX,
   FLAG_STEM_STEP_PX,
   GRACE_SCALE,
+  SIGN_CROSS_SIZE_PX,
   STAFF_LINE_SPACING,
   STAFF_LINE_THICKNESS_PX,
   TWO_TAILS_LENGTH_PX,
@@ -3534,6 +3535,99 @@ describe('headless notes and the multiphonic M', () => {
     expect(
       inStaff.shadowRoot!.querySelector('.stem-multiphonic')
     ).not.toBeNull();
+  });
+});
+
+describe('signs', () => {
+  const signGlyphs = (element: Element): string[] =>
+    Array.from(element.shadowRoot!.querySelectorAll('.signs .sign')).map(
+      (glyph) => glyph.getAttribute('class')!.replace('sign ', '')
+    );
+
+  it('round-trips the property, a bare list or empty clearing it', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    expect(note.sign).toBeNull();
+    note.sign = ['circle', 'circle'];
+    expect(note.getAttribute('sign')).toBe('circle,circle');
+    expect(note.sign).toEqual(['circle', 'circle']);
+    note.sign = [];
+    expect(note.hasAttribute('sign')).toBe(false);
+    note.setAttribute('sign', 'plus');
+    note.sign = null;
+    expect(note.hasAttribute('sign')).toBe(false);
+  });
+
+  it('draws its own signs standalone, stacked above its ink', () => {
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('sign', 'circle,plus');
+    document.body.appendChild(note);
+    expect(signGlyphs(note)).toEqual(['sign-circle', 'sign-plus']);
+    const [circle, plus] = Array.from(
+      note.shadowRoot!.querySelectorAll('.signs .sign')
+    );
+    const centerY = (glyph: Element) =>
+      Number(
+        glyph.querySelector('circle')?.getAttribute('cy') ??
+          glyph.querySelector('line:last-child')!.getAttribute('y1')
+      );
+    expect(centerY(plus)).toBeLessThan(centerY(circle));
+  });
+
+  it('warns about unknown entries and about a sign on a chord’s note', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const note = document.createElement(MUSIC_NOTE) as NoteElementType;
+    note.setAttribute('sign', 'bogus,cross');
+    document.body.appendChild(note);
+    expect(note.sign).toEqual(['cross']);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('ignoring "bogus"')
+    );
+    const chord = document.createElement(MUSIC_CHORD);
+    const tone = document.createElement(MUSIC_NOTE);
+    tone.setAttribute('note', 'C');
+    tone.setAttribute('sign', 'circle');
+    chord.appendChild(tone);
+    document.body.appendChild(chord);
+    expect(
+      warn.mock.calls.some(([message]) =>
+        String(message).includes("sign on a chord's note is ignored")
+      )
+    ).toBe(true);
+    warn.mockRestore();
+  });
+
+  it('asks the staff to lay out again when it changes', () => {
+    const staff = makeStaff();
+    const note = renderNote(staff, 'G', 4);
+    const handler = jest.fn();
+    note.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+    note.setAttribute('sign', 'plus');
+    expect(handler).toHaveBeenCalled();
+  });
+
+  it('stacks at the staff’s placement and moves an articulation above the head up under it', () => {
+    const staff = makeStaff();
+    const note = renderNote(staff, 'A', 4) as NoteElementType;
+    note.setAttribute('stem-direction', 'down');
+    note.setAttribute('articulation', 'tenuto');
+    const before = note
+      .shadowRoot!.querySelector('.articulations line')!
+      .getAttribute('y1');
+    note.setAttribute('sign', 'plus');
+    note.signPlacement = { bottomY: note.staffY! - 40, articulationLiftPx: 12 };
+    const after = note
+      .shadowRoot!.querySelector('.articulations line')!
+      .getAttribute('y1');
+    expect(Number(after)).toBeLessThan(Number(before));
+    // The plus's horizontal arm is level with its centre, 40px over the head
+    // less half its height.
+    const arm = note.shadowRoot!.querySelector('.sign-plus line')!;
+    const headY =
+      Number(note.shadowRoot!.querySelector('.head')!.getAttribute('cy')) *
+      NOTE_SCALE;
+    expect(Number(arm.getAttribute('y1'))).toBeCloseTo(
+      headY - 40 - SIGN_CROSS_SIZE_PX / 2
+    );
   });
 });
 

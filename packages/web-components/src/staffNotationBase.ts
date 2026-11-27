@@ -154,6 +154,11 @@ import {
 } from './rules/repeatWarningRules';
 import { restShiftClearOfBeam, restToYCoordinate } from './rules/restRules';
 import {
+  levelSignRows,
+  signStackHeightPx,
+  signStackPlacement,
+} from './rules/signRules';
+import {
   type BarSpacing,
   columnOffsetAt,
   computeSpacingWeights,
@@ -461,7 +466,10 @@ import {
   flattenStaffSlotElements,
   VoiceFlattenResult,
 } from './utils/slotElements';
-import { articulationStackDepth } from './utils/svgCreator/articulations';
+import {
+  articulationStackDepth,
+  articulationStackNearDepth,
+} from './utils/svgCreator/articulations';
 import {
   chordHeadExtentPx,
   chordToneHeadCenterY,
@@ -697,6 +705,9 @@ const outermostOrNull = (
 const isUnpitchedNote = (element: Element): boolean =>
   isNoteNodeName(element.nodeName) &&
   (element as NoteElementType).unpitched !== null;
+
+const staffYOfContainerY = (containerY: number): number =>
+  containerY - STAFF_Y_PADDING + NOTE_HEAD_Y_OFFSET_CORRECTION;
 
 // A staff Y's height in the transcription containers.
 const containerYOfStaffY = (staffY: number): number =>
@@ -1069,6 +1080,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // Every note and chord the last pass laid out: what it set on them (dot
   // rows, unison parts) is cleared once they leave.
   #crossVoiceElements = new Set<NoteElementType | ChordElementType>();
+  // Top (container Y) of each placed sign stack, and the elements placed.
+  #signTopYs = new Map<Element, number>();
+  #signedElements = new Set<NoteElementType | ChordElementType>();
   // Px a unison on an entry's beat moves a part right, per voice and index:
   // the entry after it keeps clear of that (see #reserveUnisonRoom).
   #unisonReserves = new Map<VoiceKey, Map<number, number>>();
@@ -5422,6 +5436,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       }
     }
 
+    // Signs go over the beams as drawn, before anything placed above them.
+    this.#layoutSigns();
+
     // Bends and labels are placed once x is known, so the budgets count where
     // they really are.
     this.#renderBends(remainingWidth);
@@ -7647,6 +7664,97 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     return top;
   }
 
+  // Places every signed note's or chord's sign stack above its own ink and
+  // the stave, and lines up the stacks of neighbouring entries in a voice.
+  #layoutSigns(): void {
+    this.#signTopYs.clear();
+    const placed = new Set<NoteElementType | ChordElementType>();
+    const staffTopLineY = containerYOfStaffY(STAFF_TOP_LINE_Y);
+    for (const state of this.#voiceRenderStates.values()) {
+      const lifts: number[] = [];
+      const bottoms = state.elements.map((element, i): number | null => {
+        if (
+          !isNoteNodeName(element.nodeName) &&
+          !isChordNodeName(element.nodeName)
+        ) {
+          return null;
+        }
+        const noteOrChord = element as NoteElementType | ChordElementType;
+        const inkTopY = this.#entryInkY(state, i, true, false);
+        if (noteOrChord.sign === null || inkTopY === null) {
+          return null;
+        }
+        const headEdgeY = this.#outerHeadEdgeY(state, i, true) ?? inkTopY;
+        const headCenterY = headEdgeY + STAFF_Y_STEP;
+        const scale = entryScale(element);
+        const articulationAbove =
+          !state.stemDirections[i] &&
+          noteOrChord.articulationStemAnchorBeamLevels === null &&
+          (noteOrChord.articulation !== null || noteOrChord.stress !== null);
+        const placement = signStackPlacement({
+          inkTopY,
+          articulation: articulationAbove
+            ? {
+                topY:
+                  headCenterY -
+                  articulationStackDepth(
+                    noteOrChord.articulation,
+                    noteOrChord.stress,
+                    scale
+                  ) *
+                    NOTE_SCALE,
+                bottomY:
+                  headCenterY -
+                  articulationStackNearDepth(
+                    noteOrChord.articulation,
+                    noteOrChord.stress,
+                    scale
+                  ) *
+                    NOTE_SCALE,
+              }
+            : null,
+          staffTopLineY,
+        });
+        lifts[i] = placement.articulationLiftPx;
+        return placement.bottomY;
+      });
+      levelSignRows(bottoms).forEach((bottomY, i) => {
+        if (bottomY === null) {
+          return;
+        }
+        const noteOrChord = state.elements[i] as
+          | NoteElementType
+          | ChordElementType;
+        noteOrChord.signPlacement = {
+          bottomY: staffYOfContainerY(bottomY),
+          articulationLiftPx: lifts[i] ?? 0,
+        };
+        this.#signTopYs.set(
+          noteOrChord,
+          bottomY - signStackHeightPx(noteOrChord.sign ?? [])
+        );
+        placed.add(noteOrChord);
+      });
+    }
+    for (const element of this.#signedElements) {
+      if (!placed.has(element)) {
+        element.signPlacement = null;
+      }
+    }
+    this.#signedElements = placed;
+  }
+
+  // Topmost Y (container) of a voice's signs; null with none.
+  #signTopY(state: VoiceRenderState): number | null {
+    return outermostOrNull(
+      state.elements.flatMap((element) => {
+        const top = this.#signTopYs.get(element);
+        return top === undefined ? [] : [top];
+      }),
+      true
+    );
+  }
+
   // Outermost ink (container Y) of entry i toward one side: its head there,
   // then a stem pointing that way with its beam and tremolo numeral, a stemless
   // head's strokes, or the marks past a head whose stem points away. Null for
@@ -7654,11 +7762,20 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   #entryInkY(
     state: VoiceRenderState,
     i: number,
-    above: boolean
+    above: boolean,
+    withSigns = true
   ): number | null {
     const headEdgeY = this.#outerHeadEdgeY(state, i, above);
     if (headEdgeY === null) {
       return null;
+    }
+    const signTopY =
+      above && withSigns ? this.#signTopYs.get(state.elements[i]) : undefined;
+    if (signTopY !== undefined) {
+      return Math.min(
+        signTopY,
+        this.#entryInkY(state, i, above, false) ?? signTopY
+      );
     }
     const sign = above ? -1 : 1;
     const headCenterY = headEdgeY - sign * STAFF_Y_STEP;
@@ -8215,13 +8332,9 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   }
 
   // Px to raise a trill's line (drawn here) and sign (drawn by the note, via
-  // trillSignExtraLift) together past any other voice's up-stem content in
-  // [startX, endX]. Never lowers them.
-  #trillLineLiftClearingOtherVoices(
-    ownVoiceKey: VoiceKey,
-    startX: number,
-    endX: number
-  ): number {
+  // trillSignExtraLift) together past any other voice's up-stem content and
+  // any voice's signs in [startX, endX]. Never lowers them.
+  #trillLineLift(ownVoiceKey: VoiceKey, startX: number, endX: number): number {
     let lift = 0;
     for (const [otherKey, otherState] of this.#voiceRenderStates) {
       if (otherKey === ownVoiceKey) {
@@ -8244,6 +8357,22 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       if (extreme !== null) {
         const requiredY = extreme - TRILL_ABOVE_STAFF_GAP_PX;
         lift = Math.max(lift, TRILL_ABOVE_STAFF_BOTTOM_Y - requiredY);
+      }
+    }
+    // Signs under the line, in any voice.
+    for (const state of this.#voiceRenderStates.values()) {
+      for (const [i, x] of state.noteXPositions) {
+        const signTopY = this.#signTopYs.get(state.elements[i]);
+        if (
+          signTopY !== undefined &&
+          x + NOTE_SVG_WIDTH >= startX &&
+          x <= endX
+        ) {
+          lift = Math.max(
+            lift,
+            TRILL_ABOVE_STAFF_BOTTOM_Y - (signTopY - TRILL_ABOVE_STAFF_GAP_PX)
+          );
+        }
       }
     }
     return lift;
@@ -8282,11 +8411,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       const endX = span.hasLine
         ? this.#trillLineEndX(state, span, width)
         : signStartX + TRILL_SIGN_WIDTH_PX;
-      const lift = this.#trillLineLiftClearingOtherVoices(
-        voiceKey,
-        signStartX,
-        endX
-      );
+      const lift = this.#trillLineLift(voiceKey, signStartX, endX);
       startElement.trillSignExtraLift = lift;
 
       if (resolvedTrillPitch?.written === true) {
@@ -8768,10 +8893,20 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
 
     // A trill can be lifted past another voice's up-stem content
-    // (#trillLineLiftClearingOtherVoices). With no x-positions yet, reserve
+    // (#trillLineLift). With no x-positions yet, reserve
     // for every other voice's whole up-stem reach.
     const hasTrillSpan = resolveTrillSpans(state.elements).length > 0;
     if (hasTrillSpan) {
+      for (const otherState of this.#voiceRenderStates.values()) {
+        const signTop = this.#signTopY(otherState);
+        if (signTop === null) {
+          continue;
+        }
+        const topY = signTop - TRILL_ABOVE_STAFF_GAP_PX - TRILL_SIGN_HEIGHT_PX;
+        if (topY < 0) {
+          budget = Math.max(budget, Math.ceil(-topY) + 2);
+        }
+      }
       for (const [otherKey, otherState] of this.#voiceRenderStates) {
         if (otherKey === voiceKey) {
           continue;
@@ -8797,6 +8932,11 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       if (labelTop !== null && labelTop < 0) {
         budget = Math.max(budget, Math.ceil(-labelTop) + 2);
       }
+    }
+
+    const signTop = this.#signTopY(state);
+    if (signTop !== null && signTop < 0) {
+      budget = Math.max(budget, Math.ceil(-signTop) + 2);
     }
 
     const breathMarkTop = this.#breathMarkTopY(voiceKey, state);

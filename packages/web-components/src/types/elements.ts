@@ -25,6 +25,7 @@ import type {
   Note,
   NoteheadType,
   NoteLetter,
+  NoteSign,
   NoteSize,
   Octave,
   OctaveContinuationMode,
@@ -84,6 +85,13 @@ export type GraceNoteheadsType = (NoteheadType | null)[] | string | null;
 export type GraceQuarterTonesType = (QuarterTone | null)[] | string | null;
 
 // A note's role in a unison with another voice (see rules/unisonRules.ts).
+/**
+ * Where a staff puts a note's or chord's signs: the stack's bottom edge in
+ * staff Y, and how far (px) an articulation above the head moves up to stand
+ * under them.
+ */
+export type SignPlacement = { bottomY: number; articulationLiftPx: number };
+
 export type UnisonPart = {
   // The other voice draws the shared head.
   omitsHead: boolean;
@@ -209,6 +217,8 @@ export interface INoteElement {
   set accidentalReminder(value: AccidentalReminder | boolean | null);
   /** A mark through the stem. */
   stemMark: StemMark | null;
+  sign: NoteSign[] | null;
+  signPlacement: SignPlacement | null;
   // Own `size`, else the closest `<music-voice>`'s.
   size: NoteSize;
   crescendo: HairpinRole | null;
@@ -469,6 +479,8 @@ export interface IChordElement {
   set accidentalReminder(value: AccidentalReminder | boolean | null);
   /** A mark through the stem. */
   stemMark: StemMark | null;
+  sign: NoteSign[] | null;
+  signPlacement: SignPlacement | null;
   // Own `size`, else the closest `<music-voice>`'s.
   size: NoteSize;
   crescendo: HairpinRole | null;

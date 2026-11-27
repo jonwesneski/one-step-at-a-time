@@ -43,6 +43,7 @@ const SUPPORTED = new Set(DRUM_NOTE_ATTRIBUTES);
  * @attr {ArticulationType} articulation - Articulation or accent, e.g. `accent`, `marcato`, `staccato`.
  * @attr {boolean} articulation-repeat - Repeats the articulation's length mark once per measured-tremolo repetition.
  * @attr {'stressed' | 'unstressed'} stress - Stress mark.
+ * @attr {string} sign - Comma-separated signs above, stacked upward (see `<music-note>`): `circle` ○, `filled` ●, `half` ◑, `plus` +, `cross` ×.
  * @attr {StemDirection} stem-direction - Forces this note's stem direction (`up`/`down`).
  * @attr {string} beam-group - Joins this note to a double-stemmed beam shared with an adjacent staff.
  * @attr {string} shared-stem-for - `id` of an element on an adjacent staff this note shares one stem with.

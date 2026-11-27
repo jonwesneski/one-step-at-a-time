@@ -1,5 +1,7 @@
 import { contourMinLengthPx } from '../../rules/bendContourRules';
 import type { Phoneme } from '../../rules/phonemeRules';
+import { signStackHeightPx } from '../../rules/signRules';
+import type { SignPlacement } from '../../types/elements';
 import { createStandalonePhonemesSvg } from './phonemes';
 // Stem geometry constants derived from createNoteSvg()'s 600-unit coordinate space
 
@@ -43,6 +45,7 @@ import type {
   DynamicMarking,
   HairpinKind,
   NoteheadType,
+  NoteSign,
   NoteSize,
   StemMark,
   StressType,
@@ -66,6 +69,7 @@ import {
   DOWN_TAIL_HEAD_ROOM_PX,
   FLAG_STEM_STEP_PX,
   QUAVER_TAIL_LENGTH_PX,
+  SIGN_GAP_PX,
   STACKED_TAIL_LENGTH_PX,
   STAFF_LINE_SPACING,
   STAFF_TOP_LINE_Y,
@@ -93,6 +97,7 @@ import {
   placeNoteheadGlyph,
   type NoteheadPlacement,
 } from './noteheads';
+import { createSignsSvg } from './signs';
 import { createStemMarkSvg } from './stemMark';
 import {
   appendTechniqueLabels,
@@ -227,7 +232,7 @@ export type NoteProps = {
   staffY?: number | null;
   // Staff-written px to raise the trill sign further above its own nominal
   // Y — set when another voice's own content occupies that territory in a
-  // multi-voice staff (see StaffNotationElementBase#trillLineYClearingOtherVoices,
+  // multi-voice staff (see StaffNotationElementBase#trillLineLift,
   // which computes the same value the sibling trill line/notch use, so the
   // sign and line move together as one visual unit).
   trillSignExtraLift?: number;
@@ -242,6 +247,10 @@ export type NoteProps = {
   tremoloStrokeCount?: number;
   // A `stem-mark="cross"`.
   stemMark?: StemMark | null;
+  signs?: readonly NoteSign[] | null;
+  // The staff's placement of the signs; null stacks them above the note's own
+  // ink.
+  signPlacement?: SignPlacement | null;
   // Tuplet numeral beyond the stem's end (or the strokes on a stemless head).
   tremoloTuplet?: number | null;
   // Times the articulation's length mark repeats across a row.
@@ -319,6 +328,8 @@ export const createNoteSvg = ({
   omitsHead = false,
   tremoloStrokeCount = 0,
   stemMark = null,
+  signs = null,
+  signPlacement = null,
   tremoloTuplet = null,
   articulationRepeatCount = 1,
   tremoloLabel = null,
@@ -522,7 +533,11 @@ export const createNoteSvg = ({
     stress,
     stemUp,
     noteHeadCenterX: Number(headXStartStr),
-    noteHeadCenterY: Number(headYStartStr),
+    noteHeadCenterY:
+      Number(headYStartStr) -
+      (signs !== null && !stemUp && articulationStemAnchorBeamLevels === null
+        ? (signPlacement?.articulationLiftPx ?? 0) / NOTE_SCALE
+        : 0),
     stemAnchor:
       articulationStemAnchorBeamLevels !== null
         ? stemBeamJunctionPosition(
@@ -626,6 +641,22 @@ export const createNoteSvg = ({
         inkTopY = Math.min(inkTopY, numeralY - TUPLET_NUMERAL_FONT_SIZE / 2);
       }
     }
+  }
+
+  if (signs !== null) {
+    const signsBottomY =
+      signPlacement !== null && staffY !== null
+        ? headCenterPxY + signPlacement.bottomY - staffY
+        : inkTopY - SIGN_GAP_PX;
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(
+      createSignsSvg(
+        signs,
+        (headless && !stemless ? stemX : headGeometry.cx) * NOTE_SCALE,
+        signsBottomY
+      )
+    );
+    inkTopY = Math.min(inkTopY, signsBottomY - signStackHeightPx(signs));
   }
 
   if (qualifiedElementName === 'svg') {

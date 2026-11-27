@@ -53,6 +53,7 @@ const DRUM_SHARED_ATTRIBUTES = [
   'stress',
   'stem-direction',
   'stem-mark',
+  'sign',
   'size',
   'beam-group',
   'shared-stem-for',

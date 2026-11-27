@@ -2077,3 +2077,26 @@ export const PHONEME_ARROW_HEAD_HEIGHT_PX = STAFF_LINE_SPACING * 0.7;
  * = 0.8 × STAFF_LINE_SPACING
  */
 export const PHONEME_ARROW_MIN_PX = STAFF_LINE_SPACING * 0.8;
+
+// ─── Signs above notes ──────────────────────────────────────────────────────
+
+/** Diameter (px) of a sign's circle (open, filled or half). = 0.6 × STAFF_LINE_SPACING */
+export const SIGN_CIRCLE_DIAMETER_PX = STAFF_LINE_SPACING * 0.6;
+
+/** Height and width (px) of a sign's plus or cross. = 0.9 × STAFF_LINE_SPACING */
+export const SIGN_CROSS_SIZE_PX = STAFF_LINE_SPACING * 0.9;
+
+/** Stroke width (px) of a sign's plus or cross. = 0.1 × STAFF_LINE_SPACING */
+export const SIGN_CROSS_STROKE_WIDTH_PX = STAFF_LINE_SPACING * 0.1;
+
+/** Stroke width (px) of an open or half circle. = STAFF_LINE_THICKNESS_PX */
+export const SIGN_CIRCLE_STROKE_WIDTH_PX = STAFF_LINE_THICKNESS_PX;
+
+/** Gap (px) between stacked signs, and between a sign and the ink under it. = 0.25 × STAFF_LINE_SPACING */
+export const SIGN_GAP_PX = STAFF_LINE_SPACING * 0.25;
+
+/** Least gap (px) between a sign, or an articulation moved up with one, and the stave's top line. = 0.5 × STAFF_LINE_SPACING */
+export const SIGN_STAFF_CLEARANCE_PX = STAFF_LINE_SPACING * 0.5;
+
+/** Signs of neighbouring notes closer in height than this (px) line up level. = 0.5 × STAFF_LINE_SPACING */
+export const SIGN_LEVEL_TOLERANCE_PX = STAFF_LINE_SPACING * 0.5;

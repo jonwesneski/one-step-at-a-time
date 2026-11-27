@@ -102,6 +102,8 @@ type DrumNotationProps = {
   'articulation-repeat'?: boolean;
   stress?: StressType;
   'stem-mark'?: StemMark;
+  // Comma-separated NoteSign list, nearest the note first.
+  sign?: string;
   size?: NoteSize;
   'stem-direction'?: StemDirection;
   'beam-group'?: string;
@@ -254,6 +256,7 @@ declare module 'react' {
         'technique-text-style'?: TextStyle;
         'accidental-reminder'?: boolean | AccidentalReminder;
         'stem-mark'?: StemMark;
+        sign?: string;
         size?: NoteSize;
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;
@@ -345,6 +348,7 @@ declare module 'react' {
         unpitched?: boolean | UnpitchedPlacement;
         'accidental-reminder'?: boolean | AccidentalReminder;
         'stem-mark'?: StemMark;
+        sign?: string;
         size?: NoteSize;
         crescendo?: HairpinRole;
         decrescendo?: HairpinRole;

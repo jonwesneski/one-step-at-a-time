@@ -1050,12 +1050,13 @@ const shadowRects = (
     .filter((rect) => rect.width > 0 || rect.height > 0)
     .map((rect) => toRootSpace(rect, rootRect));
 
-// Root-space rects of an entry's articulation marks, its grace notes' included.
+// Root-space rects of an entry's articulation marks and signs, its grace
+// notes' included.
 const articulationRectsOf = (
   note: NoteLikeElementType,
   rootRect: DOMRect
 ): ObstacleRect[] =>
-  shadowRects(stemSourceOf(note), '.articulations', rootRect);
+  shadowRects(stemSourceOf(note), '.articulations, .signs', rootRect);
 
 // Root-space rects of an entry's own heads and accidentals, with its stem and
 // tail for a slur that passes on the stem side.
