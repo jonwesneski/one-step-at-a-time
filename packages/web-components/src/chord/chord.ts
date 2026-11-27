@@ -19,6 +19,7 @@ import {
   resolveChordToneNoteheads,
   triangleUnsupportedWarning,
 } from '../rules/noteheadRules';
+import { parsePhonemes, phonemesWarning } from '../rules/phonemeRules';
 import { textAttributeWarning } from '../rules/techniqueTextRules';
 import { durationToDotCount } from '../rules/theoryConsts';
 import { generateYCoordinates, getChordNotes } from '../rules/theoryHelpers';
@@ -194,6 +195,7 @@ import { upgradeShadowedProperties } from '../utils/upgradeShadowedProperties';
  * @attr {string} for - `id` of the matching start element, to disambiguate interleaved same-kind ties/slurs/glissandi.
  * @attr {DynamicMarking} dynamic - Dynamic marking under the chord.
  * @attr {SwellShape} swell - A swell under this chord over its tie chain (just its own value when untied): bare or `both` draws `< >`, louder to the middle and softer after it; `crescendo` or `diminuendo` draws that wedge alone. On a chord tied into, it covers the rest of the chain; with swells on two chords of one chain, the earlier wins. Inside a `<music-composition>` it crosses barlines and system breaks. A hairpin starting, ending or running over any chord of the chain wins.
+ * @attr {string} phonemes - Vowels or phonemes to form while the chord sounds, below the stave in square brackets: `,` separates them (`i,u`), `>` (or `→`) joins them with an arrow (`oo>ah`), and a trailing `>` leads to the next note's first phoneme, over a barline too. The first stands under the head; with an arrow out they are spaced evenly toward the next phoneme, else the last ends with the chord's value.
  * @attr {DynamicMarking} dynamic-end - A second dynamic at the end of the chord's span (its tie chain's, with `swell`), just before the next entry or the barline. A `swell` ends before it.
  * @attr {boolean} dynamic-shared - Marks `dynamic`, and any hairpin this chord starts, as applying to both hands: the ancestor `<music-measure>` draws them centered in the gap between this staff and its next/previous sibling staff, clear of any beam, instead of at this staff's own local placement. The hairpin may end on either staff. Requires a `<music-measure>` ancestor with an adjacent staff; on a lone staff the marking is not drawn and the hairpin keeps the staff's own placement.
  * @attr {boolean} dynamic-reminder - Draws `dynamic` in brackets, "(f)", as a reminder, e.g. at the start of a repeated section. Needs `dynamic`.
@@ -335,6 +337,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       'slur-style',
       'breath-mark',
       'swell',
+      'phonemes',
     ];
   }
 
@@ -1064,6 +1067,17 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     }
   }
 
+  get phonemes(): string | null {
+    return this.readAttribute('phonemes');
+  }
+  set phonemes(value: string | null) {
+    if (value === null) {
+      this.removeAttribute('phonemes');
+    } else {
+      this.setAttribute('phonemes', value);
+    }
+  }
+
   get dynamicEnd(): DynamicMarking | null {
     return parseDynamicMarking(this.readAttribute('dynamic-end'));
   }
@@ -1692,6 +1706,12 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
     if (swellWarning !== null) {
       console.warn(`[music-chord] ${swellWarning}`);
     }
+    if (name === 'phonemes') {
+      const phonemeWarning = phonemesWarning(newValue);
+      if (phonemeWarning !== null) {
+        console.warn(`[music-chord] ${phonemeWarning}`);
+      }
+    }
     if (
       name === 'breath-mark' &&
       newValue !== null &&
@@ -1901,6 +1921,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
       name === 'tremolo-label' ||
       name === 'breath-mark' ||
       name === 'swell' ||
+      name === 'phonemes' ||
       name === 'dynamic-end' ||
       name === 'glissando-label' ||
       name === 'technique-text' ||
@@ -2185,6 +2206,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
           ? null
           : techniqueTextLabel(this.techniqueText, this.techniqueTextStyle),
         techniqueTextBelow: this.techniqueTextPlacement === 'below',
+        phonemes: this.#drawnByStaff ? null : parsePhonemes(this.phonemes),
         breathMark: this.#drawnByStaff ? null : this.breathMark,
         bends: this.#standaloneBends(),
       });
@@ -2292,6 +2314,7 @@ export class ChordElement extends MaybeHTMLElement implements IChordElement {
           ? null
           : techniqueTextLabel(this.techniqueText, this.techniqueTextStyle),
         techniqueTextBelow: this.techniqueTextPlacement === 'below',
+        phonemes: this.#drawnByStaff ? null : parsePhonemes(this.phonemes),
         breathMark: this.#drawnByStaff ? null : this.breathMark,
         bends: this.#standaloneBends(),
       });

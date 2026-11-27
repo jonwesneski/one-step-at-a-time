@@ -19,6 +19,7 @@ import {
   resolveSwellOwners,
   resolveSwellSegments,
   swellConflicts,
+  swellGapForPhonemes,
   swellMidpoint,
   type SwellPiece,
   type SwellRow,
@@ -59,6 +60,11 @@ import {
   resolveOctaveContinuationSegments,
   resolveOctaveSpans,
 } from '../rules/octaveRules';
+import {
+  parsePhonemes,
+  phonemeArrow,
+  resolvePhonemeRuns,
+} from '../rules/phonemeRules';
 import {
   type BoundaryState,
   type Component,
@@ -105,6 +111,7 @@ import {
   createOctaveExtensionLineSvg,
   createOctaveLocoLabelSvg,
   createOctaveSignSvg,
+  createPhonemeArrowSvg,
   createSwellSvg,
   createTrillContinuationSignSvg,
   createTrillLineSvg,
@@ -156,6 +163,8 @@ import {
   OCTAVE_SIGN_LEADING_GAP_PX,
   OCTAVE_SIGN_LINE_GAP_PX,
   OCTAVE_SIGN_TRAILING_GAP_PX,
+  PHONEME_ARROW_GAP_PX,
+  PHONEME_ARROW_HEAD_LENGTH_PX,
   STAFF_TOP_LINE_Y,
   STAFF_Y_PADDING,
   TRILL_ABOVE_STAFF_GAP_PX,
@@ -294,6 +303,28 @@ type SwellStaff = HTMLElement & {
     covered: ReadonlySet<Element>;
     dynamicEnds: ReadonlyMap<Element, DynamicMarking>;
   };
+};
+
+// A notation staff's phoneme rows and boxes, duck-typed like the octave
+// hooks above (client px, rows local).
+type PhonemeStaff = HTMLElement & {
+  ownPhonemeRows?: () => ReadonlyMap<unknown, number>;
+  phonemeBoxes?: (
+    element: Element
+  ) => { left: number; right: number; arrowY: number }[];
+  phonemeContinuations?: {
+    nextAnchors: ReadonlyMap<Element, number>;
+    continued: ReadonlySet<Element>;
+    rows: ReadonlyMap<unknown, number>;
+  };
+};
+
+// One phoneme of a run over a barline, with its bar's staff.
+type PhonemeEnd = {
+  element: NoteOrChordElementType;
+  index: number;
+  staff: PhonemeStaff;
+  rowIndex: number;
 };
 
 // A swell whose tie chain runs on past its bar: the composition draws it.
@@ -723,6 +754,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
         const swells = this.#crossBarSwells();
         if (this.#updateSwellContinuations(swells)) {
+          this.#alignRowStaffSpace();
+        }
+        if (this.#updatePhonemeContinuations()) {
           this.#alignRowStaffSpace();
         }
         const octaveContinuations = this.#resolveOctaveContinuations();
@@ -1488,6 +1522,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         });
       }
       this.#drawCrossBarSwells(swells, overlay, rootRect, obstaclesOf);
+      this.#drawPhonemeArrows(overlay, rootRect);
     }
 
     // Swells whose tie chain runs on past the bar of the note they start on,
@@ -1584,6 +1619,254 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
       });
       return { swells, covered };
+    }
+
+    // Each voice's phoneme runs, walked over its track across measures: the
+    // arrows that cross a barline, and the staves each run joins in a system.
+    #crossBarPhonemes(): {
+      links: { from: PhonemeEnd; to: PhonemeEnd }[];
+      shared: { voice: VoiceNumber; staves: PhonemeStaff[] }[];
+    } {
+      const links: { from: PhonemeEnd; to: PhonemeEnd }[] = [];
+      const shared: { voice: VoiceNumber; staves: PhonemeStaff[] }[] = [];
+      for (const track of this.#buildStaffTracks()) {
+        const flattened = track.map(({ staff }) =>
+          flattenStaffSlotElements(Array.from(staff.children))
+        );
+        for (const voice of [1, 2, 3] as VoiceNumber[]) {
+          const elements: NoteChordOrRestElementType[] = [];
+          const barOf: number[] = [];
+          flattened.forEach((flatten, bar) => {
+            const voiceElements = flatten.voices.get(voice)?.flatElements ?? [];
+            elements.push(...voiceElements);
+            barOf.push(...voiceElements.map(() => bar));
+          });
+          const runs = resolvePhonemeRuns(
+            elements.map((element) => ({
+              phonemes:
+                element.nodeName === MUSIC_REST_NODE
+                  ? null
+                  : parsePhonemes(
+                      (element as NoteOrChordElementType).phonemes ?? null
+                    ),
+              rest: element.nodeName === MUSIC_REST_NODE,
+            }))
+          );
+          const endOf = ({
+            entry,
+            index,
+          }: {
+            entry: number;
+            index: number;
+          }): PhonemeEnd => ({
+            element: elements[entry] as NoteOrChordElementType,
+            index,
+            staff: track[barOf[entry]].staff as PhonemeStaff,
+            rowIndex: track[barOf[entry]].rowIndex,
+          });
+          for (const run of runs) {
+            const bars = new Set(run.items.map(({ entry }) => barOf[entry]));
+            const last = run.items[run.items.length - 1];
+            if (run.end === 'open') {
+              this.#warnPhonemeOnce(elements[last.entry]);
+            } else if (run.end === 'dangling') {
+              const breaker = elements.findIndex(
+                (element, i) =>
+                  i > last.entry && element.nodeName !== MUSIC_REST_NODE
+              );
+              if (breaker >= 0 && barOf[breaker] !== barOf[last.entry]) {
+                this.#warnPhonemeOnce(elements[last.entry]);
+              }
+            }
+            if (bars.size < 2) {
+              continue;
+            }
+            run.items.slice(1).forEach((item, k) => {
+              const before = run.items[k];
+              if (barOf[item.entry] !== barOf[before.entry]) {
+                links.push({ from: endOf(before), to: endOf(item) });
+              }
+            });
+            const byRow = new Map<number, PhonemeStaff[]>();
+            for (const bar of bars) {
+              const { staff, rowIndex } = track[bar];
+              byRow.set(rowIndex, [
+                ...(byRow.get(rowIndex) ?? []),
+                staff as PhonemeStaff,
+              ]);
+            }
+            for (const staves of byRow.values()) {
+              if (staves.length > 1) {
+                shared.push({ voice, staves });
+              }
+            }
+          }
+        }
+      }
+      return { links, shared };
+    }
+
+    #warnedPhonemes = new WeakSet<Element>();
+
+    #warnPhonemeOnce(element: Element): void {
+      if (!this.#warnedPhonemes.has(element)) {
+        this.#warnedPhonemes.add(element);
+        console.warn(
+          '[music-composition] a phoneme arrow leads to no phoneme on the next note; the bracket closes after it',
+          element
+        );
+      }
+    }
+
+    // Tells each staff where an arrow out of its bar aims (the next phoneme's
+    // head, or the end of the system), which of its runs began in an earlier
+    // bar, and the row a run shares over the bars of one system. Returns
+    // whether any staff changed.
+    #updatePhonemeContinuations(): boolean {
+      const { links, shared } = this.#crossBarPhonemes();
+      const wrapper = this.shadowRoot?.querySelector<HTMLElement>(
+        '.composition-wrapper'
+      );
+      const rootRect =
+        wrapper?.getBoundingClientRect() ?? this.getBoundingClientRect();
+      const byStaff = new Map<
+        Element,
+        {
+          nextAnchors: Map<Element, number>;
+          continued: Set<Element>;
+          rows: Map<unknown, number>;
+        }
+      >();
+      const forStaff = (staff: Element) => {
+        const entry = byStaff.get(staff) ?? {
+          nextAnchors: new Map<Element, number>(),
+          continued: new Set<Element>(),
+          rows: new Map<unknown, number>(),
+        };
+        byStaff.set(staff, entry);
+        return entry;
+      };
+      for (const { from, to } of links) {
+        forStaff(from.staff).nextAnchors.set(
+          from.element,
+          from.rowIndex === to.rowIndex
+            ? this.#headCenterX(to.element, rootRect) + rootRect.left
+            : this.#rowRightOf(from.staff)
+        );
+        forStaff(to.staff).continued.add(to.element);
+      }
+      for (const { voice, staves } of shared) {
+        const ys = staves.flatMap(
+          (staff) => staff.ownPhonemeRows?.().get(voice) ?? []
+        );
+        if (ys.length === 0) {
+          continue;
+        }
+        const y = Math.max(...ys);
+        for (const staff of staves) {
+          const rows = forStaff(staff).rows;
+          rows.set(voice, Math.max(rows.get(voice) ?? y, y));
+        }
+      }
+      let changed = false;
+      for (const staff of Array.from(
+        this.querySelectorAll<PhonemeStaff>(NOTATION_STAFF_TAGS)
+      )) {
+        if (staff.phonemeContinuations === undefined) {
+          continue;
+        }
+        const before = staff.phonemeContinuations;
+        staff.phonemeContinuations = byStaff.get(staff) ?? {
+          nextAnchors: new Map(),
+          continued: new Set(),
+          rows: new Map(),
+        };
+        changed ||= staff.phonemeContinuations !== before;
+      }
+      return changed;
+    }
+
+    // The right edge (client px) of the system a staff stands in: its
+    // track's last staff in that row.
+    #rowRightOf(staff: Element): number {
+      for (const track of this.#buildStaffTracks()) {
+        const slot = track.find((candidate) => candidate.staff === staff);
+        if (slot !== undefined) {
+          const row = track.filter(
+            (candidate) => candidate.rowIndex === slot.rowIndex
+          );
+          return row[row.length - 1].staff.getBoundingClientRect().right;
+        }
+      }
+      return staff.getBoundingClientRect().right;
+    }
+
+    // The arrows of phoneme runs over a barline, at their phonemes' height;
+    // over a system break, one to the end of the system without a head and a
+    // lead-in to the next phoneme.
+    #drawPhonemeArrows(overlay: SVGSVGElement, rootRect: DOMRect): void {
+      const tracks = this.#buildStaffTracks();
+      const rowStartOf = (staff: Element): number => {
+        for (const track of tracks) {
+          const slot = track.find((candidate) => candidate.staff === staff);
+          if (slot !== undefined) {
+            const first = track.find(
+              (candidate) => candidate.rowIndex === slot.rowIndex
+            );
+            return this.#computeNotesAreaLeftForStaff(
+              (first ?? slot).staff,
+              rootRect
+            );
+          }
+        }
+        return 0;
+      };
+      for (const { from, to } of this.#crossBarPhonemes().links) {
+        const fromBox = from.staff.phonemeBoxes?.(from.element)[from.index];
+        const toBox = to.staff.phonemeBoxes?.(to.element)[to.index];
+        if (fromBox === undefined || toBox === undefined) {
+          continue;
+        }
+        const draw = (
+          arrow: { fromX: number; toX: number; head: boolean } | null,
+          y: number
+        ) => {
+          if (arrow !== null) {
+            overlay.appendChild(
+              createPhonemeArrowSvg(
+                arrow.fromX - rootRect.left,
+                arrow.toX - rootRect.left,
+                y - rootRect.top,
+                arrow.head
+              )
+            );
+          }
+        };
+        if (from.rowIndex === to.rowIndex) {
+          draw(phonemeArrow(fromBox.right, toBox.left), fromBox.arrowY);
+          continue;
+        }
+        const out = phonemeArrow(
+          fromBox.right,
+          this.#rowRightOf(from.staff) + PHONEME_ARROW_GAP_PX
+        );
+        draw(out && { ...out, head: false }, fromBox.arrowY);
+        // From the start of the system, and long enough for its head.
+        const rowStart = rowStartOf(to.staff) + rootRect.left;
+        draw(
+          phonemeArrow(
+            Math.min(
+              rowStart,
+              toBox.left -
+                2 * PHONEME_ARROW_GAP_PX -
+                PHONEME_ARROW_HEAD_LENGTH_PX -
+                CONTINUED_CONNECTOR_LEAD_PX
+            ) - PHONEME_ARROW_GAP_PX,
+            toBox.left
+          ),
+          toBox.arrowY
+        );
+      }
     }
 
     #warnedSwells = new WeakSet<Element>();
@@ -1731,10 +2014,20 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
                 : rows[row].endX,
           };
         });
+        const mid = swellMidpoint(pieces);
         const segments = resolveSwellSegments({
           shape,
           rows,
-          mid: swellMidpoint(pieces),
+          mid,
+          minGap: swellGapForPhonemes(
+            mid.x + rootRect.left,
+            entries
+              .filter((entry) => entry.rowIndex === rowIndices[mid.row])
+              .flatMap(
+                ({ element, staff }) =>
+                  (staff as PhonemeStaff).phonemeBoxes?.(element) ?? []
+              )
+          ),
         });
         if (segments === null) {
           this.#warnSwellOnce(

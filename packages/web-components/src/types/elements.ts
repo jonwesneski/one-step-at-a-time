@@ -193,6 +193,8 @@ export interface INoteElement {
   dynamicText: string | null;
   /** A second dynamic at the end of this entry's span (its swell's chain). */
   dynamicEnd: DynamicMarking | null;
+  /** Phonemes below the stave: `,` separates, `>` draws an arrow. */
+  phonemes: string | null;
   /** Technique text over (or under) this entry, `|` starting a new line. */
   techniqueText: string | null;
   techniqueTextPlacement: TextPlacement;
@@ -449,6 +451,8 @@ export interface IChordElement {
   dynamicText: string | null;
   /** A second dynamic at the end of this entry's span (its swell's chain). */
   dynamicEnd: DynamicMarking | null;
+  /** Phonemes below the stave: `,` separates, `>` draws an arrow. */
+  phonemes: string | null;
   /** Technique text over (or under) this entry, `|` starting a new line. */
   techniqueText: string | null;
   techniqueTextPlacement: TextPlacement;

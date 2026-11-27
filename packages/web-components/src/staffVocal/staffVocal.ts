@@ -193,6 +193,27 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#positionLyricsIfPresent();
     }
 
+    // Where the last verse ends (client px), which phonemes go below.
+    #lyricsBottomClientY: number | null = null;
+
+    #setLyricsBottom(clientY: number | null): void {
+      const before = this.#lyricsBottomClientY;
+      this.#lyricsBottomClientY = clientY;
+      const moved =
+        before === null || clientY === null
+          ? before !== clientY
+          : Math.abs(before - clientY) >= LYRICS_ROW_EPSILON_PX;
+      if (moved) {
+        this.relayPhonemes();
+      }
+    }
+
+    protected override phonemeFloorY(): number | null {
+      return this.#lyricsBottomClientY === null
+        ? null
+        : this.clientToContainerY(this.#lyricsBottomClientY);
+    }
+
     #boundPositionLyrics = () => this.#positionLyricsIfPresent();
 
     protected override onConnectedCallback(): void {
@@ -324,6 +345,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       if (lyricsElements.length === 0 || noteElements.length === 0) {
         this.#ownLyricsRowY = null;
         this.#reserveLyricsSpace(0, 0);
+        this.#setLyricsBottom(null);
         for (const lyricEl of lyricsElements) {
           (lyricEl as LyricsElementType).updatePositions([]);
         }
@@ -343,6 +365,9 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       this.#ownLyricsRowY = this.#computeOwnLyricsRowY(wrapperBottom);
       const rowY = this.#lyricsRowY ?? this.#ownLyricsRowY;
       this.#reserveLyricsSpace(lyricsElements.length, wrapperBottom);
+      this.#setLyricsBottom(
+        staffRect.top + rowY + lyricsElements.length * LYRICS_VERSE_SPACING_PX
+      );
 
       const warnings = new Set<string>();
       let verseIndex = 0;

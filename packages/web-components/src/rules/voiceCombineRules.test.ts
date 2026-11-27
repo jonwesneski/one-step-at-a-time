@@ -223,6 +223,19 @@ describe('detectCombinableGroups', () => {
     expect(combine(marked('C', 'sub.'), marked('E', 'dolce'))).toBe(0);
   });
 
+  it('never combines a note with phonemes', () => {
+    const voiced = note('C', 4);
+    voiced.setAttribute('phonemes', 'oo');
+    expect(
+      detectCombinableGroups(
+        new Map([
+          [1, voiceInput([voiced], [0])],
+          [2, voiceInput([note('E', 4)], [0])],
+        ])
+      )
+    ).toHaveLength(0);
+  });
+
   it('never combines a note with a bend contour', () => {
     const contoured = note('C', 4);
     contoured.setAttribute('bend-contour', 'G4');

@@ -884,3 +884,49 @@ describe(`${MUSIC_COMPOSITION} swells over a barline`, () => {
     ]);
   });
 });
+
+describe(`${MUSIC_COMPOSITION} phonemes over a barline`, () => {
+  const note = (attributes: Record<string, string>): Element => {
+    const element = document.createElement(MUSIC_NOTE);
+    element.setAttribute('note', 'E');
+    element.setAttribute('octave', '4');
+    element.setAttribute('duration', 'whole');
+    for (const [attribute, value] of Object.entries(attributes)) {
+      element.setAttribute(attribute, value);
+    }
+    return element;
+  };
+
+  it('aims the arrow at the next bar and keeps its bracket open there', async () => {
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    document.body.appendChild(composition);
+    const from = note({ phonemes: 'oo>ah>' });
+    const to = note({ phonemes: 'oo' });
+    const first = addMeasure(composition, {}, () => [from]);
+    const second = addMeasure(composition, {}, () => [to]);
+    await nextFrame();
+
+    expect([...first.phonemeContinuations.nextAnchors.keys()]).toEqual([from]);
+    expect([...second.phonemeContinuations.continued]).toEqual([to]);
+    expect([...first.phonemeContinuations.rows.keys()]).toEqual([1]);
+    expect(first.phonemeContinuations.rows.get(1)).toBe(
+      second.phonemeContinuations.rows.get(1)
+    );
+  });
+
+  it('warns once about an arrow out of the last phoneme', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const composition = document.createElement(MUSIC_COMPOSITION);
+    document.body.appendChild(composition);
+    addMeasure(composition, {}, () => [note({ phonemes: 'oo>' })]);
+    addMeasure(composition, {}, () => [note({})]);
+    await nextFrame();
+    await nextFrame();
+    expect(
+      warn.mock.calls.filter(([message]) =>
+        String(message).includes('leads to no phoneme')
+      )
+    ).toHaveLength(1);
+    warn.mockRestore();
+  });
+});

@@ -1,4 +1,6 @@
 import { contourMinLengthPx } from '../../rules/bendContourRules';
+import type { Phoneme } from '../../rules/phonemeRules';
+import { createStandalonePhonemesSvg } from './phonemes';
 // Stem geometry constants derived from createNoteSvg()'s 600-unit coordinate space
 
 import {
@@ -241,6 +243,8 @@ export type NoteProps = {
   glissandoLabel?: string | null;
   techniqueText?: TechniqueLabel | null;
   techniqueTextBelow?: boolean;
+  // Drawn under the note only standalone; a staff draws its own row.
+  phonemes?: readonly Phoneme[] | null;
   // Drawn just after the note only standalone; a staff places it in the gap
   // before the next entry.
   breathMark?: BreathMark | null;
@@ -311,6 +315,7 @@ export const createNoteSvg = ({
   glissandoLabel = null,
   techniqueText = null,
   techniqueTextBelow = false,
+  phonemes = null,
   breathMark = null,
   bend = null,
 }: NoteProps): [SVGElement | SVGGElement, number] => {
@@ -604,8 +609,24 @@ export const createNoteSvg = ({
         techniqueTextBelow ? null : techniqueText
       )
     );
+    let belowBottomY = inkBottomY;
     if (techniqueTextBelow && techniqueText !== null) {
-      appendTechniqueTextBelow(svg, headLeftX, inkBottomY, techniqueText);
+      belowBottomY = appendTechniqueTextBelow(
+        svg,
+        headLeftX,
+        inkBottomY,
+        techniqueText
+      );
+    }
+    if (phonemes !== null) {
+      svg.setAttribute('overflow', 'visible');
+      svg.appendChild(
+        createStandalonePhonemesSvg(
+          phonemes,
+          headGeometry.cx * NOTE_SCALE,
+          belowBottomY
+        )
+      );
     }
   }
 

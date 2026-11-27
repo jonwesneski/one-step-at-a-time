@@ -294,6 +294,8 @@ declare module 'react' {
         'breath-mark'?: BreathMark;
         swell?: boolean | SwellShape;
         'dynamic-end'?: DynamicMarking;
+        // `,` separates phonemes, `>` draws an arrow.
+        phonemes?: string;
       };
       'music-drum-note': WebComponentNoChildrenProps &
         DrumNotationProps & {
@@ -382,6 +384,8 @@ declare module 'react' {
         'breath-mark'?: BreathMark;
         swell?: boolean | SwellShape;
         'dynamic-end'?: DynamicMarking;
+        // `,` separates phonemes, `>` draws an arrow.
+        phonemes?: string;
       };
       'music-guitar-note': WebComponentNoChildrenProps & {
         fret?: GuitarFret;

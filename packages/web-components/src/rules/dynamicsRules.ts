@@ -615,8 +615,10 @@ export function resolveSwellSegments(input: {
   shape: SwellShape;
   rows: readonly SwellRow[];
   mid: { row: number; x: number };
+  /** The narrowest the gap may be: a phoneme's width under its peak. */
+  minGap?: number;
 }): HairpinSegment[] | null {
-  const { shape, rows, mid } = input;
+  const { shape, rows, mid, minGap = 0 } = input;
   const lengths = rows.map((row) => Math.max(0, row.endX - row.startX));
   const offsets = lengths.map((_, index) =>
     lengths.slice(0, index).reduce((sum, length) => sum + length, 0)
@@ -635,7 +637,7 @@ export function resolveSwellSegments(input: {
       lengths
     );
   }
-  const gap = swellGapPx(total);
+  const gap = Math.max(swellGapPx(total), minGap);
   const lowest = SWELL_MIN_WEDGE_PX + gap / 2;
   const highest = total - SWELL_MIN_WEDGE_PX - gap / 2;
   if (highest < lowest) {
@@ -740,15 +742,35 @@ export function resolveSwellRow(input: {
   midX: number;
   centerY: number;
   startText: HairpinEndpointText | null;
+  minGap?: number;
 }): HairpinSegment[] | null {
-  const { shape, rawStartX, endX, midX, centerY, startText } = input;
+  const { shape, rawStartX, endX, midX, centerY, startText, minGap } = input;
   return resolveSwellSegments({
     shape,
     rows: [
       { startX: hairpinStartClearOf(rawStartX, startText), endX, centerY },
     ],
     mid: { row: 0, x: midX },
+    minGap,
   });
+}
+
+/**
+ * The narrowest a swell's gap may be: the width of the phoneme standing
+ * under its middle, if one does (its centre within its own width of `midX`).
+ */
+export function swellGapForPhonemes(
+  midX: number,
+  phonemes: readonly { left: number; right: number }[]
+): number {
+  const under = phonemes
+    .map(({ left, right }) => ({
+      width: right - left,
+      distance: Math.abs((left + right) / 2 - midX),
+    }))
+    .filter(({ width, distance }) => distance < width)
+    .sort((a, b) => a.distance - b.distance)[0];
+  return under?.width ?? 0;
 }
 
 /**

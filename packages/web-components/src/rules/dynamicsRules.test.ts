@@ -48,6 +48,7 @@ import {
   swellAttributeWarning,
   swellChain,
   swellConflicts,
+  swellGapForPhonemes,
   swellGapPx,
   swellMidpoint,
   type PositionedHairpinEndpoint,
@@ -905,6 +906,28 @@ describe('resolveSwellSegments', () => {
         mid: { row: 0, x: 15 },
       })
     ).toBeNull();
+  });
+});
+
+describe('swellGapForPhonemes', () => {
+  it('is the width of the phoneme under the middle, else nothing', () => {
+    expect(
+      swellGapForPhonemes(100, [
+        { left: 20, right: 40 },
+        { left: 94, right: 110 },
+      ])
+    ).toBe(16);
+    expect(swellGapForPhonemes(100, [{ left: 20, right: 40 }])).toBe(0);
+  });
+
+  it('widens the gap of a short swell to it', () => {
+    const segments = resolveSwellSegments({
+      shape: 'both',
+      rows: [{ startX: 0, endX: 120, centerY: 80 }],
+      mid: { row: 0, x: 60 },
+      minGap: 30,
+    });
+    expect((segments?.[1].startX ?? 0) - (segments?.[0].endX ?? 0)).toBe(30);
   });
 });
 

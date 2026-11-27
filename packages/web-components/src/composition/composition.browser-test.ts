@@ -4889,3 +4889,98 @@ test.describe('bend contour', () => {
     }
   });
 });
+
+test.describe('phonemes over a barline', () => {
+  const setHost = async (page: Page, width: number, html: string) => {
+    await page.evaluate(
+      ({ hostWidth, markup }) => {
+        const host = document.getElementById('host');
+        if (host === null) {
+          throw new Error('host missing');
+        }
+        host.style.width = `${hostWidth}px`;
+        host.innerHTML = markup;
+      },
+      { hostWidth: width, markup: html }
+    );
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const setWidth = async (page: Page, width: number) => {
+    await page.evaluate((hostWidth) => {
+      const host = document.getElementById('host');
+      if (host !== null) {
+        host.style.width = `${hostWidth}px`;
+      }
+    }, width);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+    await waitForRedrawCycle(page);
+  };
+  const markup = `<music-composition time="4/4">
+    <music-measure><music-staff clef="bass">
+      <music-note note="E" octave="2" duration="whole" tie="start" phonemes="oo>ah>"></music-note>
+    </music-staff></music-measure>
+    <music-measure><music-staff clef="bass">
+      <music-note note="E" octave="2" duration="whole" tie="end" phonemes="oo"></music-note>
+    </music-staff></music-measure>
+  </music-composition>`;
+  const read = (page: Page) =>
+    page.evaluate(() => {
+      const staves = Array.from(document.querySelectorAll('music-staff'));
+      const phonemes = staves.flatMap((staff) =>
+        Array.from(
+          staff.shadowRoot?.querySelectorAll('.phonemes-container .phoneme') ??
+            [],
+          (text) => {
+            const rect = text.getBoundingClientRect();
+            return (rect.left + rect.right) / 2;
+          }
+        )
+      );
+      const overlay = document
+        .querySelector('music-composition')
+        ?.shadowRoot?.querySelector('.connectors-overlay');
+      const arrows = Array.from(
+        overlay?.querySelectorAll('.phoneme-arrow') ?? [],
+        (arrow) => {
+          const rect = arrow.getBoundingClientRect();
+          return { left: rect.left, right: rect.right, top: rect.top };
+        }
+      );
+      const barline = staves[0].getBoundingClientRect().right;
+      return { phonemes, arrows, barline };
+    });
+
+  test('crosses the barline, and splits when the bars wrap', async ({
+    page,
+  }) => {
+    await setHost(page, 900, markup);
+    const wide = await read(page);
+    expect(wide.arrows).toHaveLength(1);
+    expect(wide.arrows[0].left).toBeLessThan(wide.barline);
+    expect(wide.arrows[0].right).toBeGreaterThan(wide.barline);
+
+    await setWidth(page, 300);
+    const wrapped = await read(page);
+    expect(wrapped.arrows).toHaveLength(2);
+    expect(wrapped.arrows[1].top).toBeGreaterThan(wrapped.arrows[0].top);
+
+    await setWidth(page, 900);
+    expect((await read(page)).arrows).toHaveLength(1);
+  });
+
+  test('keeps the middle phoneme halfway as the width changes', async ({
+    page,
+  }) => {
+    const halfway = async () => {
+      const [first, middle, last] = (await read(page)).phonemes;
+      return (middle - first) / (last - first);
+    };
+    await setHost(page, 600, markup);
+    expect(await halfway()).toBeCloseTo(0.5, 1);
+    await setWidth(page, 1000);
+    expect(await halfway()).toBeCloseTo(0.5, 1);
+  });
+});

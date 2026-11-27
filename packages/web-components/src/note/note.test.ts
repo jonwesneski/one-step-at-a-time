@@ -2031,6 +2031,37 @@ describe('swell', () => {
   });
 });
 
+describe('phonemes', () => {
+  it('round-trips, warns about an empty part and draws them standalone', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    document.body.appendChild(noteElement);
+    noteElement.phonemes = 'oo,,ah';
+    expect(noteElement.getAttribute('phonemes')).toBe('oo,,ah');
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/empty part/));
+    expect(
+      Array.from(
+        noteElement.shadowRoot!.querySelectorAll('.phoneme'),
+        (text) => text.textContent
+      )
+    ).toEqual(['oo', 'ah']);
+    noteElement.phonemes = null;
+    expect(noteElement.shadowRoot!.querySelector('.phoneme')).toBeNull();
+    warn.mockRestore();
+  });
+
+  it('re-lays out its staff', () => {
+    const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;
+    const staff = document.createElement(MUSIC_STAFF);
+    staff.appendChild(noteElement);
+    document.body.appendChild(staff);
+    const handler = jest.fn();
+    noteElement.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, handler);
+    noteElement.phonemes = 'i';
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('tie', () => {
   it('reads continue, the middle of a tie chain', () => {
     const noteElement = document.createElement(MUSIC_NOTE) as NoteElementType;

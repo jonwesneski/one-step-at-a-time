@@ -96,6 +96,7 @@ import {
   type NoteDotLayout,
   type NoteProps,
 } from './note';
+import { createStandalonePhonemesSvg } from './phonemes';
 import { createStemCrossSvg } from './stemMark';
 import {
   appendTechniqueLabels,
@@ -175,6 +176,7 @@ export const createChordSvg = ({
   glissandoLabel = null,
   techniqueText = null,
   techniqueTextBelow = false,
+  phonemes = null,
   breathMark = null,
   bends = [],
 }: ChordProps): [SVGElement | SVGGElement, number] => {
@@ -381,8 +383,24 @@ export const createChordSvg = ({
       techniqueTextBelow ? null : techniqueText
     )
   );
+  let belowBottomY = inkBottomY;
   if (techniqueTextBelow && techniqueText !== null) {
-    appendTechniqueTextBelow(svg, labelLeftX, inkBottomY, techniqueText);
+    belowBottomY = appendTechniqueTextBelow(
+      svg,
+      labelLeftX,
+      inkBottomY,
+      techniqueText
+    );
+  }
+  if (phonemes !== null) {
+    svg.setAttribute('overflow', 'visible');
+    svg.appendChild(
+      createStandalonePhonemesSvg(
+        phonemes,
+        labelHead.cx * NOTE_SCALE,
+        belowBottomY
+      )
+    );
   }
 
   const dotLayout = chordAugmentationDotLayout({

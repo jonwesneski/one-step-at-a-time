@@ -2189,6 +2189,110 @@ describe('swells over tie chains', () => {
   });
 });
 
+describe('phonemes', () => {
+  const WIDTH = 400;
+
+  function renderStaff(markup: string): any {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+    document.body.appendChild(staff);
+    staff.shadowRoot.querySelector(
+      '.transcribe-container'
+    ).getBoundingClientRect = () => ({
+      width: WIDTH,
+      left: 0,
+      right: WIDTH,
+      top: 0,
+      bottom: 0,
+      height: 0,
+    });
+    staff.innerHTML = markup;
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+  const texts = (staff: any, selector: string): Element[] =>
+    Array.from(staff.shadowRoot.querySelectorAll(selector));
+  const at = (element: Element | undefined, name: string) =>
+    Number(element?.getAttribute(name));
+  const baselineOf = (staff: any) =>
+    at(texts(staff, '.phonemes-container .phoneme')[0], 'y');
+
+  it('goes below a low note and its tie, the dynamics below it', () => {
+    const high = renderStaff(
+      '<music-note note="G" octave="4" duration="whole" phonemes="oo"></music-note>'
+    );
+    const highBaseline = baselineOf(high);
+    document.body.innerHTML = '';
+    const low = renderStaff(`
+      <music-note note="A" octave="3" duration="half" tie="start" phonemes="oo" dynamic="p"></music-note>
+      <music-note note="A" octave="3" duration="half" tie="end"></music-note>`);
+    expect(baselineOf(low)).toBeGreaterThan(highBaseline);
+    const dynamic = texts(low, '.dynamics-container .dynamic-marking')[0];
+    expect(at(dynamic, 'y')).toBeGreaterThan(baselineOf(low));
+  });
+
+  it('stands a phoneme after an arrow halfway to the next', () => {
+    const staff = renderStaff(`
+      <music-note note="E" octave="4" duration="half" phonemes="oo>ah>"></music-note>
+      <music-note note="E" octave="4" duration="half" phonemes="oo"></music-note>`);
+    const [first, middle, last] = texts(
+      staff,
+      '.phonemes-container .phoneme'
+    ).map((text) => at(text, 'x'));
+    expect(middle).toBeCloseTo((first + last) / 2);
+    expect(texts(staff, '.phonemes-container .phoneme-arrow')).toHaveLength(2);
+    expect(
+      texts(staff, '.phonemes-container .phoneme-bracket').map(
+        (bracket) => bracket.textContent
+      )
+    ).toEqual(['[', ']']);
+  });
+
+  it('warns once about an arrow to a note with no phoneme', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const staff = renderStaff(`
+      <music-note note="E" octave="4" duration="half" phonemes="oo>"></music-note>
+      <music-note note="E" octave="4" duration="half"></music-note>`);
+    staff.onStaffResize();
+    expect(
+      warn.mock.calls.filter(([message]) =>
+        String(message).includes('leads to no phoneme')
+      )
+    ).toHaveLength(1);
+    expect(
+      texts(staff, '.phonemes-container .phoneme-bracket').map(
+        (bracket) => bracket.textContent
+      )
+    ).toEqual(['[', ']']);
+    warn.mockRestore();
+  });
+
+  it('keeps room after a short note for its phonemes', () => {
+    const minWidth = (first: string) => {
+      const staff = document.createElement(MUSIC_STAFF) as any;
+      staff.setAttribute(COMMON_ATTRIBUTES.TIME, '4/4');
+      staff.innerHTML =
+        `<music-note note="E" octave="4" duration="eighth" ${first}></music-note>` +
+        '<music-note note="E" octave="4" duration="eighth"></music-note>'.repeat(
+          7
+        );
+      document.body.appendChild(staff);
+      let width = 0;
+      staff.addEventListener(STAFF_EVENTS.STAFF_MIN_WIDTH, (event: Event) => {
+        width = (event as CustomEvent).detail.minWidth;
+      });
+      const slot = staff.shadowRoot.querySelector('slot');
+      slot.assignedElements = () => Array.from(staff.children);
+      slot.dispatchEvent(new Event('slotchange'));
+      document.body.innerHTML = '';
+      return width;
+    };
+    expect(minWidth('phonemes="oo>ah>ee"')).toBeGreaterThan(minWidth(''));
+  });
+});
+
 describe('staffNotationBase strut min width with tuplets', () => {
   const makeNote = (duration: DurationType) => {
     const note = document.createElement(MUSIC_NOTE) as any;

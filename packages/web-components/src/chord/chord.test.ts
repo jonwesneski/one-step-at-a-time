@@ -2303,6 +2303,14 @@ describe('chord symbol changes', () => {
     expect(chord.shadowRoot!.querySelector('.breath-mark')).toBeNull();
   });
 
+  it('draws its phonemes standalone', () => {
+    document.body.innerHTML =
+      '<music-chord chord="Cmaj" duration="quarter" phonemes="i,u"></music-chord>';
+    const chord = document.querySelector(MUSIC_CHORD) as ChordElementType;
+    expect(chord.phonemes).toBe('i,u');
+    expect(chord.shadowRoot!.querySelectorAll('.phoneme')).toHaveLength(2);
+  });
+
   it('round-trips swell', () => {
     document.body.innerHTML =
       '<music-chord chord="Cmaj" duration="whole"></music-chord>';

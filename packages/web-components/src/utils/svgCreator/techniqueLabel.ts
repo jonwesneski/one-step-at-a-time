@@ -203,15 +203,12 @@ export function appendTechniqueTextBelow(
   leftX: number,
   inkBottomY: number,
   label: TechniqueLabel
-): void {
+): number {
+  const baselineY =
+    inkBottomY + TECHNIQUE_TEXT_BELOW_GAP_PX + techniqueLabelHeightPx(label);
   svg.setAttribute('overflow', 'visible');
-  svg.appendChild(
-    createTechniqueLabel(
-      leftX,
-      inkBottomY + TECHNIQUE_TEXT_BELOW_GAP_PX + techniqueLabelHeightPx(label),
-      label
-    )
-  );
+  svg.appendChild(createTechniqueLabel(leftX, baselineY, label));
+  return baselineY;
 }
 
 /** A standalone entry's labels, stacked above its topmost ink. */

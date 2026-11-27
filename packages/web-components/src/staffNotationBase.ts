@@ -61,6 +61,7 @@ import {
   resolveSwellOwners,
   resolveSwellRow,
   swellConflicts,
+  swellGapForPhonemes,
   swellMidpoint,
   type SwellOwner,
 } from './rules/dynamicsRules';
@@ -133,6 +134,18 @@ import {
   resolveOctaveSpans,
   splitOctaveSpanIntoRuns,
 } from './rules/octaveRules';
+import {
+  parsePhonemes,
+  phonemeArrow,
+  phonemeBracketWidthPx,
+  type PhonemeEntry,
+  phonemeRowY,
+  type PhonemeRun,
+  phonemeSpacingPx,
+  phonemeWidthPx,
+  phonemeXs,
+  resolvePhonemeRuns,
+} from './rules/phonemeRules';
 import {
   type Component,
   type DescribeReminder,
@@ -294,6 +307,9 @@ import {
   createOctaveSignSvg,
   createOrnamentConnectorSlur,
   createParenthesisSvg,
+  createPhonemeArrowSvg,
+  createPhonemeBracketSvg,
+  createPhonemeSvg,
   createSempreArpeggiandoText,
   createSharpSvg,
   createStartRepeatSvg,
@@ -305,6 +321,7 @@ import {
   NOTE_HEAD_RADIUS_PX,
   NOTE_HEAD_Y_OFFSET_CORRECTION,
   octaveSignWidth,
+  phonemeArrowY,
   TRILL_FINISH_HEAD_RY,
   trillFinishTailOverhangPx,
 } from './utils';
@@ -390,6 +407,12 @@ import {
   OCTAVE_SIGN_LEADING_GAP_PX,
   OCTAVE_SIGN_NOTEHEAD_CLEARANCE_PX,
   OCTAVE_SIGN_TRAILING_GAP_PX,
+  PHONEME_BARLINE_GAP_PX,
+  PHONEME_DESCENT_RATIO,
+  PHONEME_FONT_SIZE_PX,
+  PHONEME_INK_GAP_PX,
+  PHONEME_ROW_GAP_PX,
+  PHONEME_SPAN_END_GAP_PX,
   REMINDER_PAREN_GAP_PX,
   REMINDER_PAREN_OVERHANG_PX,
   REMINDER_PAREN_WIDTH_PX,
@@ -725,6 +748,36 @@ export type TechniqueTextRunOn = { maxRight: number; inkY: number | null };
  */
 export type CarriedTechniqueText = PlacedAboveStaffRect & { above: boolean };
 
+/** A phoneme as a staff draws it (container px). */
+type PlacedPhoneme = {
+  element: NoteChordOrRestElementType;
+  index: number;
+  text: string;
+  centerX: number;
+  width: number;
+  open: boolean;
+  close: boolean;
+};
+
+/** One voice's phoneme row in a staff. */
+type VoicePhonemes = {
+  baselineY: number;
+  phonemes: PlacedPhoneme[];
+  arrows: { fromX: number; toX: number; head: boolean }[];
+};
+
+/**
+ * What the composition hands a staff for phoneme runs over a barline: where
+ * an arrow out of an entry aims (client px: the next phoneme's head, or the
+ * end of the system), the entries whose run began in an earlier bar, and each
+ * voice's row shared with the bars its runs cross (local px).
+ */
+export type PhonemeContinuations = {
+  nextAnchors: ReadonlyMap<Element, number>;
+  continued: ReadonlySet<Element>;
+  rows: ReadonlyMap<VoiceKey, number>;
+};
+
 /** What the composition hands a staff for swells over a barline. */
 export type SwellContinuations = {
   covered: ReadonlySet<Element>;
@@ -1034,6 +1087,14 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // in the voice containers' frame (which starts at the describe area's end).
   #notesAreaEndX = 0;
   #warnedSwells = new WeakSet<NoteOrChordElementType>();
+  #phonemeContainers: Map<VoiceKey, SVGSVGElement> = new Map();
+  #placedPhonemes = new Map<VoiceKey, VoicePhonemes>();
+  #warnedPhonemes = new WeakSet<Element>();
+  #phonemeContinuations: PhonemeContinuations = {
+    nextAnchors: new Map(),
+    continued: new Set(),
+    rows: new Map(),
+  };
   #swellContinuations: SwellContinuations = {
     covered: new Set(),
     dynamicEnds: new Map(),
@@ -3148,6 +3209,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     this.#prepareVoiceContainers(this.#techniqueLabelContainers, activeKeys);
     this.#prepareVoiceContainers(this.#breathMarkContainers, activeKeys);
     this.#prepareVoiceContainers(this.#bendContainers, activeKeys);
+    this.#prepareVoiceContainers(this.#phonemeContainers, activeKeys);
 
     this.#spaceElements();
 
@@ -4162,6 +4224,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     const gapReserve = Math.max(
       breathMark === null ? 0 : breathMarkReservedWidthPx(breathMark),
       this.#dynamicsReserve(state, index),
+      this.#phonemeReserve(state, index),
       this.#glissandoReserve(state, index),
       this.#bendReserve(voiceKey, state, index)
     );
@@ -4169,6 +4232,40 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
       this.#rightwardInkFootprint(voiceKey, state, index) +
       Math.max(0, gapReserve)
     );
+  }
+
+  // Room (px) past an entry's SVG box for its phonemes: each one's width, the
+  // gaps or shortest arrows between them and after the last, and half the
+  // next entry's first phoneme, which stands on its head.
+  #phonemeReserve(state: VoiceRenderState, index: number): number {
+    const phonemesOf = (element: NoteChordOrRestElementType | undefined) =>
+      element === undefined || element.nodeName === MUSIC_REST_NODE
+        ? null
+        : parsePhonemes((element as NoteOrChordElementType).phonemes ?? null);
+    const element = state.elements[index];
+    const phonemes = phonemesOf(element);
+    if (phonemes === null) {
+      return 0;
+    }
+    const bracket = phonemeBracketWidthPx();
+    const widths = phonemes.map(({ text }) => phonemeWidthPx(text));
+    let reach =
+      NOTE_SVG_WIDTH / 2 + entryCenterShiftPx(element) + widths[0] / 2;
+    phonemes.slice(1).forEach((_, k) => {
+      const linked = phonemes[k].arrowAfter;
+      reach +=
+        phonemeSpacingPx(linked) + (linked ? 0 : 2 * bracket) + widths[k + 1];
+    });
+    const last = phonemes[phonemes.length - 1];
+    const nextFirst = phonemesOf(state.elements[index + 1])?.[0];
+    reach += last.arrowAfter
+      ? phonemeSpacingPx(true)
+      : bracket + PHONEME_SPAN_END_GAP_PX;
+    if (nextFirst !== undefined) {
+      reach +=
+        phonemeWidthPx(nextFirst.text) / 2 + (last.arrowAfter ? 0 : bracket);
+    }
+    return reach - NOTE_SVG_WIDTH;
   }
 
   // Room (px) past an entry's SVG box for a swell over just this entry and a
@@ -5231,6 +5328,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     this.#renderBends(remainingWidth);
     this.#layoutTechniqueLabels();
     this.#layoutBelowTexts();
+    this.#layoutPhonemes();
 
     // Conservative budgets, before anything above or below the notes is drawn.
     const aboveStaffBudget = this.#estimateAboveStaffBudget();
@@ -5398,6 +5496,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
 
     const placedAboveStaff = this.#renderTechniqueLabels(remainingWidth);
+    this.#renderPhonemes(remainingWidth);
     this.#renderBreathMarks(remainingWidth, placedAboveStaff);
 
     this.#renderUnisonOverlay(placementColumns, remainingWidth);
@@ -5524,6 +5623,389 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // Technique text below the stave sits nearest it of the rows there, clear
   // of the ink under it; one that would overlap an earlier one moves down
   // past it. Dynamics, phonemes and lyrics go beneath.
+  // Each voice's phonemes: below the stave and every voice's ink there, a
+  // later voice's row below an earlier one's, at least as low as the row the
+  // bars of its runs share. Before the budgets and the dynamics row, which
+  // goes below it.
+  #layoutPhonemes(): void {
+    this.#placedPhonemes.clear();
+    const inkYs = [...this.#voiceRenderStates.values()].flatMap((state) =>
+      this.#belowInkYs(state)
+    );
+    let floorY: number | null = this.phonemeFloorY();
+    const keys = [...this.#voiceRenderStates.keys()].sort((a, b) =>
+      String(a).localeCompare(String(b))
+    );
+    for (const voiceKey of keys) {
+      const state = this.#voiceRenderStates.get(voiceKey);
+      if (state === undefined) {
+        continue;
+      }
+      const own = this.#ownPhonemeRowY(state, inkYs, floorY);
+      if (own === null) {
+        continue;
+      }
+      const shared = this.#phonemeContinuations.rows.get(voiceKey);
+      const baselineY = Math.max(own, shared ?? own);
+      this.#placedPhonemes.set(voiceKey, {
+        baselineY,
+        ...this.#placePhonemes(voiceKey, state),
+      });
+      floorY =
+        baselineY +
+        PHONEME_FONT_SIZE_PX * PHONEME_DESCENT_RATIO +
+        PHONEME_ROW_GAP_PX -
+        PHONEME_INK_GAP_PX;
+    }
+  }
+
+  /**
+   * Where a vocal staff's lyrics end (container Y), which phonemes go
+   * below; null without lyrics.
+   */
+  protected phonemeFloorY(): number | null {
+    return null;
+  }
+
+  /** Lays the staff out again when it has phonemes, as after lyrics move. */
+  protected relayPhonemes(): void {
+    const has = [...this.#voiceRenderStates.values()].some((state) =>
+      state.elements.some(
+        (element) =>
+          element.nodeName !== MUSIC_REST_NODE &&
+          parsePhonemes(
+            (element as NoteOrChordElementType).phonemes ?? null
+          ) !== null
+      )
+    );
+    if (has) {
+      this.#renderNotes();
+    }
+  }
+
+  /** A client Y in the staff's drawing (container) coordinates. */
+  protected clientToContainerY(clientY: number): number {
+    const matrix = this.transcribeContainer.getScreenCTM?.();
+    return matrix
+      ? (clientY - matrix.f) / matrix.d
+      : clientY - this.transcribeContainer.getBoundingClientRect().top;
+  }
+
+  // A voice's own phoneme baseline before sharing, or null without phonemes.
+  #ownPhonemeRowY(
+    state: VoiceRenderState,
+    inkYs: readonly number[],
+    floorY: number | null
+  ): number | null {
+    const has = state.elements.some(
+      (element) =>
+        element.nodeName !== MUSIC_REST_NODE &&
+        parsePhonemes((element as NoteOrChordElementType).phonemes ?? null) !==
+          null
+    );
+    return has
+      ? phonemeRowY({
+          staffBottomY: containerYOfStaffY(STAFF_BOTTOM_LINE_Y),
+          inkYs: floorY === null ? inkYs : [...inkYs, floorY],
+        })
+      : null;
+  }
+
+  /**
+   * The row each voice's phonemes need in this staff (local px), before
+   * any shared with other bars.
+   */
+  ownPhonemeRows(): ReadonlyMap<VoiceKey, number> {
+    const inkYs = [...this.#voiceRenderStates.values()].flatMap((state) =>
+      this.#belowInkYs(state)
+    );
+    const rows = new Map<VoiceKey, number>();
+    let floorY: number | null = this.phonemeFloorY();
+    const keys = [...this.#voiceRenderStates.keys()].sort((a, b) =>
+      String(a).localeCompare(String(b))
+    );
+    for (const voiceKey of keys) {
+      const state = this.#voiceRenderStates.get(voiceKey);
+      const own =
+        state === undefined ? null : this.#ownPhonemeRowY(state, inkYs, floorY);
+      if (own !== null) {
+        rows.set(voiceKey, own);
+        floorY =
+          own +
+          PHONEME_FONT_SIZE_PX * PHONEME_DESCENT_RATIO +
+          PHONEME_ROW_GAP_PX -
+          PHONEME_INK_GAP_PX;
+      }
+    }
+    return rows;
+  }
+
+  // Every ink of a voice below the stave the phonemes clear: heads, stems,
+  // marks, rests, slurs, ties, tuplets, bends and text below.
+  #belowInkYs(state: VoiceRenderState): number[] {
+    return [
+      ...state.elements.flatMap((_, i) =>
+        [
+          this.#entryInkY(state, i, false),
+          this.#restInkY(state, i, false),
+          ...this.#entryLeftInkYs(state, i, false),
+          this.#tieReachY(state, i, false),
+        ].filter((y): y is number => y !== null)
+      ),
+      ...[
+        this.#slurReachY(state, false),
+        this.#tupletExtremeY(state, false, true),
+        this.#arrowAndBendReachY(state, false),
+      ].filter((y): y is number => y !== null),
+      ...[
+        ...this.#placedBelowTexts,
+        ...this.#carriedTechniqueTexts.filter((text) => !text.above),
+      ].map(({ bottom }) => bottom),
+    ];
+  }
+
+  // One voice's phonemes and the arrows between them inside this bar.
+  #placePhonemes(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState
+  ): Omit<VoicePhonemes, 'baselineY'> {
+    const entries: PhonemeEntry[] = state.elements.map((element) => ({
+      phonemes:
+        element.nodeName === MUSIC_REST_NODE
+          ? null
+          : parsePhonemes((element as NoteOrChordElementType).phonemes ?? null),
+      rest: element.nodeName === MUSIC_REST_NODE,
+    }));
+    const runs = resolvePhonemeRuns(entries);
+    const inComposition = this.closest(MUSIC_COMPOSITION) !== null;
+    const containerLeft =
+      this.transcribeContainer.getBoundingClientRect().left + this.describeEndX;
+    const runOf = new Map<string, PhonemeRun>();
+    for (const run of runs) {
+      for (const { entry, index } of run.items) {
+        runOf.set(`${entry}/${index}`, run);
+      }
+      const last = run.items[run.items.length - 1];
+      const element = state.elements[last.entry];
+      const dangling =
+        run.end === 'dangling' || (run.end === 'open' && !inComposition);
+      if (dangling && !this.#warnedPhonemes.has(element)) {
+        this.#warnedPhonemes.add(element);
+        console.warn(
+          '[music-staff] a phoneme arrow leads to no phoneme on the next note; the bracket closes after it',
+          element
+        );
+      } else if (!dangling) {
+        this.#warnedPhonemes.delete(element);
+      }
+    }
+    const placed: PlacedPhoneme[] = [];
+    entries.forEach(({ phonemes }, i) => {
+      if (phonemes === null) {
+        return;
+      }
+      const element = state.elements[i];
+      const lastIndex = phonemes.length - 1;
+      const run = runOf.get(`${i}/${lastIndex}`);
+      const next =
+        run?.items[
+          run.items.findIndex(
+            (item) => item.entry === i && item.index === lastIndex
+          ) + 1
+        ];
+      const handed = this.#phonemeContinuations.nextAnchors.get(element);
+      const nextAnchor =
+        next !== undefined
+          ? this.#headCenterX(state, next.entry)
+          : run?.end === 'open' && handed !== undefined
+          ? handed - containerLeft
+          : null;
+      const headX = this.#headCenterX(state, i);
+      const widths = phonemes.map(({ text }) => phonemeWidthPx(text));
+      const xs = phonemeXs({
+        headX,
+        nextX: nextAnchor ?? this.#phonemeSpanEndX(voiceKey, state, i),
+        arrowOut: nextAnchor !== null,
+        widths,
+      });
+      phonemes.forEach(({ text }, index) => {
+        const itemRun = runOf.get(`${i}/${index}`);
+        const first = itemRun?.items[0];
+        const last = itemRun?.items[itemRun.items.length - 1];
+        placed.push({
+          element,
+          index,
+          text,
+          centerX: xs[index],
+          width: widths[index],
+          open:
+            first?.entry === i &&
+            first.index === index &&
+            !(
+              i === entries.findIndex((entry) => entry.phonemes !== null) &&
+              index === 0 &&
+              this.#phonemeContinuations.continued.has(element)
+            ),
+          close:
+            last?.entry === i &&
+            last.index === index &&
+            !(itemRun?.end === 'open' && handed !== undefined),
+        });
+      });
+    });
+    const arrows: VoicePhonemes['arrows'] = [];
+    for (const run of runs) {
+      run.items.slice(1).forEach((item, k) => {
+        const before = run.items[k];
+        const from = placed.find(
+          (phoneme) =>
+            phoneme.element === state.elements[before.entry] &&
+            phoneme.index === before.index
+        );
+        const to = placed.find(
+          (phoneme) =>
+            phoneme.element === state.elements[item.entry] &&
+            phoneme.index === item.index
+        );
+        if (from === undefined || to === undefined) {
+          return;
+        }
+        const arrow = phonemeArrow(
+          from.centerX + from.width / 2,
+          to.centerX - to.width / 2
+        );
+        if (arrow === null) {
+          if (!this.#warnedPhonemes.has(from.element)) {
+            this.#warnedPhonemes.add(from.element);
+            console.warn(
+              '[music-staff] no room for a phoneme arrow; it is not drawn',
+              from.element
+            );
+          }
+          return;
+        }
+        arrows.push(arrow);
+      });
+    }
+    return { phonemes: placed, arrows };
+  }
+
+  // Where an entry's last phoneme ends with no arrow out: half a space
+  // before the next entry's ink, or 1.5 spaces before the barline.
+  #phonemeSpanEndX(
+    voiceKey: VoiceKey,
+    state: VoiceRenderState,
+    i: number
+  ): number {
+    const next = this.#nextEntryAfter(voiceKey, state, i);
+    if (next === null) {
+      return this.#notesAreaEndX - PHONEME_BARLINE_GAP_PX;
+    }
+    return (
+      (next.state.noteXPositions.get(next.index) ?? 0) -
+      this.#entryLeftwardExtent(next.state.elements[next.index]) -
+      PHONEME_SPAN_END_GAP_PX
+    );
+  }
+
+  #renderPhonemes(remainingWidth: number): void {
+    for (const voiceKey of this.#voiceRenderStates.keys()) {
+      const container = this.#containerFor(
+        this.#phonemeContainers,
+        voiceKey,
+        'phonemes-container'
+      );
+      this.#sizeVoiceContainer(container, remainingWidth);
+      container.innerHTML = '';
+      const placed = this.#placedPhonemes.get(voiceKey);
+      if (placed === undefined) {
+        continue;
+      }
+      const { baselineY, phonemes, arrows } = placed;
+      for (const { text, centerX, width, open, close } of phonemes) {
+        if (open) {
+          container.appendChild(
+            createPhonemeBracketSvg('open', centerX - width / 2, baselineY)
+          );
+        }
+        container.appendChild(createPhonemeSvg(text, centerX, baselineY));
+        if (close) {
+          container.appendChild(
+            createPhonemeBracketSvg('close', centerX + width / 2, baselineY)
+          );
+        }
+      }
+      for (const { fromX, toX, head } of arrows) {
+        container.appendChild(
+          createPhonemeArrowSvg(fromX, toX, phonemeArrowY(baselineY), head)
+        );
+      }
+    }
+  }
+
+  // The bottom (container Y) of every voice's phoneme row, or null.
+  #phonemesBottomY(): number | null {
+    const ys = [...this.#placedPhonemes.values()].map(
+      ({ baselineY }) =>
+        baselineY + PHONEME_FONT_SIZE_PX * PHONEME_DESCENT_RATIO
+    );
+    return ys.length === 0 ? null : Math.max(...ys);
+  }
+
+  /**
+   * An entry's drawn phonemes (client px): each one's edges, and the height
+   * its arrows run at. Empty when it has none here.
+   */
+  phonemeBoxes(
+    element: Element
+  ): { left: number; right: number; arrowY: number }[] {
+    for (const [voiceKey, { baselineY, phonemes }] of this.#placedPhonemes) {
+      const own = phonemes.filter((phoneme) => phoneme.element === element);
+      if (own.length === 0) {
+        continue;
+      }
+      const matrix = this.#phonemeContainers
+        .get(voiceKey)
+        ?.getScreenCTM?.() ?? { a: 1, d: 1, e: 0, f: 0 };
+      return own.map(({ centerX, width }) => ({
+        left: matrix.a * (centerX - width / 2) + matrix.e,
+        right: matrix.a * (centerX + width / 2) + matrix.e,
+        arrowY: matrix.d * phonemeArrowY(baselineY) + matrix.f,
+      }));
+    }
+    return [];
+  }
+
+  /**
+   * Set by the ancestor <music-composition> for phoneme runs over a
+   * barline. Compared by content.
+   */
+  get phonemeContinuations(): PhonemeContinuations {
+    return this.#phonemeContinuations;
+  }
+
+  set phonemeContinuations(value: PhonemeContinuations) {
+    const current = this.#phonemeContinuations;
+    const near = (a: number | undefined, b: number | undefined) =>
+      a !== undefined && b !== undefined && Math.abs(a - b) < 0.5;
+    const sameAnchors =
+      current.nextAnchors.size === value.nextAnchors.size &&
+      [...value.nextAnchors].every(([element, x]) =>
+        near(current.nextAnchors.get(element), x)
+      );
+    const sameContinued =
+      current.continued.size === value.continued.size &&
+      [...value.continued].every((element) => current.continued.has(element));
+    const sameRows =
+      current.rows.size === value.rows.size &&
+      [...value.rows].every(([key, y]) => near(current.rows.get(key), y));
+    if (sameAnchors && sameContinued && sameRows) {
+      return;
+    }
+    this.#phonemeContinuations = value;
+    this.#renderNotes();
+  }
+
   #layoutBelowTexts(): void {
     const entries: {
       voiceKey: VoiceKey;
@@ -6794,13 +7276,23 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
     const x = state.noteXPositions.get(owner.index) ?? 0;
     const end = this.#swellEnd(voiceKey, state, owner);
+    const midX = this.#swellMidX(state, owner, end.rawEndX);
     return resolveSwellRow({
       shape: element.swell,
       rawStartX: x,
       endX: end.endX,
-      midX: this.#swellMidX(state, owner, end.rawEndX),
+      midX,
       centerY,
       startText: this.#ownDynamicText(element, x),
+      minGap: swellGapForPhonemes(
+        midX,
+        (this.#placedPhonemes.get(voiceKey)?.phonemes ?? []).map(
+          ({ centerX, width }) => ({
+            left: centerX - width / 2,
+            right: centerX + width / 2,
+          })
+        )
+      ),
     });
   }
 
@@ -8259,6 +8751,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
   // lower letter isn't counted.
   #estimateBelowStaffBudget(): number {
     let budget = 0;
+    const phonemesBottom = this.#phonemesBottomY();
+    if (
+      phonemesBottom !== null &&
+      phonemesBottom > STAFF_TRANSCRIPTION_HEIGHT
+    ) {
+      budget = Math.ceil(phonemesBottom - STAFF_TRANSCRIPTION_HEIGHT) + 2;
+    }
     for (const { bottom } of [
       ...this.#placedBelowTexts,
       ...this.#carriedTechniqueTexts.filter(({ above }) => !above),
@@ -9086,6 +9585,7 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
               ...this.#placedBelowTexts,
               ...this.#carriedTechniqueTexts.filter((text) => !text.above),
             ].map(({ bottom }) => bottom)),
+        ...(above ? [] : [this.#phonemesBottomY() ?? []].flat()),
       ],
       curveYs: [
         this.#slurReachY(state, above),

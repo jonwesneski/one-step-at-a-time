@@ -1989,3 +1989,69 @@ export const BEND_TARGET_GAP_PX = STAFF_LINE_SPACING * 0.15;
 
 /** How far (px) a bend target's ledger lines reach past its head. = 0.3 × STAFF_LINE_SPACING */
 export const BEND_TARGET_LEDGER_OVERHANG_PX = STAFF_LINE_SPACING * 0.3;
+
+// ─── Phonemes ──────────────────────────────────────────────────────────────────
+
+/** Font size (px) of phonemes: upright serif at the label size. */
+export const PHONEME_FONT_SIZE_PX = TECHNIQUE_LABEL_FONT_SIZE_PX;
+
+/**
+ * Share of PHONEME_FONT_SIZE_PX a bracket reaches above / below the baseline.
+ */
+export const PHONEME_ASCENT_RATIO = 0.75;
+export const PHONEME_DESCENT_RATIO = 0.25;
+
+/** Share of PHONEME_FONT_SIZE_PX of the x-height, where arrows sit halfway. */
+export const PHONEME_X_HEIGHT_RATIO = 0.45;
+
+/**
+ * Gap (px) from the ink above a phoneme row to its brackets' tops.
+ * = 0.8 × STAFF_LINE_SPACING
+ */
+export const PHONEME_INK_GAP_PX = STAFF_LINE_SPACING * 0.8;
+
+/**
+ * Least gap (px) from the bottom stave line to a phoneme row's brackets.
+ * = 1.5 × STAFF_LINE_SPACING
+ */
+export const PHONEME_STAFF_GAP_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Gap (px) between two voices' phoneme rows.
+ * = 0.4 × STAFF_LINE_SPACING
+ */
+export const PHONEME_ROW_GAP_PX = STAFF_LINE_SPACING * 0.4;
+
+/**
+ * Gap (px) between two phonemes with no arrow between them, brackets
+ * included.
+ * = 0.5 × STAFF_LINE_SPACING
+ */
+export const PHONEME_GAP_PX = STAFF_LINE_SPACING * 0.5;
+
+/**
+ * Gap (px) from the last phoneme of a note to the next entry's ink, or to the
+ * barline.
+ * = 0.5 / 1.5 × STAFF_LINE_SPACING
+ */
+export const PHONEME_SPAN_END_GAP_PX = STAFF_LINE_SPACING * 0.5;
+export const PHONEME_BARLINE_GAP_PX = STAFF_LINE_SPACING * 1.5;
+
+/**
+ * Gap (px) between an arrow and the phonemes it joins.
+ * = 0.6 × STAFF_LINE_SPACING
+ */
+export const PHONEME_ARROW_GAP_PX = STAFF_LINE_SPACING * 0.6;
+
+/**
+ * An arrow's open head: its length and its height (px).
+ * = 1.6 × / 0.7 × STAFF_LINE_SPACING
+ */
+export const PHONEME_ARROW_HEAD_LENGTH_PX = STAFF_LINE_SPACING * 1.6;
+export const PHONEME_ARROW_HEAD_HEIGHT_PX = STAFF_LINE_SPACING * 0.7;
+
+/**
+ * Shortest arrow (px) drawn at all; shorter, it is left out.
+ * = 0.8 × STAFF_LINE_SPACING
+ */
+export const PHONEME_ARROW_MIN_PX = STAFF_LINE_SPACING * 0.8;

@@ -911,6 +911,13 @@
             },
             {
               "kind": "field",
+              "name": "phonemes",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "dynamicEnd",
               "type": {
                 "text": "DynamicMarking | null"
@@ -2045,6 +2052,13 @@
                 "text": "SwellShape"
               },
               "description": "A swell under this chord over its tie chain (just its own value when untied): bare or `both` draws `< >`, louder to the middle and softer after it; `crescendo` or `diminuendo` draws that wedge alone. On a chord tied into, it covers the rest of the chain; with swells on two chords of one chain, the earlier wins. Inside a `<music-composition>` it crosses barlines and system breaks. A hairpin starting, ending or running over any chord of the chain wins."
+            },
+            {
+              "name": "phonemes",
+              "type": {
+                "text": "string"
+              },
+              "description": "Vowels or phonemes to form while the chord sounds, below the stave in square brackets: `,` separates them (`i,u`), `>` (or `→`) joins them with an arrow (`oo>ah`), and a trailing `>` leads to the next note's first phoneme, over a barline too. The first stands under the head; with an arrow out they are spaced evenly toward the next phoneme, else the last ends with the chord's value."
             }
           ],
           "superclass": {
@@ -2519,6 +2533,92 @@
                   "text": "{\n      swells: CrossBarSwell[];\n      covered: NoteOrChordElementType[];\n    }"
                 }
               }
+            },
+            {
+              "kind": "method",
+              "name": "#crossBarPhonemes",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "{\n      links: { from: PhonemeEnd; to: PhonemeEnd }[];\n      shared: { voice: VoiceNumber; staves: PhonemeStaff[] }[];\n    }"
+                }
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#warnedPhonemes",
+              "privacy": "private",
+              "default": "new WeakSet<Element>()"
+            },
+            {
+              "kind": "method",
+              "name": "#warnPhonemeOnce",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "Element"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#updatePhonemeContinuations",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "boolean"
+                }
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#rowRightOf",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "staff",
+                  "type": {
+                    "text": "Element"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "#drawPhonemeArrows",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "overlay",
+                  "type": {
+                    "text": "SVGSVGElement"
+                  }
+                },
+                {
+                  "name": "rootRect",
+                  "type": {
+                    "text": "DOMRect"
+                  }
+                }
+              ]
             },
             {
               "kind": "field",
@@ -4101,6 +4201,17 @@
               "name": "swell",
               "type": {
                 "text": "SwellShape | null"
+              },
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "phonemes",
+              "type": {
+                "text": "string | null"
               },
               "inheritedFrom": {
                 "name": "ChordElement",
@@ -5774,6 +5885,17 @@
                 "name": "ChordElement",
                 "module": "src/chord/chord.ts"
               }
+            },
+            {
+              "name": "phonemes",
+              "type": {
+                "text": "string"
+              },
+              "description": "Vowels or phonemes to form while the chord sounds, below the stave in square brackets: `,` separates them (`i,u`), `>` (or `→`) joins them with an arrow (`oo>ah`), and a trailing `>` leads to the next note's first phoneme, over a barline too. The first stands under the head; with an arrow out they are spaced evenly toward the next phoneme, else the last ends with the chord's value.",
+              "inheritedFrom": {
+                "name": "ChordElement",
+                "module": "src/chord/chord.ts"
+              }
             }
           ],
           "superclass": {
@@ -6838,6 +6960,17 @@
               "name": "swell",
               "type": {
                 "text": "SwellShape | null"
+              },
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "phonemes",
+              "type": {
+                "text": "string | null"
               },
               "inheritedFrom": {
                 "name": "NoteElement",
@@ -8508,6 +8641,17 @@
                 "text": "BreathMark"
               },
               "description": "A breath after this note: `tick` (✓, a break in the sound) or `comma` (a short pause or lift). Drawn above the stave in the gap before the next entry; standalone, just after the note.",
+              "inheritedFrom": {
+                "name": "NoteElement",
+                "module": "src/note/note.ts"
+              }
+            },
+            {
+              "name": "phonemes",
+              "type": {
+                "text": "string"
+              },
+              "description": "Vowels or phonemes to form while the note sounds, below the stave in square brackets: `,` separates them (`i,u`), `>` (or `→`) joins them with an arrow (`oo>ah`), and a trailing `>` leads to the next note's first phoneme, over a barline too. The first stands under the head; with an arrow out they are spaced evenly toward the next phoneme, else the last ends with the note's value.",
               "inheritedFrom": {
                 "name": "NoteElement",
                 "module": "src/note/note.ts"
@@ -10606,6 +10750,13 @@
             },
             {
               "kind": "field",
+              "name": "phonemes",
+              "type": {
+                "text": "string | null"
+              }
+            },
+            {
+              "kind": "field",
               "name": "dynamicEnd",
               "type": {
                 "text": "DynamicMarking | null"
@@ -11728,6 +11879,13 @@
                 "text": "SwellShape"
               },
               "description": "A swell under this note over its tie chain (just its own value when untied): bare or `both` draws `< >`, louder to the middle and softer after it; `crescendo` or `diminuendo` draws that wedge alone. On a note tied into, it covers the rest of the chain; with swells on two notes of one chain, the earlier wins. Inside a `<music-composition>` it crosses barlines and system breaks. A hairpin starting, ending or running over any note of the chain wins."
+            },
+            {
+              "name": "phonemes",
+              "type": {
+                "text": "string"
+              },
+              "description": "Vowels or phonemes to form while the note sounds, below the stave in square brackets: `,` separates them (`i,u`), `>` (or `→`) joins them with an arrow (`oo>ah`), and a trailing `>` leads to the next note's first phoneme, over a barline too. The first stands under the head; with an arrow out they are spaced evenly toward the next phoneme, else the last ends with the note's value."
             }
           ],
           "superclass": {
@@ -12729,6 +12887,52 @@
               "name": "#warnedSwells",
               "privacy": "private",
               "default": "new WeakSet<NoteOrChordElementType>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#phonemeContainers",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceKey, SVGSVGElement>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#placedPhonemes",
+              "privacy": "private",
+              "default": "new Map<VoiceKey, VoicePhonemes>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#warnedPhonemes",
+              "privacy": "private",
+              "default": "new WeakSet<Element>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#phonemeContinuations",
+              "privacy": "private",
+              "type": {
+                "text": "PhonemeContinuations"
+              },
+              "default": "{ nextAnchors: new Map(), continued: new Set(), rows: new Map(), }",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -14821,6 +15025,34 @@
             },
             {
               "kind": "method",
+              "name": "#phonemeReserve",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#dynamicsReserve",
               "privacy": "private",
               "return": {
@@ -15428,6 +15660,275 @@
                   }
                 }
               ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#layoutPhonemes",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "phonemeFloorY",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "description": "Where a vocal staff's lyrics end (container Y), which phonemes go\nbelow; null without lyrics.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "relayPhonemes",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "description": "Lays the staff out again when it has phonemes, as after lyrics move.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "clientToContainerY",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "clientY",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "description": "A client Y in the staff's drawing (container) coordinates.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#ownPhonemeRowY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "inkYs",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "floorY",
+                  "type": {
+                    "text": "number | null"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "ownPhonemeRows",
+              "return": {
+                "type": {
+                  "text": "ReadonlyMap<VoiceKey, number>"
+                }
+              },
+              "description": "The row each voice's phonemes need in this staff (local px), before\nany shared with other bars.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#belowInkYs",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#placePhonemes",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "Omit<VoicePhonemes, 'baselineY'>"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#phonemeSpanEndX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderPhonemes",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#phonemesBottomY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "phonemeBoxes",
+              "return": {
+                "type": {
+                  "text": "{ left: number; right: number; arrowY: number }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "Element"
+                  }
+                }
+              ],
+              "description": "An entry's drawn phonemes (client px): each one's edges, and the height\nits arrows run at. Empty when it has none here.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "phonemeContinuations",
+              "type": {
+                "text": "PhonemeContinuations"
+              },
+              "description": "Set by the ancestor <music-composition> for phoneme runs over a\nbarline. Compared by content.",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -21220,6 +21721,48 @@
             },
             {
               "kind": "field",
+              "name": "#lyricsBottomClientY",
+              "privacy": "private",
+              "type": {
+                "text": "number | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "method",
+              "name": "#setLyricsBottom",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "clientY",
+                  "type": {
+                    "text": "number | null"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "phonemeFloorY",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "description": "Where a vocal staff's lyrics end (container Y), which phonemes go\nbelow; null without lyrics.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
               "name": "#boundPositionLyrics",
               "privacy": "private"
             },
@@ -22132,6 +22675,52 @@
               "name": "#warnedSwells",
               "privacy": "private",
               "default": "new WeakSet<NoteOrChordElementType>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#phonemeContainers",
+              "privacy": "private",
+              "type": {
+                "text": "Map<VoiceKey, SVGSVGElement>"
+              },
+              "default": "new Map()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#placedPhonemes",
+              "privacy": "private",
+              "default": "new Map<VoiceKey, VoicePhonemes>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#warnedPhonemes",
+              "privacy": "private",
+              "default": "new WeakSet<Element>()",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#phonemeContinuations",
+              "privacy": "private",
+              "type": {
+                "text": "PhonemeContinuations"
+              },
+              "default": "{ nextAnchors: new Map(), continued: new Set(), rows: new Map(), }",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -24194,6 +24783,34 @@
             },
             {
               "kind": "method",
+              "name": "#phonemeReserve",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "index",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#dynamicsReserve",
               "privacy": "private",
               "return": {
@@ -24801,6 +25418,260 @@
                   }
                 }
               ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#layoutPhonemes",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "relayPhonemes",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "description": "Lays the staff out again when it has phonemes, as after lyrics move.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "clientToContainerY",
+              "privacy": "protected",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "clientY",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "description": "A client Y in the staff's drawing (container) coordinates.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#ownPhonemeRowY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "inkYs",
+                  "type": {
+                    "text": "readonly number[]"
+                  }
+                },
+                {
+                  "name": "floorY",
+                  "type": {
+                    "text": "number | null"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "ownPhonemeRows",
+              "return": {
+                "type": {
+                  "text": "ReadonlyMap<VoiceKey, number>"
+                }
+              },
+              "description": "The row each voice's phonemes need in this staff (local px), before\nany shared with other bars.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#belowInkYs",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#placePhonemes",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "Omit<VoicePhonemes, 'baselineY'>"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#phonemeSpanEndX",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "voiceKey",
+                  "type": {
+                    "text": "VoiceKey"
+                  }
+                },
+                {
+                  "name": "state",
+                  "type": {
+                    "text": "VoiceRenderState"
+                  }
+                },
+                {
+                  "name": "i",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#renderPhonemes",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "remainingWidth",
+                  "type": {
+                    "text": "number"
+                  }
+                }
+              ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#phonemesBottomY",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number | null"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "phonemeBoxes",
+              "return": {
+                "type": {
+                  "text": "{ left: number; right: number; arrowY: number }[]"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "element",
+                  "type": {
+                    "text": "Element"
+                  }
+                }
+              ],
+              "description": "An entry's drawn phonemes (client px): each one's edges, and the height\nits arrows run at. Empty when it has none here.",
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "phonemeContinuations",
+              "type": {
+                "text": "PhonemeContinuations"
+              },
+              "description": "Set by the ancestor <music-composition> for phoneme runs over a\nbarline. Compared by content.",
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"

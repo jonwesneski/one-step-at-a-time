@@ -85,8 +85,9 @@ const NO_END_WARNING_SPACE: EndWarningSpace = { width: 0, reserved: 0 };
 
 const INK_SELECTOR =
   'path, ellipse:not(.head-hit-zone), line, rect, polygon, polyline, circle, text';
+// Phonemes go under a vocal staff's lyrics, which clear this ink.
 const NON_ENTRY_INK =
-  '.describe-container, .end-warnings-container, .start-repeat-container, .mid-bar-barlines-container';
+  '.describe-container, .end-warnings-container, .start-repeat-container, .mid-bar-barlines-container, .phonemes-container';
 const ENTRY_SELECTOR = `${NOTE_TAGS}, ${CHORD_TAGS}, ${MUSIC_REST}:not([hidden]), ${MUSIC_CLEF}, ${MUSIC_GUITAR_NOTE}`;
 
 // Sub-pixel drift between passes must not count as a change, or the measure

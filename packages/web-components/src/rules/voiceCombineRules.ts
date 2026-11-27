@@ -122,6 +122,7 @@ function isCombineEligible(voice: VoiceCombineInput, index: number): boolean {
     element.glissando === null &&
     (element.glissandoLabel ?? null) === null &&
     (element.techniqueText ?? null) === null &&
+    (element.phonemes ?? null) === null &&
     !hasBend(element) &&
     element.stress === null &&
     !element.dynamicShared &&
