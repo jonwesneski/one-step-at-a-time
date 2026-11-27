@@ -120,11 +120,11 @@ Specific to stringed instruments (violin, cello, guitar, etc.).
 
 |          | Name                       | Notation                                    | Description                                                       |
 | -------- | -------------------------- | ------------------------------------------- | ----------------------------------------------------------------- |
-| &#x2610; | Tongue                     | `t` or `Tu`                                 | Articulate note with tongue                                       |
-| &#x2610; | Double Tongue              | `T-K`                                       | Rapid double articulation                                         |
-| &#x2610; | Triple Tongue              | `T-K-T`                                     | Rapid triple articulation                                         |
+| &#x2611; | Tongue                     | `t` or `Tu`                                 | Articulate note with tongue                                       |
+| &#x2611; | Double Tongue              | `T-K`                                       | Rapid double articulation                                         |
+| &#x2611; | Triple Tongue              | `T-K-T`                                     | Rapid triple articulation                                         |
 | &#x2611; | Flutter Tongue             | `flz.` or `flutter`                         | Roll the tongue while playing                                     |
-| &#x2610; | Growl                      | `growl`                                     | Sing into instrument while playing                                |
+| &#x2611; | Growl                      | `growl`                                     | Sing into instrument while playing                                |
 | &#x2610; | Multiphonics               | Special notation                            | Produce multiple pitches simultaneously                           |
 | &#x2610; | Half-valve                 | `(+)` or special mark                       | Depress valve halfway for microtone/effect                        |
 | &#x2611; | Glissando                  | `gliss.`                                    | Slide between pitches (trombones especially)                      |
@@ -133,11 +133,16 @@ Specific to stringed instruments (violin, cello, guitar, etc.).
 | &#x2611; | Pitch Bend / Lip Glissando | Line after the notehead (`bend`, `bend-to`) | Alter the pitch by embouchure or throat                           |
 | &#x2610; | Stopped (Horn)             | `+`                                         | Hand stops bell (French Horn)                                     |
 | &#x2610; | Open (Horn)                | `o`                                         | Remove hand from bell                                             |
-| &#x2610; | Mute                       | `con sord.`                                 | Use a mute                                                        |
-| &#x2610; | Remove Mute                | `senza sord.`                               | Take off the mute                                                 |
+| &#x2611; | Mute                       | `con sord.`                                 | Use a mute                                                        |
+| &#x2611; | Remove Mute                | `senza sord.`                               | Take off the mute                                                 |
 | &#x2610; | Sforzando Tongue           | `sfz` + note                                | Explosive tongued attack                                          |
 | &#x2611; | Breath Mark                | `✓` (`breath-mark="tick"`)                  | Break in the sound after the note                                 |
 | &#x2611; | Comma Breath Mark          | `’` (`breath-mark="comma"`)                 | Short pause or lift within a phrase                               |
+| &#x2611; | Unpitched Note             | `unpitched` (`top`, `bottom` or written)    | A sound with no pitch: no accidental or ledger line               |
+| &#x2611; | Crossed Stem               | `stem-mark="cross"`                         | Air through the instrument with the written fingering             |
+| &#x2611; | Phonemes                   | `phonemes="oo>ah>"`                         | Vowel shapes in brackets, `>` an arrow to the next                |
+| &#x2611; | Pitch Contour              | `bend-contour`                              | Approximate pitches as a freehand line after the note             |
+| &#x2610; | Circle-dot Notehead        | `⊙` (Berio)                                 | An alternative head for a sung or spoken pitch                    |
 
 ---
 
@@ -182,17 +187,19 @@ Specific to stringed instruments (violin, cello, guitar, etc.).
 
 These alter the rhythmic length of a note.
 
-|          | Name             | Notation            | Description                          |
-| -------- | ---------------- | ------------------- | ------------------------------------ |
-| &#x2611; | Dot              | `.` after note      | Adds 50% of note's value             |
-| &#x2611; | Double Dot       | `..` after note     | Adds 75% of note's value             |
-| &#x2611; | Triple Dot       | `...` after note    | Adds 87.5% of note's value           |
-| &#x2611; | Tie              | Curved line         | Extends note across a barline        |
-| &#x2611; | Tuplet / Triplet | Bracket with number | Groups of notes in irregular rhythms |
-| &#x2611; | Fermata          | `ð„`                | Hold the note longer than written    |
-| &#x2610; | Short Fermata    | Pointed fermata     | Shorter than normal fermata          |
-| &#x2610; | Long Fermata     | Square fermata      | Longer than normal fermata           |
-| &#x2610; | Ad libitum       | `ad lib.`           | At the performer's discretion        |
+|          | Name              | Notation                                 | Description                                             |
+| -------- | ----------------- | ---------------------------------------- | ------------------------------------------------------- |
+| &#x2611; | Dot               | `.` after note                           | Adds 50% of note's value                                |
+| &#x2611; | Double Dot        | `..` after note                          | Adds 75% of note's value                                |
+| &#x2611; | Triple Dot        | `...` after note                         | Adds 87.5% of note's value                              |
+| &#x2611; | Tie               | Curved line                              | Extends note across a barline                           |
+| &#x2611; | Tuplet / Triplet  | Bracket with number                      | Groups of notes in irregular rhythms                    |
+| &#x2611; | Beam Over Rests   | `beam-over` on a rest                    | The beam reaches over the rest; a lone note takes stubs |
+| &#x2611; | Tuplet Note Value | `note-value` (`5=♩`), `bracket="always"` | The ratio shown as a note value                         |
+| &#x2611; | Fermata           | `ð„`                                     | Hold the note longer than written                       |
+| &#x2610; | Short Fermata     | Pointed fermata                          | Shorter than normal fermata                             |
+| &#x2610; | Long Fermata      | Square fermata                           | Longer than normal fermata                              |
+| &#x2610; | Ad libitum        | `ad lib.`                                | At the performer's discretion                           |
 
 ---
 
@@ -208,6 +215,7 @@ These alter the rhythmic length of a note.
 | &#x2611; | Hairpin Decrescendo | `>` hairpin             | Get softer over a span of notes             |
 | &#x2611; | Dotted Slur         | Dashed curved line      | Editorial phrasing (`slur-style="dotted"`)  |
 | &#x2611; | Swell               | `< >` on one note       | Louder to the middle, then softer (`swell`) |
+| &#x2611; | Swell Over A Tie    | `swell` on a tie chain  | One `< >` over the whole tied note          |
 | &#x2610; | Niente              | `n` or circle at end    | Fade to/from silence                        |
 
 ---
@@ -253,21 +261,22 @@ These alter the rhythmic length of a note.
 
 ## 13. Special / Extended Techniques
 
-|          | Name             | Context        | Description                                 |
-| -------- | ---------------- | -------------- | ------------------------------------------- |
-| &#x2610; | Multiphonics     | Wind/Voice     | Produce multiple pitches at once            |
-| &#x2610; | Sprechstimme     | Voice          | Half-sung, half-spoken                      |
-| &#x2610; | Cluster          | Keyboard       | Play a dense group of adjacent notes        |
-| &#x2610; | Prepared Piano   | Piano          | Objects placed on strings to alter tone     |
-| &#x2610; | Con sordino      | Strings/Brass  | Play with a mute                            |
-| &#x2610; | Senza sordino    | Strings/Brass  | Play without a mute                         |
-| &#x2610; | Sul ponticello   | Strings        | Near the bridge                             |
-| &#x2610; | Sul tasto        | Strings        | Over the fingerboard                        |
-| &#x2610; | Ordinario (ord.) | Any            | Return to normal playing technique          |
-| &#x2611; | Loco             | Any            | Play as written (cancel 8va etc.)           |
-| &#x2610; | Flautando        | Strings        | Flute-like, light bowing                    |
-| &#x2610; | JetÃ©            | Strings        | Throw the bow for multiple bouncing strokes |
-| &#x2610; | Flageolet        | Strings/Guitar | Natural harmonic; light airy tone           |
+|          | Name             | Context        | Description                                            |
+| -------- | ---------------- | -------------- | ------------------------------------------------------ |
+| &#x2610; | Multiphonics     | Wind/Voice     | Produce multiple pitches at once                       |
+| &#x2610; | Sprechstimme     | Voice          | Half-sung, half-spoken                                 |
+| &#x2610; | Cluster          | Keyboard       | Play a dense group of adjacent notes                   |
+| &#x2610; | Prepared Piano   | Piano          | Objects placed on strings to alter tone                |
+| &#x2611; | Con sordino      | Strings/Brass  | Play with a mute                                       |
+| &#x2611; | Senza sordino    | Strings/Brass  | Play without a mute                                    |
+| &#x2610; | Sul ponticello   | Strings        | Near the bridge                                        |
+| &#x2610; | Sul tasto        | Strings        | Over the fingerboard                                   |
+| &#x2611; | Ordinario (ord.) | Any            | Return to normal playing technique                     |
+| &#x2611; | Loco             | Any            | Play as written (cancel 8va etc.)                      |
+| &#x2610; | Flautando        | Strings        | Flute-like, light bowing                               |
+| &#x2610; | JetÃ©            | Strings        | Throw the bow for multiple bouncing strokes            |
+| &#x2610; | Flageolet        | Strings/Guitar | Natural harmonic; light airy tone                      |
+| &#x2611; | Cue-sized Notes  | Any            | Smaller notes, as sung or optional ones (`size="cue"`) |
 
 # Staff Annotations (Above & Below the Staff) List
 
@@ -278,18 +287,19 @@ They are broken into two positional zones: **Above Staff** and **Below Staff**, 
 
 ## What Are They Called?
 
-|          | Term                       | Meaning                                                               |
-| -------- | -------------------------- | --------------------------------------------------------------------- |
-| &#x2610; | **Staff Text**             | Any freeform text placed above or below a staff                       |
-| &#x2610; | **System Text**            | Text that applies to ALL staves simultaneously (e.g., tempo markings) |
-| &#x2610; | **Expression Text**        | Stylistic/interpretive instructions (e.g., _cantabile_, _espressivo_) |
-| &#x2610; | **Technique Text**         | Performance technique instructions (e.g., _palm mute_, _col legno_)   |
-| &#x2610; | **Rehearsal Marks**        | Letters or numbers used to reference sections during rehearsal        |
-| &#x2610; | **Chord Symbols**          | Chord names written above or below for harmonic reference             |
-| &#x2610; | **Figured Bass**           | Numbers below the bass line indicating harmony (Baroque style)        |
-| &#x2611; | **Lyrics / Text Underlay** | Sung text placed beneath notes                                        |
-| &#x2610; | **Fingering**              | Numbers indicating which finger to use                                |
-| &#x2610; | **Score Directives**       | Instructions that redirect playback/flow (D.C., D.S., Coda, etc.)     |
+|          | Term                       | Meaning                                                                 |
+| -------- | -------------------------- | ----------------------------------------------------------------------- |
+| &#x2611; | **Staff Text**             | Any freeform text placed above or below a staff                         |
+| &#x2610; | **System Text**            | Text that applies to ALL staves simultaneously (e.g., tempo markings)   |
+| &#x2610; | **Expression Text**        | Stylistic/interpretive instructions (e.g., _cantabile_, _espressivo_)   |
+| &#x2611; | **Technique Text**         | Performance technique instructions (e.g., _palm mute_, _col legno_)     |
+| &#x2610; | **Rehearsal Marks**        | Letters or numbers used to reference sections during rehearsal          |
+| &#x2610; | **Chord Symbols**          | Chord names written above or below for harmonic reference               |
+| &#x2610; | **Figured Bass**           | Numbers below the bass line indicating harmony (Baroque style)          |
+| &#x2611; | **Lyrics / Text Underlay** | Sung text placed beneath notes                                          |
+| &#x2610; | **Fingering**              | Numbers indicating which finger to use                                  |
+| &#x2610; | **Score Directives**       | Instructions that redirect playback/flow (D.C., D.S., Coda, etc.)       |
+| &#x2610; | **Footnotes / Legends**    | Numbered notes or a page explaining symbols (e.g. vowel qualifications) |
 
 ---
 
@@ -375,29 +385,29 @@ Instructions for how to physically produce the sound. These are specific to the 
 
 |          | Marking                  | Context        | Meaning                            |
 | -------- | ------------------------ | -------------- | ---------------------------------- |
-| &#x2610; | `arco`                   | Strings        | Return to bowing                   |
-| &#x2610; | `pizz.`                  | Strings        | Pluck the string                   |
-| &#x2610; | `col legno`              | Strings        | Play with the wood of the bow      |
-| &#x2610; | `sul pont.`              | Strings        | Bow near the bridge                |
-| &#x2610; | `sul tasto`              | Strings        | Bow over the fingerboard           |
-| &#x2610; | `flautando`              | Strings        | Light, flute-like bowing           |
-| &#x2610; | `con sord.`              | Strings/Brass  | With mute                          |
-| &#x2610; | `senza sord.`            | Strings/Brass  | Without mute                       |
-| &#x2610; | `ord.` / `ordinario`     | Any            | Return to normal technique         |
+| &#x2611; | `arco`                   | Strings        | Return to bowing                   |
+| &#x2611; | `pizz.`                  | Strings        | Pluck the string                   |
+| &#x2611; | `col legno`              | Strings        | Play with the wood of the bow      |
+| &#x2611; | `sul pont.`              | Strings        | Bow near the bridge                |
+| &#x2611; | `sul tasto`              | Strings        | Bow over the fingerboard           |
+| &#x2611; | `flautando`              | Strings        | Light, flute-like bowing           |
+| &#x2611; | `con sord.`              | Strings/Brass  | With mute                          |
+| &#x2611; | `senza sord.`            | Strings/Brass  | Without mute                       |
+| &#x2611; | `ord.` / `ordinario`     | Any            | Return to normal technique         |
 | &#x2611; | `flutter` / `flz.`       | Wind           | Flutter tongue                     |
 | &#x2610; | `palm mute` / `P.M.----` | Guitar         | Mute strings with palm near bridge |
 | &#x2610; | `let ring` / `L.R.----`  | Guitar         | Allow strings to sustain           |
-| &#x2610; | `tap` / `T`              | Guitar         | Right-hand tapping                 |
-| &#x2610; | `w/ pick`                | Guitar         | Use a plectrum                     |
-| &#x2610; | `w/ fingers`             | Guitar         | Fingerpick                         |
-| &#x2610; | `harmonics`              | Guitar/Strings | Play harmonics                     |
-| &#x2610; | `straight mute`          | Brass          | Specific mute type                 |
-| &#x2610; | `cup mute`               | Brass          | Specific mute type                 |
-| &#x2610; | `harmon mute`            | Brass          | Specific mute type (wah effect)    |
-| &#x2610; | `open`                   | Brass          | Remove mute / open bell            |
+| &#x2611; | `tap` / `T`              | Guitar         | Right-hand tapping                 |
+| &#x2611; | `w/ pick`                | Guitar         | Use a plectrum                     |
+| &#x2611; | `w/ fingers`             | Guitar         | Fingerpick                         |
+| &#x2611; | `harmonics`              | Guitar/Strings | Play harmonics                     |
+| &#x2611; | `straight mute`          | Brass          | Specific mute type                 |
+| &#x2611; | `cup mute`               | Brass          | Specific mute type                 |
+| &#x2611; | `harmon mute`            | Brass          | Specific mute type (wah effect)    |
+| &#x2611; | `open`                   | Brass          | Remove mute / open bell            |
 | &#x2611; | `loco`                   | Any            | Cancel 8va â€” play as written     |
-| &#x2610; | `ad lib.`                | Any            | At performer's discretion          |
-| &#x2610; | `sim.` / `simile`        | Any            | Continue in the same manner        |
+| &#x2611; | `ad lib.`                | Any            | At performer's discretion          |
+| &#x2611; | `sim.` / `simile`        | Any            | Continue in the same manner        |
 
 ---
 
@@ -613,7 +623,7 @@ Can appear above or below depending on the instrument/score.
 | &#x2610; | Tempo markings                | Above â€” system-wide                                 |
 | &#x2610; | Rehearsal marks               | Above â€” system-wide                                 |
 | &#x2610; | Expression text               | Above staff                                           |
-| &#x2610; | Technique text                | Above staff                                           |
+| &#x2611; | Technique text                | Above staff                                           |
 | &#x2611; | 8va / 15ma                    | Above staff                                           |
 | &#x2610; | Chord symbols                 | Above staff (lead sheets) / Below staff (some styles) |
 | &#x2611; | Trill marks                   | Above staff                                           |

@@ -1,3 +1,4 @@
+import { beamOverWarning } from '../rules/restRules';
 import { textAttributeWarning } from '../rules/techniqueTextRules';
 import { IRestElement } from '../types/elements';
 import {
@@ -42,6 +43,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
    * @customElement music-rest
    * @attr {DurationType} duration - Rest length: `whole`, `half`, `quarter`, `eighth`, `sixteenth`, …, optionally dotted (`dotted-quarter`, `double-dotted-eighth`). Defaults to `quarter`.
    * @attr {string} beam-group - `id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. A rest carries this purely as a correlation key — it never contributes to the beam polygon itself.
+   * @attr {boolean} beam-over - Joins the beam of the notes beside it in its beat group: the beam reaches toward the rest at the end of a run and runs over it inside one, and a lone note beside it takes beam stubs instead of a tail. Rests shorter than a crotchet only; several rests in a row each need it. Ignored in a cross-staff `beam-group`.
    * @attr {RestStaffSide} rest-staff-side - Placement relative to a double-stemmed beam this rest is a member of (`above`/`below` the beam itself, or `centered` in the real gap between staves) — meaningless outside an active `beam-group`. Unset = auto-classified by the ancestor `<music-measure>`.
    * @attr {boolean} hidden - Spacer rest: still occupies its beat time (bar-fit and spacing) but draws nothing — e.g. the empty staff's share of a single line passed between the hands. In a staff its `technique-text` is still drawn.
    * @attr {string} technique-text - Technique text over the rest, starting at its left edge, `|` starting a new line (see `<music-note>`).
@@ -59,6 +61,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       return [
         'duration',
         'beam-group',
+        'beam-over',
         'rest-staff-side',
         'technique-text',
         'technique-text-placement',
@@ -98,6 +101,17 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       } else {
         this.setAttribute('beam-group', value);
       }
+    }
+
+    // A spacer in a <music-tremolo> never joins a beam.
+    get beamOver(): boolean {
+      return (
+        this.parentElement?.nodeName !== MUSIC_TREMOLO_NODE &&
+        this.hasAttribute('beam-over')
+      );
+    }
+    set beamOver(value: boolean) {
+      this.toggleAttribute('beam-over', value);
     }
 
     // Placement relative to a double-stemmed beam this rest is a member
@@ -160,6 +174,13 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
       if (name === 'duration') {
         warnIfInvalidDuration(this.localName, newValue);
       }
+      if (
+        name === 'beam-over' ||
+        name === 'duration' ||
+        name === 'beam-group'
+      ) {
+        this.#warnBeamOver();
+      }
       const textWarning = textAttributeWarning(name, newValue);
       if (textWarning !== null) {
         console.warn(`[music-rest] ${textWarning}`);
@@ -197,6 +218,18 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
           composed: true,
         })
       );
+    }
+
+    #lastBeamOverWarning: string | null = null;
+
+    #warnBeamOver(): void {
+      const warning = this.hasAttribute('beam-over')
+        ? beamOverWarning(this.duration, this.getAttribute('beam-group'))
+        : null;
+      if (warning !== null && warning !== this.#lastBeamOverWarning) {
+        console.warn(`[music-rest] ${warning}`);
+      }
+      this.#lastBeamOverWarning = warning;
     }
 
     private render(): void {

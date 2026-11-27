@@ -10,6 +10,7 @@ import {
   COMMON_ATTRIBUTES,
   MUSIC_REST,
   MUSIC_STAFF,
+  MUSIC_TREMOLO,
   NOTE_EVENTS,
 } from '../utils/consts';
 import './index';
@@ -284,6 +285,55 @@ describe('technique-text on a rest', () => {
         '.technique-labels-container .technique-text'
       )?.textContent
     ).toBe('hum');
+  });
+
+  describe('beam-over', () => {
+    it('reads and toggles the attribute', () => {
+      const rest = document.createElement(MUSIC_REST) as RestElementType;
+      document.body.appendChild(rest);
+      expect(rest.beamOver).toBe(false);
+      rest.beamOver = true;
+      expect(rest.hasAttribute('beam-over')).toBe(true);
+      rest.beamOver = false;
+      expect(rest.hasAttribute('beam-over')).toBe(false);
+    });
+
+    it('is off for a spacer in a tremolo', () => {
+      const tremolo = document.createElement(MUSIC_TREMOLO);
+      const rest = document.createElement(MUSIC_REST) as RestElementType;
+      rest.setAttribute('beam-over', '');
+      tremolo.appendChild(rest);
+      document.body.appendChild(tremolo);
+      expect(rest.beamOver).toBe(false);
+    });
+
+    it('warns once on a crotchet or longer, and again when it changes', () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const rest = document.createElement(MUSIC_REST) as RestElementType;
+      rest.setAttribute('duration', 'quarter');
+      rest.setAttribute('beam-over', '');
+      document.body.appendChild(rest);
+      rest.setAttribute('duration', 'half');
+      rest.setAttribute('duration', 'eighth');
+      rest.setAttribute('beam-group', 'g');
+      expect(warn.mock.calls.map(([message]) => message)).toEqual([
+        expect.stringContaining('ignoring it on a quarter rest'),
+        expect.stringContaining('ignoring it on a half rest'),
+        expect.stringContaining('beam-group'),
+      ]);
+      warn.mockRestore();
+    });
+
+    it('asks the staff to re-lay out when it changes', () => {
+      const rest = document.createElement(MUSIC_REST) as RestElementType;
+      rest.setAttribute('duration', 'eighth');
+      document.body.appendChild(rest);
+      const changes = jest.fn();
+      document.body.addEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, changes);
+      rest.beamOver = true;
+      expect(changes).toHaveBeenCalledTimes(1);
+      document.body.removeEventListener(NOTE_EVENTS.NOTE_Y_CHANGE, changes);
+    });
   });
 
   it('asks the staff to re-lay out when its text changes', () => {

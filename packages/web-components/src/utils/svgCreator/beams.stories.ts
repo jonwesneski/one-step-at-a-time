@@ -348,3 +348,47 @@ export const KneedBeam: Story = {
     </music-staff>
   `,
 };
+
+// `beam-over`: a beam reaches toward a rest at the end of its run, and a
+// lone note beside one takes stubs instead of a tail (bar 1); inside a run
+// the beam runs through, the rest moving clear of it (bar 2).
+export const OverRests: Story = {
+  render: () => html`
+    <music-composition time="3/4">
+      <music-measure>
+        <music-staff clef="treble">
+          <music-tuplet ratio="3">
+            <music-rest duration="eighth" beam-over></music-rest>
+            <music-note note="C" octave="4" duration="sixteenth"></music-note>
+          </music-tuplet>
+          <music-rest duration="eighth"></music-rest>
+          <music-tuplet ratio="5">
+            <music-rest duration="sixteenth" beam-over></music-rest>
+            <music-note note="C" octave="5" duration="sixteenth"></music-note>
+            <music-note note="C" octave="5" duration="sixteenth"></music-note>
+            <music-note note="C" octave="5" duration="sixteenth"></music-note>
+            <music-note note="C" octave="5" duration="sixteenth"></music-note>
+          </music-tuplet>
+          <music-note note="A" octave="4" duration="eighth"></music-note>
+          <music-note note="F" octave="4" duration="sixteenth"></music-note>
+          <music-rest duration="sixteenth" beam-over></music-rest>
+        </music-staff>
+      </music-measure>
+      <music-measure>
+        <music-staff clef="treble">
+          <music-note note="E" octave="5" duration="sixteenth"></music-note>
+          <music-rest duration="sixteenth" beam-over></music-rest>
+          <music-note note="G" octave="5" duration="sixteenth"></music-note>
+          <music-note note="F" octave="5" duration="sixteenth"></music-note>
+          <music-note note="G" octave="4" duration="eighth"></music-note>
+          <music-rest duration="sixteenth" beam-over></music-rest>
+          <music-note note="B" octave="4" duration="sixteenth"></music-note>
+          <music-rest duration="sixteenth" beam-over></music-rest>
+          <music-note note="D" octave="5" duration="sixteenth"></music-note>
+          <music-rest duration="sixteenth" beam-over></music-rest>
+          <music-rest duration="sixteenth"></music-rest>
+        </music-staff>
+      </music-measure>
+    </music-composition>
+  `,
+};

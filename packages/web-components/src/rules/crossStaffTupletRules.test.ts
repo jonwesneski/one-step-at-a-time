@@ -316,4 +316,17 @@ describe('resolveCrossStaffTupletGapBaseY', () => {
       })
     ).toEqual({ upper: 170 + clearance, lower: 130 - clearance });
   });
+
+  it('keeps a note-value label that rises above the line clear of the top staff', () => {
+    const band = crossStaffTupletGapBand({
+      topGapEdgeY: 100,
+      bottomGapEdgeY: 200,
+      topExtremeY: null,
+      bottomExtremeY: null,
+      labelAscent: 24,
+      labelDescent: TUPLET_NUMERAL_FONT_SIZE / 2,
+    });
+    expect(band.upper).toBe(100 + TUPLET_STAFF_CLEARANCE_PX + 24);
+    expect(band.lower).toBe(200 - clearance);
+  });
 });

@@ -10163,6 +10163,18 @@
         {
           "kind": "variable",
           "name": "centerX"
+        },
+        {
+          "kind": "variable",
+          "name": "startX"
+        },
+        {
+          "kind": "variable",
+          "name": "endX"
+        },
+        {
+          "kind": "variable",
+          "name": "baseY"
         }
       ],
       "exports": [
@@ -12068,6 +12080,13 @@
             },
             {
               "kind": "field",
+              "name": "beamOver",
+              "type": {
+                "text": "boolean"
+              }
+            },
+            {
+              "kind": "field",
               "name": "restStaffSide",
               "type": {
                 "text": "RestStaffSide | null"
@@ -12092,6 +12111,25 @@
               "name": "techniqueTextStyle",
               "type": {
                 "text": "TextStyle"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "#lastBeamOverWarning",
+              "privacy": "private",
+              "type": {
+                "text": "string | null"
+              },
+              "default": "null"
+            },
+            {
+              "kind": "method",
+              "name": "#warnBeamOver",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
               }
             },
             {
@@ -12126,6 +12164,13 @@
                 "text": "string"
               },
               "description": "`id` shared by every note/chord/rest across a measure's two adjacent grand-staff staves that joins one cross-staff double-stemmed beam group. A rest carries this purely as a correlation key — it never contributes to the beam polygon itself."
+            },
+            {
+              "name": "beam-over",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Joins the beam of the notes beside it in its beat group: the beam reaches toward the rest at the end of a run and runs over it inside one, and a lone note beside it takes beam stubs instead of a tail. Rests shorter than a crotchet only; several rests in a row each need it. Ignored in a cross-staff `beam-group`."
             },
             {
               "name": "rest-staff-side",
@@ -15606,6 +15651,20 @@
                   }
                 }
               ],
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
+              "name": "#moveRestsClearOfBeams",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
               "inheritedFrom": {
                 "name": "StaffNotationElementBase",
                 "module": "src/staffNotationBase.ts"
@@ -25371,6 +25430,20 @@
             },
             {
               "kind": "method",
+              "name": "#moveRestsClearOfBeams",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "inheritedFrom": {
+                "name": "StaffNotationElementBase",
+                "module": "src/staffNotationBase.ts"
+              }
+            },
+            {
+              "kind": "method",
               "name": "#collectPlacementColumns",
               "privacy": "private",
               "return": {
@@ -30159,6 +30232,20 @@
             },
             {
               "kind": "field",
+              "name": "noteValue",
+              "type": {
+                "text": "DurationType | null"
+              }
+            },
+            {
+              "kind": "field",
+              "name": "bracket",
+              "type": {
+                "text": "TupletBracket"
+              }
+            },
+            {
+              "kind": "field",
               "name": "flatElements",
               "type": {
                 "text": "NoteChordOrRestElementType[]"
@@ -30194,6 +30281,20 @@
                 "text": "TupletPlacement"
               },
               "description": "Forces the bracket/numeral `above` or `below` the notes. Unset = the stems' majority vote (or, for a `tuplet-group`, the side nearest its outer notes; on a vocal staff with one voice, above)."
+            },
+            {
+              "name": "note-value",
+              "type": {
+                "text": "DurationType"
+              },
+              "description": "Shows the ratio as a note value: `note-value=\"quarter\"` on a quintuplet draws `5=♩`, the numeral, `=` and a small upright note of that value (dotted or undotted, down to a sixty-fourth). Unset = the numeral alone."
+            },
+            {
+              "name": "bracket",
+              "type": {
+                "text": "TupletBracket"
+              },
+              "description": "`always` draws the bracket on a fully beamed group too, along the beam, where `auto` (the default) shows the numeral alone."
             }
           ],
           "superclass": {

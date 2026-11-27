@@ -942,6 +942,18 @@ export const TUPLET_NUMERAL_GAP_PX = STAFF_LINE_SPACING * 2.5;
 /** Vertical offset (px) between nesting levels of tuplet brackets. */
 export const TUPLET_BRACKET_LEVEL_OFFSET_PX = STAFF_LINE_SPACING * 0.8;
 
+/** A tuplet's note value (`5=♩`) is drawn at 0.7 of a note's size. */
+export const TUPLET_NOTE_VALUE_SCALE = 0.7;
+
+/** Gap (px) between a tuplet label's `=` and its note value. */
+export const TUPLET_NOTE_VALUE_GAP_PX = STAFF_LINE_SPACING * 0.2;
+
+/**
+ * Padding (px) either side of a tuplet label in its bracket's gap, which
+ * widens past TUPLET_NUMERAL_GAP_PX to fit it.
+ */
+export const TUPLET_LABEL_PADDING_PX = STAFF_LINE_SPACING * 0.3;
+
 /** Font size (px) for the tuplet numeral. */
 export const TUPLET_NUMERAL_FONT_SIZE = STAFF_LINE_SPACING * 1.2;
 

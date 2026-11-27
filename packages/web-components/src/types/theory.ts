@@ -421,6 +421,12 @@ export type RestStaffSide = 'above' | 'below' | 'centered';
 export type TupletPlacement = 'above' | 'below';
 
 /**
+ * Whether a tuplet draws its bracket: `auto` leaves it off a fully beamed
+ * group, `always` draws it there too, along the beam.
+ */
+export type TupletBracket = 'auto' | 'always';
+
+/**
  * Author override for a note/chord's stem direction, independent of its
  * pitch-driven default. Unset leaves pitch, voice or beam-group policy to
  * decide. A beamed group draws one direction, so set it on every member.

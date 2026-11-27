@@ -51,6 +51,7 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  TupletBracket,
   TupletPlacement,
   TupletRatio,
   UnpitchedPlacement,
@@ -631,6 +632,8 @@ export interface IRestElement {
   // ancestor <music-measure> from the rest's position among its group's
   // members, re-derived on every render rather than persisted here.
   restStaffSide: RestStaffSide | null;
+  /** Joins the beam of the notes beside it (shorter than a crotchet only). */
+  beamOver: boolean;
   /** Technique text over (or under) this rest, `|` starting a new line. */
   techniqueText: string | null;
   techniqueTextPlacement: TextPlacement;
@@ -663,6 +666,9 @@ export interface ITupletElement {
   ratio: TupletRatio;
   tupletGroup: string | null;
   placement: TupletPlacement | null;
+  /** Shows the ratio as a note value, `5=♩`, rather than the numeral alone. */
+  noteValue: DurationType | null;
+  bracket: TupletBracket;
   readonly flatElements: NoteChordOrRestElementType[];
 }
 

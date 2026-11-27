@@ -151,7 +151,7 @@ import {
   type DescribeReminder,
   describeReminderEquals,
 } from './rules/repeatWarningRules';
-import { restToYCoordinate } from './rules/restRules';
+import { restShiftClearOfBeam, restToYCoordinate } from './rules/restRules';
 import {
   type BarSpacing,
   columnOffsetAt,
@@ -213,7 +213,9 @@ import {
   resolveTupletBracketAbove,
   stemTipYFromStaffY,
   TupletBracketGeometry,
+  tupletDisplayOf,
   TupletGroup,
+  tupletLabelExtents,
 } from './rules/tupletRules';
 import {
   resolveStemlessClusters,
@@ -4781,6 +4783,31 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     container.setAttribute('height', `${STAFF_TRANSCRIPTION_HEIGHT}`);
   }
 
+  // A `beam-over` rest the beam runs through moves away from it by whole
+  // spaces until REST_BEAM_CLEARANCE_PX clear.
+  #moveRestsClearOfBeams(): void {
+    for (const state of this.#voiceRenderStates.values()) {
+      state.elements.forEach((element, i) => {
+        if (element.nodeName !== MUSIC_REST_NODE) {
+          return;
+        }
+        const over = state.beamRenderer?.beamOverRest(i) ?? null;
+        if (over === null) {
+          return;
+        }
+        const top = parseFloat(element.style.top || '0');
+        const shift = restShiftClearOfBeam({
+          inkTop: top + restInkTopPx(element.duration),
+          inkBottom: top + restInkBottomPx(element.duration),
+          beamTop: over.top,
+          beamBottom: over.bottom,
+          beamAbove: over.above,
+        });
+        element.style.top = `${top + shift}px`;
+      });
+    }
+  }
+
   // Every real voice's notes and chords, clustered by beat, for the
   // cross-voice pass ('combined'/'shared-rest' already merged or represent
   // every voice at once, so neither has anything left to collide with — see
@@ -5369,6 +5396,8 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     }
     this.#crossVoiceElements = crossVoiceElements;
 
+    this.#moveRestsClearOfBeams();
+
     // Reconcile each beamed stem to the beam as drawn, now X is known. The
     // only stem-length pass a bare resize runs.
     for (const state of this.#voiceRenderStates.values()) {
@@ -5508,7 +5537,13 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
           .filter(([innerGroup]) =>
             innerGroup.indices.every((i) => outerIndexSet.has(i))
           )
-          .map(([, geom]) => geom.numeralY);
+          .map(([innerGroup, geom]) => {
+            // A label taller than the numeral reaches further out.
+            const farExtra =
+              tupletLabelExtents(tupletDisplayOf(innerGroup), geom.stemUp).far -
+              TUPLET_NUMERAL_FONT_SIZE / 2;
+            return geom.numeralY + (geom.stemUp ? -farExtra : farExtra);
+          });
 
         const stemUp = this.#tupletBracketAbove(state, group);
         const outerBaseY =
@@ -8945,17 +8980,22 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     group: TupletGroup,
     stemUp: boolean
   ): number {
+    const label = tupletLabelExtents(tupletDisplayOf(group), stemUp);
+    // How much further than the numeral alone the label reaches outward.
+    const farExtra = label.far - TUPLET_NUMERAL_FONT_SIZE / 2;
     const nominalY = stemUp
       ? STAFF_TOP_LINE_Y -
         STAFF_Y_PADDING -
         TUPLET_STAFF_CLEARANCE_PX -
         TUPLET_HOOK_LENGTH_PX -
-        TUPLET_NUMERAL_FONT_SIZE
+        TUPLET_NUMERAL_FONT_SIZE -
+        farExtra
       : STAFF_BOTTOM_LINE_Y +
         STAFF_Y_PADDING +
         TUPLET_STAFF_CLEARANCE_PX +
         TUPLET_HOOK_LENGTH_PX +
-        TUPLET_NUMERAL_FONT_SIZE;
+        TUPLET_NUMERAL_FONT_SIZE +
+        farExtra;
 
     const extremeStemTipY =
       this.#tupletSideOverride(state, group) === null
@@ -8967,18 +9007,18 @@ export abstract class StaffNotationElementBase extends StaffElementBase {
     // the stem tips with the numeral centred on it.
     const bracketOmitted =
       this.#tupletSideOverride(state, group) === null &&
+      group.element.bracket !== 'always' &&
       group.indices.every(
         (i) =>
           state.beamedIndices.has(i) &&
           state.elements[i].nodeName !== MUSIC_REST_NODE
       );
     const numeralOffset = bracketOmitted
-      ? TUPLET_NUMERAL_FONT_SIZE / 2 +
-        TUPLET_NUMERAL_BEAM_GAP_PX +
-        BEAM_THICKNESS_PX
-      : TUPLET_STAFF_CLEARANCE_PX +
-        TUPLET_HOOK_LENGTH_PX +
-        TUPLET_NUMERAL_FONT_SIZE / 2;
+      ? label.near + TUPLET_NUMERAL_BEAM_GAP_PX + BEAM_THICKNESS_PX + farExtra
+      : Math.max(
+          TUPLET_STAFF_CLEARANCE_PX + TUPLET_HOOK_LENGTH_PX,
+          label.near + TUPLET_NUMERAL_BEAM_GAP_PX
+        ) + label.far;
     const beamDerivedY =
       extremeStemTipY !== null
         ? stemUp

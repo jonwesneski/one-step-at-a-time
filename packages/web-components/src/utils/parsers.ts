@@ -47,6 +47,7 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  TupletBracket,
   UnpitchedPlacement,
 } from '../types/theory';
 import {
@@ -95,6 +96,7 @@ import {
   TRILL_CONTINUATION_MODES,
   TRILL_FINISH_SLURS,
   TRILL_LINE_MODES,
+  TUPLET_BRACKETS,
   UNPITCHED_PLACEMENTS,
 } from './consts';
 
@@ -438,6 +440,13 @@ export const parseUnpitched = (
 export const parseNoteSize = (value: string | null): NoteSize | null =>
   value !== null && (NOTE_SIZES as string[]).includes(value)
     ? (value as NoteSize)
+    : null;
+
+export const parseTupletBracket = (
+  value: string | null
+): TupletBracket | null =>
+  value !== null && (TUPLET_BRACKETS as string[]).includes(value)
+    ? (value as TupletBracket)
     : null;
 
 /** An element's own `size`, else its closest `<music-voice>`'s. */

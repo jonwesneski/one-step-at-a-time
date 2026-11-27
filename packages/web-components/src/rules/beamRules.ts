@@ -205,7 +205,8 @@ function tremoloOf(element: NoteChordOrRestElementType): TremoloValue | null {
 // inside, since the clef sits in the stave where a kneed beam would run. A
 // group with tremolo strokes keeps its beam too: the strokes need the stem
 // length a kneed beam takes away. A cue group keeps its beam as well: a knee
-// is laid out at full size only.
+// is laid out at full size only. So does a group reaching over a rest, whose
+// beam keeps to one side of it.
 function applyKneedBeams(
   elements: NoteChordOrRestElementType[],
   beamsBuilder: BeamsBuilder,
@@ -230,7 +231,8 @@ function applyKneedBeams(
           (elements[index] as NoteElementType | ChordElementType).size ===
             'cue' ||
           beamsBuilder.isTremoloMember(index)
-      )
+      ) ||
+      beamsBuilder.beamOverRestsFor(i).length > 0
     ) {
       continue;
     }

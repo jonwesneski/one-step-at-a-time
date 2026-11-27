@@ -1,5 +1,9 @@
 import { TUPLET_NUMERAL_FONT_SIZE } from '../utils/notationDimensions';
-import { TupletBracketGeometry } from './tupletRules';
+import {
+  TupletBracketGeometry,
+  tupletDisplayOf,
+  tupletLabelExtents,
+} from './tupletRules';
 
 /**
  * Computes the above-staff SVG coordinate budget (px above y=0) needed to
@@ -17,9 +21,12 @@ export function computeAboveStaffBudget(
     }
     // The topmost rendered element is either the bracket arm (at baseY for bracket groups)
     // or the numeral top edge (numeralY - font/2 for omitBracket groups).
+    const { far } = tupletLabelExtents(tupletDisplayOf(geometry.group), true);
     const topY = geometry.omitBracket
-      ? geometry.numeralY - TUPLET_NUMERAL_FONT_SIZE / 2
-      : geometry.baseY - TUPLET_NUMERAL_FONT_SIZE;
+      ? geometry.numeralY - far
+      : Math.min(geometry.baseY, geometry.numeralY) -
+        far -
+        TUPLET_NUMERAL_FONT_SIZE / 2;
     if (topY < 0) {
       maxBudget = Math.max(maxBudget, Math.ceil(-topY) + 2);
     }

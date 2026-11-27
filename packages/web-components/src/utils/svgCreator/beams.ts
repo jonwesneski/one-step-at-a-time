@@ -8,7 +8,10 @@ Beam grouping implemented here:
   on a single beat. Runs never cross a window boundary, which also means
   they never cross a measure (the builder is invoked once per staff's note
   stream).
-- A rest always breaks the current run (no beaming over rests).
+- A rest breaks the current run, unless it is a `beam-over` rest shorter
+  than a crotchet: then it joins the run (several in a row must all have
+  it). A beam reaches toward a rest at either end of its run, runs through
+  one inside it, and a lone note beside one takes stubs instead of a tail.
 - A run also breaks where notes change between tremolo and plain, so a
   change of technique reads from the beaming, except where a flutter-tongued
   note meets a plain one.
@@ -26,6 +29,10 @@ Beam grouping implemented here:
   built in BeamGroup#computeBeamStructure.
 - Tuplet-scaled elements use their scaled duration (via parseTupletRatio) so
   they land in the correct beat window alongside non-tuplet notes.
+- A tuplet is beamed on its own: a run breaks where the innermost tuplet
+  changes, and every member of a tuplet counts as being in the window its
+  outermost tuplet starts in, so a tuplet longer than a window stays one
+  beam.
 */
 
 import {
@@ -35,8 +42,9 @@ import {
   resolveKneedBeamPlacement,
 } from '../../rules/beamPlacementRules';
 import {
-  BeamLineDescriptor,
-  computeBeamLevelStructure,
+  type BeamLineDescriptor,
+  beamReachOverRest,
+  computeBeamLinesOverRests,
 } from '../../rules/beamStructureRules';
 import { isTriangle } from '../../rules/noteheadRules';
 import { durationToFlagCountMap } from '../../rules/theoryConsts';
@@ -50,6 +58,7 @@ import type {
   ChordElementType,
   NoteChordOrRestElementType,
   NoteElementType,
+  RestElementType,
 } from '../../types/elements';
 import type {
   BeatsInMeasure,
@@ -57,7 +66,12 @@ import type {
   DurationType,
   TremoloBeamAttach,
 } from '../../types/theory';
-import { isNoteNodeName, MUSIC_REST_NODE, SVG_NS } from '../consts';
+import {
+  isNoteNodeName,
+  MUSIC_REST_NODE,
+  MUSIC_TUPLET_NODE,
+  SVG_NS,
+} from '../consts';
 import {
   BASE_STEM_LENGTH_PX,
   BEAM_ESTIMATE_NOTE_SPACING_PX,
@@ -75,6 +89,7 @@ import {
   NOTE_STEM_TIP_Y_OFFSET_STEM_DOWN,
   NOTE_STEM_X_OFFSET,
   NOTE_STEM_X_OFFSET_STEM_DOWN,
+  NOTE_SVG_WIDTH,
   NOTE_Y_HEAD_OFFSET_STEM_DOWN,
   NOTE_Y_HEAD_OFFSET_STEM_UP,
   NOTEHEAD_WIDTH_PX,
@@ -95,6 +110,8 @@ export type NoteYPosition = {
 };
 
 interface NoteData {
+  // A `beam-over` rest: no stem; x is its centre.
+  rest: boolean;
   x: number;
   // Stem tip at the base stem length, measured from the head nearest the beam.
   tipY: number;
@@ -110,14 +127,7 @@ interface NoteData {
 // A single beam line drawn across two stems (or as a fractional beam stub).
 // beamLevel 0 = primary beam (outermost), 1 = secondary (first inner), 2 = tertiary, …
 // Fractional beams (also called partial or stub beams) have fractionalBeamSide set.
-class BeamLine {
-  constructor(
-    readonly fromNoteIndex: number,
-    readonly toNoteIndex: number,
-    readonly beamLevel: number,
-    readonly fractionalBeamSide?: 'left' | 'right'
-  ) {}
-}
+type BeamLine = BeamLineDescriptor;
 
 // Top of a beamed note's SVG in the beams container, then its stem tip at
 // the base length, measured from the head nearest the beam (beamed notes
@@ -160,12 +170,16 @@ function stemXInBox(stemUp: boolean, scale: number): number {
     : stemTipPosition(stemUp, 'eighth', true, 0, scale).x * NOTE_SCALE;
 }
 
+/** The beam stack (beams-container px) over a rest it runs through. */
+export type BeamOverRest = { top: number; bottom: number; above: boolean };
+
 // What BeamRenderer needs from each group it owns: a beam group or a
 // tremolo group.
 interface GroupRenderer {
   readonly svgGroup: SVGGElement;
   stemExtension(globalIndex: number): number | null;
   beamStackEdgeYForIndex(globalIndex: number, above: boolean): number | null;
+  beamOverRest(globalIndex: number): BeamOverRest | null;
   setX(globalIndex: number, x: number): void;
   setObstacles(obstacles: readonly BeamObstacle[]): void;
   repositionBeams(): void;
@@ -177,9 +191,10 @@ function chordSpread(note: NoteData): number {
 
 // Handles SVG drawing and X-repositioning for one beam group. The placement is
 // (re)derived from the current note positions — an estimated spacing before
-// setX, the true x after. Created by BeamGroup.buildRenderer().
+// setX, the true x after. Created by BeamGroup.buildRenderer(). Members are
+// the group's notes and any `beam-over` rests; only notes place the beam.
 class BeamGroupRenderer implements GroupRenderer {
-  #notes: NoteData[];
+  #members: NoteData[];
   #beamLines: BeamLine[];
   #globalIndices: readonly number[];
   #obstacles: readonly BeamObstacle[] = [];
@@ -194,33 +209,41 @@ class BeamGroupRenderer implements GroupRenderer {
   readonly svgGroup: SVGGElement;
 
   constructor(
-    notes: NoteData[],
+    members: NoteData[],
     beamLines: BeamLine[],
     globalIndices: readonly number[],
     svgGroup: SVGGElement
   ) {
-    this.#notes = notes;
+    this.#members = members;
     this.#beamLines = beamLines;
     this.#globalIndices = globalIndices;
     this.svgGroup = svgGroup;
   }
 
+  #notes(): NoteData[] {
+    return this.#members.filter((member) => !member.rest);
+  }
+
   #isKneed(): boolean {
-    return this.#notes.some((note) => note.stemUp !== this.#notes[0].stemUp);
+    const notes = this.#notes();
+    return notes.some((note) => note.stemUp !== notes[0].stemUp);
   }
 
   #scale(): number {
-    return this.#notes[0].scale;
+    return this.#notes()[0].scale;
   }
 
   #thickness(): number {
     return this.#scale() * BEAM_THICKNESS_PX;
   }
 
-  #stemXs(): number[] {
-    const allPlaced = this.#notes.every((note) => Number.isFinite(note.x));
-    return this.#notes.map((note, i) =>
-      allPlaced ? note.x : i * BEAM_ESTIMATE_NOTE_SPACING_PX
+  // Stem x per member (a rest's centre), estimated until every one is placed.
+  #memberXs(): number[] {
+    const allPlaced = this.#members.every((member) =>
+      Number.isFinite(member.x)
+    );
+    return this.#members.map((member, i) =>
+      allPlaced ? member.x : i * BEAM_ESTIMATE_NOTE_SPACING_PX
     );
   }
 
@@ -234,11 +257,15 @@ class BeamGroupRenderer implements GroupRenderer {
    * the true x positions are known.
    */
   recomputePlacement(): void {
-    const xs = this.#stemXs();
-    const last = this.#notes.length - 1;
+    const memberXs = this.#memberXs();
+    const notes = this.#notes();
+    const xs = this.#members.flatMap((member, i) =>
+      member.rest ? [] : [memberXs[i]]
+    );
+    const last = notes.length - 1;
     // Offset from the note Y map to the beams container, read off a stem tip
     // so stem lengths come out exact.
-    const toContainerY = staffYToContainerY(this.#notes[0]);
+    const toContainerY = staffYToContainerY(notes[0]);
     const toContainer = (placement: BeamPlacement): BeamPlacement => ({
       primaryTopAtFirst: placement.primaryTopAtFirst + toContainerY,
       primaryTopAtLast: placement.primaryTopAtLast + toContainerY,
@@ -251,13 +278,13 @@ class BeamGroupRenderer implements GroupRenderer {
     }));
     if (this.#isKneed()) {
       const { placement, fits } = resolveKneedBeamPlacement(
-        this.#notes.map((note, i) => ({
+        notes.map((note, i) => ({
           x: xs[i],
           highestHeadY: note.highestHeadStaffY,
           lowestHeadY: note.lowestHeadStaffY,
           beamCount: note.beamCount,
         })),
-        this.#notes.map((note) => note.stemUp),
+        notes.map((note) => note.stemUp),
         { obstacles }
       );
       // A knee is only chosen when it fits at any spacing and spans no clef
@@ -268,10 +295,10 @@ class BeamGroupRenderer implements GroupRenderer {
         this.#hasFittingPlacement = fits;
       }
     } else {
-      const stemUp = this.#notes[0].stemUp;
+      const stemUp = notes[0].stemUp;
       this.#placement = toContainer(
         resolveBeamPlacement({
-          notes: this.#notes.map((note, i) => ({
+          notes: notes.map((note, i) => ({
             x: xs[i],
             nearestHeadY: stemUp
               ? note.highestHeadStaffY
@@ -306,13 +333,20 @@ class BeamGroupRenderer implements GroupRenderer {
   // The beam edge a stem ends at: past every beam the note carries, on the far
   // side from its head.
   #stemEndEdgeY(localIndex: number): number {
-    const note = this.#notes[localIndex];
-    const top = this.#primaryTopAt(this.#stemXs()[localIndex]);
+    const note = this.#members[localIndex];
+    const top = this.#primaryTopAt(this.#memberXs()[localIndex]);
     const deepestLevelOffset =
       (note.beamCount - 1) * this.#placement.levelOffset;
     return note.stemUp
       ? top + Math.min(0, deepestLevelOffset)
       : top + this.#thickness() + Math.max(0, deepestLevelOffset);
+  }
+
+  #noteLocalIndex(globalIndex: number): number {
+    const localIndex = this.#globalIndices.indexOf(globalIndex);
+    return localIndex === -1 || this.#members[localIndex].rest
+      ? -1
+      : localIndex;
   }
 
   /**
@@ -321,11 +355,11 @@ class BeamGroupRenderer implements GroupRenderer {
    * group.
    */
   stemExtension(globalIndex: number): number | null {
-    const localIndex = this.#globalIndices.indexOf(globalIndex);
+    const localIndex = this.#noteLocalIndex(globalIndex);
     if (localIndex === -1) {
       return null;
     }
-    const note = this.#notes[localIndex];
+    const note = this.#members[localIndex];
     const edge = this.#stemEndEdgeY(localIndex);
     // The tip sits STEM_OVERLAP_PX inside the beam so no sub-pixel gap shows.
     // A chord's tip was fitted from its head nearest the beam, but its stem
@@ -336,21 +370,50 @@ class BeamGroupRenderer implements GroupRenderer {
     return extension + chordSpread(note);
   }
 
+  #stackEdgesAt(x: number): { top: number; bottom: number } {
+    const top = this.#primaryTopAt(x);
+    const maxBeamCount = Math.max(
+      ...this.#notes().map((note) => note.beamCount)
+    );
+    const deepestLevelOffset = (maxBeamCount - 1) * this.#placement.levelOffset;
+    return {
+      top: top + Math.min(0, deepestLevelOffset),
+      bottom: top + this.#thickness() + Math.max(0, deepestLevelOffset),
+    };
+  }
+
   /**
    * The outer edge, on the `above` side, of the whole beam stack at this
    * note's stem. Null if the note is not in this group.
    */
   beamStackEdgeYForIndex(globalIndex: number, above: boolean): number | null {
-    const localIndex = this.#globalIndices.indexOf(globalIndex);
+    const localIndex = this.#noteLocalIndex(globalIndex);
     if (localIndex === -1) {
       return null;
     }
-    const top = this.#primaryTopAt(this.#stemXs()[localIndex]);
-    const maxBeamCount = Math.max(...this.#notes.map((note) => note.beamCount));
-    const deepestLevelOffset = (maxBeamCount - 1) * this.#placement.levelOffset;
-    return above
-      ? top + Math.min(0, deepestLevelOffset)
-      : top + this.#thickness() + Math.max(0, deepestLevelOffset);
+    const edges = this.#stackEdgesAt(this.#memberXs()[localIndex]);
+    return above ? edges.top : edges.bottom;
+  }
+
+  /**
+   * The beam stack over a rest the beam runs through, and whether it lies
+   * above it; null for any other index.
+   */
+  beamOverRest(globalIndex: number): BeamOverRest | null {
+    const localIndex = this.#globalIndices.indexOf(globalIndex);
+    if (localIndex === -1 || !this.#members[localIndex].rest) {
+      return null;
+    }
+    const inside =
+      this.#members.slice(0, localIndex).some((member) => !member.rest) &&
+      this.#members.slice(localIndex + 1).some((member) => !member.rest);
+    if (!inside || this.#isKneed()) {
+      return null;
+    }
+    return {
+      ...this.#stackEdgesAt(this.#memberXs()[localIndex]),
+      above: this.#notes()[0].stemUp,
+    };
   }
 
   setX(globalIndex: number, x: number): void {
@@ -358,15 +421,17 @@ class BeamGroupRenderer implements GroupRenderer {
     if (localIndex === -1) {
       return;
     }
-    const note = this.#notes[localIndex];
-    note.x = x + stemXInBox(note.stemUp, note.scale);
+    const member = this.#members[localIndex];
+    member.x = member.rest
+      ? x + NOTE_SVG_WIDTH / 2
+      : x + stemXInBox(member.stemUp, member.scale);
   }
 
   /** Updates all beam polygon points using the current x/y positions. */
   repositionBeams(): void {
     this.recomputePlacement();
     const beamPolygons = this.svgGroup.querySelectorAll('polygon');
-    const xs = this.#stemXs();
+    const xs = this.#memberXs();
     const { levelOffset } = this.#placement;
     // Corners run outer-left, inner-left, inner-right, outer-right, where the
     // outer edge faces away from the direction the beams stack in.
@@ -375,16 +440,22 @@ class BeamGroupRenderer implements GroupRenderer {
     const fractionalLength = this.#scale() * NOTEHEAD_WIDTH_PX;
 
     this.#beamLines.forEach((beamLine, i) => {
-      const noteX1 = xs[beamLine.fromNoteIndex];
-      const noteX2 = xs[beamLine.toNoteIndex];
-      const x1 =
-        beamLine.fractionalBeamSide === 'left'
-          ? noteX1 - fractionalLength
-          : noteX1;
-      const x2 =
-        beamLine.fractionalBeamSide === 'right'
-          ? noteX2 + fractionalLength
-          : noteX2;
+      const from = beamLine.fromNoteIndex;
+      const to = beamLine.toNoteIndex;
+      const noteX1 = xs[from];
+      const noteX2 = xs[to];
+      let x1 = noteX1;
+      let x2 = noteX2;
+      if (beamLine.reachesLeft) {
+        x1 = noteX1 - beamReachOverRest(noteX1, xs[from - 1]);
+      } else if (beamLine.fractionalBeamSide === 'left') {
+        x1 = noteX1 - fractionalLength;
+      }
+      if (beamLine.reachesRight) {
+        x2 = noteX2 + beamReachOverRest(noteX2, xs[to + 1]);
+      } else if (beamLine.fractionalBeamSide === 'right') {
+        x2 = noteX2 + fractionalLength;
+      }
       const levelShift = beamLine.beamLevel * levelOffset;
       const top1 = this.#primaryTopAt(x1) + levelShift;
       const top2 = this.#primaryTopAt(x2) + levelShift;
@@ -580,6 +651,10 @@ class TremoloGroupRenderer implements GroupRenderer {
     // Tremolo beams sit between their own notes, clear of a clef change.
   }
 
+  beamOverRest(): null {
+    return null;
+  }
+
   repositionBeams(): void {
     this.#recomputePlacement();
     const polygons = this.svgGroup.querySelectorAll('polygon');
@@ -592,21 +667,25 @@ class TremoloGroupRenderer implements GroupRenderer {
   }
 }
 
-// Owns one contiguous beam group (e.g. four consecutive sixteenth notes).
-// Indexed by local position (0..n−1 within the group); global-to-local
-// mapping is handled via #globalIndices.
-class BeamGroup {
-  #notes: NoteData[];
-  // The single outermost beam connecting all notes in the group.
-  #primaryBeam: BeamLine;
-  // Full-span beams at level 1+ for consecutive runs of faster notes.
-  #secondaryBeams: BeamLine[];
-  // Fractional (partial/stub) beams for isolated faster notes at any level.
-  #fractionalBeams: BeamLine[];
-  #globalIndices: number[];
+type BeamGroupMember = {
+  globalIndex: number;
+  beamCount: number;
+  rest: boolean;
+};
 
-  constructor(flagCounts: number[], globalIndices: number[]) {
-    this.#notes = flagCounts.map((beamCount) => ({
+// Owns one contiguous beam group (e.g. four consecutive sixteenth notes),
+// with any `beam-over` rests it reaches over. Indexed by local position
+// (0..n−1 within the group); global-to-local mapping is handled via
+// #memberIndices.
+class BeamGroup {
+  #members: NoteData[];
+  #beamLines: BeamLine[];
+  #memberIndices: number[];
+  #noteIndices: number[];
+
+  constructor(members: readonly BeamGroupMember[]) {
+    this.#members = members.map(({ beamCount, rest }) => ({
+      rest,
       x: NaN,
       tipY: NaN,
       highestHeadStaffY: NaN,
@@ -615,33 +694,39 @@ class BeamGroup {
       stemUp: true,
       scale: 1,
     }));
-    this.#globalIndices = globalIndices;
-    // Beam structure is derived only from flag counts and computed once at
+    this.#memberIndices = members.map((member) => member.globalIndex);
+    this.#noteIndices = members
+      .filter((member) => !member.rest)
+      .map((member) => member.globalIndex);
+    // Beam structure is derived only from beam counts and computed once at
     // construction. Only x/y coordinates change at render/resize time.
-    const { primaryBeam, secondaryBeams, fractionalBeams } =
-      this.#computeBeamStructure();
-    this.#primaryBeam = primaryBeam;
-    this.#secondaryBeams = secondaryBeams;
-    this.#fractionalBeams = fractionalBeams;
+    // Rendering order: primary first, then secondary, then fractional.
+    this.#beamLines = computeBeamLinesOverRests(members);
   }
 
   containsNote(globalIndex: number): boolean {
-    return this.#globalIndices.includes(globalIndex);
+    return this.#noteIndices.includes(globalIndex);
   }
 
+  /** The group's notes (not its rests). */
   get globalIndices(): readonly number[] {
-    return this.#globalIndices;
+    return this.#noteIndices;
+  }
+
+  get restIndices(): readonly number[] {
+    return this.#memberIndices.filter(
+      (index) => !this.#noteIndices.includes(index)
+    );
   }
 
   /** Records the Y data for the note at globalIndex. */
   setY(globalIndex: number, position: NoteYPosition): void {
-    const localIndex = this.#globalIndices.indexOf(globalIndex);
-    if (localIndex === -1) {
+    if (!this.containsNote(globalIndex)) {
       return;
     }
     const { stemUp, highestHeadStaffY, lowestHeadStaffY, minimumStemPx } =
       position;
-    const note = this.#notes[localIndex];
+    const note = this.#members[this.#memberIndices.indexOf(globalIndex)];
     note.scale = position.scale ?? 1;
     note.tipY = baseStemTipY(position);
     note.highestHeadStaffY = highestHeadStaffY;
@@ -655,47 +740,15 @@ class BeamGroup {
    * estimated spacing. repositionBeams() re-places it from the true x.
    */
   buildRenderer(): BeamGroupRenderer {
-    // Rendering order: primary first, then secondary, then fractional.
-    const beamLines = [
-      this.#primaryBeam,
-      ...this.#secondaryBeams,
-      ...this.#fractionalBeams,
-    ];
-    const svgGroup = this.#buildSvgGroup(beamLines.length);
+    const svgGroup = this.#buildSvgGroup(this.#beamLines.length);
     const renderer = new BeamGroupRenderer(
-      this.#notes,
-      beamLines,
-      this.#globalIndices,
+      this.#members,
+      this.#beamLines,
+      this.#memberIndices,
       svgGroup
     );
     renderer.recomputePlacement();
     return renderer;
-  }
-
-  // Derives the beam structure from the flag counts of each note — the pure
-  // level-by-level run detection lives in rules/beamStructureRules.ts (shared
-  // with double-stemmed beams' own cross-staff structure); this wraps its
-  // plain descriptors back into BeamLine instances for the renderer below.
-  #computeBeamStructure(): {
-    primaryBeam: BeamLine;
-    secondaryBeams: BeamLine[];
-    fractionalBeams: BeamLine[];
-  } {
-    const { primaryBeam, secondaryBeams, fractionalBeams } =
-      computeBeamLevelStructure(this.#notes.map((n) => n.beamCount));
-    const toBeamLine = (d: BeamLineDescriptor): BeamLine =>
-      new BeamLine(
-        d.fromNoteIndex,
-        d.toNoteIndex,
-        d.beamLevel,
-        d.fractionalBeamSide
-      );
-
-    return {
-      primaryBeam: toBeamLine(primaryBeam),
-      secondaryBeams: secondaryBeams.map(toBeamLine),
-      fractionalBeams: fractionalBeams.map(toBeamLine),
-    };
   }
 
   /** Creates the <g> element with one <polygon> per beam line. */
@@ -748,6 +801,20 @@ class BeamRenderer {
     return null;
   }
 
+  /**
+   * The beam stack over a `beam-over` rest inside a run, or null. Valid
+   * after spaceAll().
+   */
+  beamOverRest(restIndex: number): BeamOverRest | null {
+    for (const renderer of this.#groupRenderers) {
+      const over = renderer.beamOverRest(restIndex);
+      if (over !== null) {
+        return over;
+      }
+    }
+    return null;
+  }
+
   setX(noteIndex: number, x: number): void {
     for (const renderer of this.#groupRenderers) {
       renderer.setX(noteIndex, x);
@@ -770,6 +837,58 @@ class BeamRenderer {
       renderer.repositionBeams();
     }
   }
+}
+
+// Each element's innermost <music-tuplet> (null outside one), and the offset
+// that picks its beam window: its outermost tuplet's start, else its own.
+function tupletBeamWindows(
+  elements: readonly NoteChordOrRestElementType[],
+  elementOffsets: readonly number[]
+): { innermostTuplets: (Element | null)[]; windowOffsets: number[] } {
+  const innermostTuplets: (Element | null)[] = [];
+  const outermostTuplets: (Element | null)[] = [];
+  for (const element of elements) {
+    let innermost: Element | null = null;
+    let outermost: Element | null = null;
+    for (
+      let ancestor = element.parentElement;
+      ancestor !== null;
+      ancestor = ancestor.parentElement
+    ) {
+      if (ancestor.nodeName === MUSIC_TUPLET_NODE) {
+        innermost ??= ancestor;
+        outermost = ancestor;
+      }
+    }
+    innermostTuplets.push(innermost);
+    outermostTuplets.push(outermost);
+  }
+  const tupletStarts = new Map<Element, number>();
+  outermostTuplets.forEach((tuplet, i) => {
+    if (tuplet !== null && !tupletStarts.has(tuplet)) {
+      tupletStarts.set(tuplet, elementOffsets[i]);
+    }
+  });
+  return {
+    innermostTuplets,
+    windowOffsets: elementOffsets.map((offset, i) => {
+      const tuplet = outermostTuplets[i];
+      return tuplet === null ? offset : tupletStarts.get(tuplet) ?? offset;
+    }),
+  };
+}
+
+// A `beam-over` rest's beam count, or null when it doesn't join a beam: a
+// crotchet or longer, or one in a cross-staff beam group.
+function beamOverRestCount(
+  rest: RestElementType,
+  duration: DurationType
+): number | null {
+  if (!rest.beamOver || rest.beamGroup !== null) {
+    return null;
+  }
+  const count = durationToFlagCountMap.get(duration) ?? 0;
+  return count > 0 ? count : null;
 }
 
 // Analyzes a measure's note elements at construction, determines beam groups,
@@ -865,16 +984,18 @@ export class BeamsBuilder {
     );
     const groups: BeamGroup[] = [];
     const beamedIndices = new Set<number>();
+    const { innermostTuplets, windowOffsets } = tupletBeamWindows(
+      elements,
+      elementOffsets
+    );
 
-    // Flushes a completed consecutive run; creates a BeamGroup only when the run
-    // has ≥ 2 notes (lone beamable notes fall back to flags).
-    const flushRun = (
-      pendingFlagCounts: number[],
-      pendingNoteIndices: number[]
-    ) => {
-      if (pendingNoteIndices.length >= 2) {
-        groups.push(new BeamGroup(pendingFlagCounts, pendingNoteIndices));
-        pendingNoteIndices.forEach((i) => beamedIndices.add(i));
+    // Flushes a completed run: a group needs two notes, or one beside a
+    // `beam-over` rest; a lone note keeps its flags.
+    const flushRun = (pending: BeamGroupMember[]) => {
+      const notes = pending.filter((member) => !member.rest);
+      if (notes.length >= 2 || (notes.length === 1 && pending.length > 1)) {
+        groups.push(new BeamGroup(pending));
+        notes.forEach((member) => beamedIndices.add(member.globalIndex));
       }
     };
 
@@ -884,13 +1005,19 @@ export class BeamsBuilder {
       beatWindowStart += beatWindowSize
     ) {
       const beatWindowEnd = beatWindowStart + beatWindowSize;
-      let pendingFlagCounts: number[] = [];
-      let pendingNoteIndices: number[] = [];
+      let pending: BeamGroupMember[] = [];
       let pendingHasTremolo = false;
       let pendingCue = false;
+      const lastPendingIndex = () =>
+        pending.length > 0 ? pending[pending.length - 1].globalIndex : -1;
+      const hasPendingNote = () => pending.some((member) => !member.rest);
+      const flush = () => {
+        flushRun(pending);
+        pending = [];
+      };
 
       for (let i = 0; i < elements.length; i++) {
-        const elOffset = elementOffsets[i];
+        const elOffset = windowOffsets[i];
         if (
           elOffset < beatWindowStart - 1e-9 ||
           elOffset >= beatWindowEnd - 1e-9
@@ -903,9 +1030,7 @@ export class BeamsBuilder {
           // run exactly like a rest does, but isBeamed() reports it true
           // separately (see the constructor's own field), so its flag still
           // suppresses correctly.
-          flushRun(pendingFlagCounts, pendingNoteIndices);
-          pendingFlagCounts = [];
-          pendingNoteIndices = [];
+          flush();
           continue;
         }
 
@@ -913,13 +1038,37 @@ export class BeamsBuilder {
           parseDuration(
             elements[i].dataset.duration ?? elements[i].getAttribute('duration')
           ) ?? 'quarter';
+        const breaksFromPending =
+          lastPendingIndex() !== i - 1 ||
+          barlineBetween(i - 1, i) ||
+          innermostTuplets[i] !== innermostTuplets[i - 1];
+
+        if (elements[i].nodeName === MUSIC_REST_NODE) {
+          const restBeamCount = beamOverRestCount(
+            elements[i] as RestElementType,
+            dur
+          );
+          if (restBeamCount === null) {
+            flush();
+            continue;
+          }
+          if (pending.length > 0 && breaksFromPending) {
+            flush();
+          }
+          pending.push({
+            globalIndex: i,
+            beamCount: restBeamCount,
+            rest: true,
+          });
+          continue;
+        }
+
         // A triangle (undefined extreme pitch) always stands alone with its
         // own flag. A chord can't be one: its triangle value falls back to
         // normal heads.
         const flagCount =
-          elements[i].nodeName === MUSIC_REST_NODE ||
-          (isNoteNodeName(elements[i].nodeName) &&
-            isTriangle((elements[i] as NoteElementType).notehead))
+          isNoteNodeName(elements[i].nodeName) &&
+          isTriangle((elements[i] as NoteElementType).notehead)
             ? undefined
             : durationToFlagCountMap.get(dur);
 
@@ -930,29 +1079,24 @@ export class BeamsBuilder {
             (elements[i] as NoteElementType | ChordElementType).size === 'cue';
           // A non-adjacent index means a non-beamable note broke the run.
           if (
-            pendingNoteIndices.length > 0 &&
-            (pendingNoteIndices[pendingNoteIndices.length - 1] !== i - 1 ||
-              (hasTremolo !== pendingHasTremolo &&
-                !flutterTonguedIndices.has(hasTremolo ? i : i - 1)) ||
-              cue !== pendingCue ||
-              barlineBetween(i - 1, i))
+            pending.length > 0 &&
+            (breaksFromPending ||
+              (hasPendingNote() &&
+                ((hasTremolo !== pendingHasTremolo &&
+                  !flutterTonguedIndices.has(hasTremolo ? i : i - 1)) ||
+                  cue !== pendingCue)))
           ) {
-            flushRun(pendingFlagCounts, pendingNoteIndices);
-            pendingFlagCounts = [];
-            pendingNoteIndices = [];
+            flush();
           }
-          pendingFlagCounts.push(flagCount);
-          pendingNoteIndices.push(i);
+          pending.push({ globalIndex: i, beamCount: flagCount, rest: false });
           pendingHasTremolo = hasTremolo;
           pendingCue = cue;
         } else {
-          flushRun(pendingFlagCounts, pendingNoteIndices);
-          pendingFlagCounts = [];
-          pendingNoteIndices = [];
+          flush();
         }
       }
 
-      flushRun(pendingFlagCounts, pendingNoteIndices); // flush any open run at window end
+      flush(); // flush any open run at window end
     }
 
     return { groups, beamedIndices };
@@ -980,6 +1124,14 @@ export class BeamsBuilder {
   /** True when a note needs its Y position for a beam or tremolo group. */
   needsYPosition(noteIndex: number): boolean {
     return this.isBeamed(noteIndex) || this.isTremoloMember(noteIndex);
+  }
+
+  /** The `beam-over` rests in the note's beam group. */
+  beamOverRestsFor(noteIndex: number): readonly number[] {
+    return (
+      this.#groups.find((group) => group.containsNote(noteIndex))
+        ?.restIndices ?? []
+    );
   }
 
   /**

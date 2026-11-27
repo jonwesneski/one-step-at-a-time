@@ -20,6 +20,7 @@ import {
   TUPLET_HOOK_LENGTH_PX,
   TUPLET_NUMERAL_BEAM_GAP_PX,
   TUPLET_NUMERAL_FONT_SIZE,
+  TUPLET_NUMERAL_GAP_PX,
   TUPLET_STAFF_CLEARANCE_PX,
 } from '../utils/notationDimensions';
 import {
@@ -39,10 +40,14 @@ import {
   computeTupletScaleByIndex,
   defaultNormalCount,
   isTupletRatio,
+  parseTupletNoteValue,
   parseTupletRatio,
   resolveInnermostTuplet,
   resolveTupletBracketAbove,
   stemTipYFromStaffY,
+  tupletDisplay,
+  tupletLabelExtents,
+  tupletLabelGapPx,
 } from './tupletRules';
 
 afterEach(() => {
@@ -1833,5 +1838,163 @@ describe('malformed tuplet ratios', () => {
     [null, false],
   ])('isTupletRatio(%p) is %p', (ratio, expected) => {
     expect(isTupletRatio(ratio)).toBe(expected);
+  });
+});
+
+describe('parseTupletNoteValue', () => {
+  it('takes any value from a double-whole to a sixty-fourth, dotted or not', () => {
+    expect(parseTupletNoteValue('quarter')).toBe('quarter');
+    expect(parseTupletNoteValue('dotted-eighth')).toBe('dotted-eighth');
+    expect(parseTupletNoteValue('double-whole')).toBe('double-whole');
+    expect(parseTupletNoteValue('sixtyfourth')).toBe('sixtyfourth');
+  });
+
+  it('rejects a hundred-twenty-eighth and anything else', () => {
+    expect(parseTupletNoteValue('hundredtwentyeighth')).toBeNull();
+    expect(parseTupletNoteValue('crotchet')).toBeNull();
+    expect(parseTupletNoteValue(null)).toBeNull();
+  });
+});
+
+describe('tupletDisplay', () => {
+  const half = TUPLET_NUMERAL_FONT_SIZE / 2;
+
+  it('is the numeral alone without a note value', () => {
+    const display = tupletDisplay(parseTupletRatio('5:4'), null);
+    expect(display.numeral).toBe('5:4');
+    expect(display.width).toBe(display.textWidth);
+    expect(display.ascent).toBe(half);
+    expect(display.descent).toBe(half);
+  });
+
+  it('adds `=` and a note that reaches about 2½ spaces above the line', () => {
+    const plain = tupletDisplay(parseTupletRatio('5'), null);
+    const quarter = tupletDisplay(parseTupletRatio('5'), 'quarter');
+    expect(quarter.textWidth).toBeGreaterThan(plain.textWidth);
+    expect(quarter.width).toBeGreaterThan(quarter.textWidth);
+    expect(quarter.ascent).toBeGreaterThan(20);
+    expect(quarter.ascent).toBeLessThan(28);
+    expect(quarter.descent).toBe(half);
+  });
+
+  it('widens for a tail or a dot, and stays low for a stemless value', () => {
+    const quarter = tupletDisplay(parseTupletRatio('3'), 'quarter');
+    expect(
+      tupletDisplay(parseTupletRatio('3'), 'eighth').width
+    ).toBeGreaterThan(quarter.width);
+    expect(
+      tupletDisplay(parseTupletRatio('3'), 'dotted-quarter').width
+    ).toBeGreaterThan(quarter.width);
+    expect(tupletDisplay(parseTupletRatio('3'), 'whole').ascent).toBe(half);
+  });
+
+  it('reaches toward its notes by its descent above them and its ascent below', () => {
+    const display = tupletDisplay(parseTupletRatio('5'), 'quarter');
+    expect(tupletLabelExtents(display, true)).toEqual({
+      near: display.descent,
+      far: display.ascent,
+    });
+    expect(tupletLabelExtents(display, false)).toEqual({
+      near: display.ascent,
+      far: display.descent,
+    });
+  });
+
+  it("widens the bracket's gap to fit the label", () => {
+    expect(tupletLabelGapPx(tupletDisplay(parseTupletRatio('3'), null))).toBe(
+      TUPLET_NUMERAL_GAP_PX
+    );
+    const wide = tupletDisplay(parseTupletRatio('7:6'), 'dotted-quarter');
+    expect(tupletLabelGapPx(wide)).toBeGreaterThan(wide.width);
+  });
+});
+
+describe('computeTupletBracketGeometry with a note value or a forced bracket', () => {
+  function beamedTriplet(attributes: Record<string, string>) {
+    const tuplet = makeTuplet('3');
+    for (const [name, value] of Object.entries(attributes)) {
+      tuplet.setAttribute(name, value);
+    }
+    const elements: NoteChordOrRestElementType[] = Array.from(
+      { length: 3 },
+      () => makeNote({ note: 'C', duration: 'eighth' })
+    );
+    const noteStaffYCoords = new Map<NoteElementType, number>(
+      elements.map((element, i) => [element as NoteElementType, 60 - i * 5])
+    );
+    const [group] = buildTupletGroups(
+      elements,
+      new Map(elements.map((_, i) => [i, [tuplet]]))
+    );
+    const xs = new Map(elements.map((_, i) => [i, i * 30 + 10]));
+    // A beam rising 6px over the group's 60px.
+    const beamEdge = (i: number) => 20 - (i * 6) / 2;
+    return computeTupletBracketGeometry(
+      group,
+      elements,
+      xs,
+      elements.map(() => true),
+      new Set([0, 1, 2]),
+      noteStaffYCoords,
+      new Map(),
+      null,
+      false,
+      beamEdge
+    )!;
+  }
+
+  it('hangs a note-value label off the beam by its full height below it', () => {
+    const plain = beamedTriplet({});
+    const below = (attributes: Record<string, string>) => {
+      const tuplet = makeTuplet('3');
+      for (const [name, value] of Object.entries(attributes)) {
+        tuplet.setAttribute(name, value);
+      }
+      const elements: NoteChordOrRestElementType[] = Array.from(
+        { length: 3 },
+        () => makeNote({ note: 'C', duration: 'eighth' })
+      );
+      const [group] = buildTupletGroups(
+        elements,
+        new Map(elements.map((_, i) => [i, [tuplet]]))
+      );
+      return computeTupletBracketGeometry(
+        group,
+        elements,
+        new Map(elements.map((_, i) => [i, i * 30 + 10])),
+        elements.map(() => false),
+        new Set([0, 1, 2]),
+        new Map(elements.map((element) => [element as NoteElementType, 40])),
+        new Map(),
+        null,
+        false,
+        () => 90
+      )!;
+    };
+    expect(plain.omitBracket).toBe(true);
+    const numeral = below({});
+    const noteValue = below({ 'note-value': 'quarter' });
+    const display = tupletDisplay(parseTupletRatio('3'), 'quarter');
+    expect(noteValue.numeralY - display.ascent).toBeCloseTo(
+      numeral.numeralY - TUPLET_NUMERAL_FONT_SIZE / 2
+    );
+  });
+
+  it('draws a forced bracket on a beamed group, along the beam', () => {
+    const forced = beamedTriplet({ bracket: 'always' });
+    expect(forced.omitBracket).toBe(false);
+    expect(forced.angle).toBeCloseTo(-3 / 30);
+    // Clear of the beam at every stem by the hook and clearance.
+    [0, 1, 2].forEach((i) => {
+      const stemX = i * 30 + 10 + 16;
+      const bracketY = forced.baseY + (stemX - forced.startX) * forced.angle;
+      expect(bracketY).toBeLessThanOrEqual(
+        20 -
+          (i * 6) / 2 -
+          TUPLET_STAFF_CLEARANCE_PX -
+          TUPLET_HOOK_LENGTH_PX +
+          1e-9
+      );
+    });
   });
 });

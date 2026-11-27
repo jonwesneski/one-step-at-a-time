@@ -99,6 +99,8 @@ import { acceptsBeamAttach, tremoloBeamCounts } from '../rules/tremoloRules';
 import {
   parseTupletRatio,
   type TupletBracketGeometry,
+  tupletDisplay,
+  tupletDisplayOf,
 } from '../rules/tupletRules';
 import { computeBandOverflow, VerticalBand } from '../rules/verticalSpaceRules';
 import type { StaffWidths } from '../staffBase';
@@ -197,7 +199,6 @@ import {
   STEM_OVERLAP_PX,
   TUPLET_HOOK_LENGTH_PX,
   TUPLET_NUMERAL_BEAM_GAP_PX,
-  TUPLET_NUMERAL_FONT_SIZE,
   VERTICAL_OVERFLOW_CLEARANCE_PX,
 } from '../utils/notationDimensions';
 import {
@@ -302,9 +303,12 @@ function hangingTupletNumeralShapes(
     point: { x: number };
   }[]
 ): DoubleStemmedBeamAttachedShape[] {
-  const byTuplet = new Map<Element, { xs: number[]; stemUp: boolean }>();
+  const byTuplet = new Map<
+    TupletElementType,
+    { xs: number[]; stemUp: boolean }
+  >();
   for (const { element, stemUp, point } of memberGeometries) {
-    const tuplet = element.closest(MUSIC_TUPLET);
+    const tuplet = element.closest<TupletElementType>(MUSIC_TUPLET);
     if (tuplet === null) {
       continue;
     }
@@ -313,13 +317,19 @@ function hangingTupletNumeralShapes(
     byTuplet.set(tuplet, entry);
   }
   const near = BEAM_THICKNESS_PX + TUPLET_NUMERAL_BEAM_GAP_PX;
-  const far = near + TUPLET_NUMERAL_FONT_SIZE;
-  return Array.from(byTuplet.values(), ({ xs, stemUp }) => ({
-    left: Math.min(...xs),
-    right: Math.max(...xs),
-    topOffset: stemUp ? -far : near,
-    bottomOffset: stemUp ? -near : far,
-  }));
+  return Array.from(byTuplet, ([tuplet, { xs, stemUp }]) => {
+    const display = tupletDisplay(
+      parseTupletRatio(tuplet.ratio),
+      tuplet.noteValue
+    );
+    const far = near + display.ascent + display.descent;
+    return {
+      left: Math.min(...xs),
+      right: Math.max(...xs),
+      topOffset: stemUp ? -far : near,
+      bottomOffset: stemUp ? -near : far,
+    };
+  });
 }
 
 // A cross-staff tuplet's members with the share of their written value each
@@ -2926,7 +2936,16 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         );
         const topNotesY = reachIntoGap(group.topTuplet, true);
         const bottomNotesY = reachIntoGap(group.bottomTuplet, false);
+        const tupletGroup = {
+          element: group.topTuplet,
+          indices: [],
+          parsedRatio: parseTupletRatio(group.topTuplet.ratio),
+          nestingLevel: 0,
+        };
+        const display = tupletDisplayOf(tupletGroup);
         const notesOnly = {
+          labelAscent: display.ascent,
+          labelDescent: display.descent,
           topGapEdgeY:
             this.#staffContainerRect(staves[group.topStaffIndex]).bottom -
             measureRect.top,
@@ -2973,12 +2992,7 @@ if (typeof window !== 'undefined' && typeof customElements !== 'undefined') {
         }
 
         const geometry: TupletBracketGeometry = {
-          group: {
-            element: group.topTuplet,
-            indices: [],
-            parsedRatio: parseTupletRatio(group.topTuplet.ratio),
-            nestingLevel: 0,
-          },
+          group: tupletGroup,
           startX,
           endX,
           baseY,

@@ -49,6 +49,7 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  TupletBracket,
   TupletPlacement,
   TupletRatio,
   UnpitchedPlacement,
@@ -507,6 +508,8 @@ export const TIE_STYLES: TieStyle[] = ['solid', 'dotted'];
 export const SLUR_STYLES: SlurStyle[] = ['solid', 'dotted'];
 
 export const TUPLET_PLACEMENTS: TupletPlacement[] = ['above', 'below'];
+
+export const TUPLET_BRACKETS: TupletBracket[] = ['auto', 'always'];
 
 export const BARLINE_TYPES: BarlineType[] = [
   'single',

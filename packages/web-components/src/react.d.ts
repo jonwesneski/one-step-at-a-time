@@ -63,6 +63,7 @@ import type {
   TrillContinuationMode,
   TrillFinishSlur,
   TrillLineMode,
+  TupletBracket,
   TupletPlacement,
   TupletRatio,
   UnpitchedPlacement,
@@ -196,6 +197,8 @@ declare module 'react' {
         duration?: DurationType;
         'beam-group'?: string;
         'rest-staff-side'?: RestStaffSide;
+        /** Joins the beam of the notes beside it. */
+        'beam-over'?: boolean;
         hidden?: boolean;
         // Technique text, `|` starting a new line.
         'technique-text'?: string;
@@ -216,6 +219,9 @@ declare module 'react' {
         ratio?: TupletRatio;
         'tuplet-group'?: string;
         placement?: TupletPlacement;
+        /** Draws the ratio as a note value, `5=♩`. */
+        'note-value'?: DurationType;
+        bracket?: TupletBracket;
       };
       'music-arpeggio': WebComponentProps & {
         'run-duration'?: DurationType;

@@ -1,4 +1,6 @@
 import type { TremoloBeamSegment } from '../../rules/tremoloRules';
+import { parseTupletRatio, tupletDisplay } from '../../rules/tupletRules';
+import type { TupletRatio } from '../../types/theory';
 import { SVG_NS } from '../consts';
 import {
   BEAM_THICKNESS_PX,
@@ -6,7 +8,7 @@ import {
   TREMOLO_STROKE_THICKNESS_PX,
   TREMOLO_STROKE_WIDTH_PX,
 } from '../notationDimensions';
-import { createTupletNumeralText } from './tuplet';
+import { createTupletLabel } from './tuplet';
 
 /**
  * Tremolo strokes centred on `centerX` (the stem, or a stemless head's
@@ -52,8 +54,13 @@ export function createTremoloNumeral(
   x: number,
   centerY: number,
   value: number
-): SVGTextElement {
-  return createTupletNumeralText(x, centerY, `${value}`, 'tremolo-numeral');
+): SVGElement {
+  return createTupletLabel(
+    x,
+    centerY,
+    tupletDisplay(parseTupletRatio(`${value}` as TupletRatio), null),
+    'tremolo-numeral'
+  );
 }
 
 /** `points` for a tremolo beam whose top edge runs along `segment`. */

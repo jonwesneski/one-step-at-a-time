@@ -1,10 +1,16 @@
-import type { TupletBracketGeometry } from '../../rules/tupletRules';
+import {
+  type TupletBracketGeometry,
+  type TupletDisplay,
+  tupletDisplayOf,
+  tupletLabelGapPx,
+} from '../../rules/tupletRules';
 import { SVG_NS } from '../consts';
 import {
   TUPLET_BRACKET_STROKE_WIDTH,
+  TUPLET_NOTE_VALUE_SCALE,
   TUPLET_NUMERAL_FONT_SIZE,
-  TUPLET_NUMERAL_GAP_PX,
 } from '../notationDimensions';
+import { createNoteSvg } from './note';
 
 function bracketYAtX(
   x: number,
@@ -48,8 +54,8 @@ export function createTupletBracketSvg(
     numeralY,
     hookLength,
     hookDirections,
-    group: { parsedRatio },
   } = geometry;
+  const display = tupletDisplayOf(geometry.group);
 
   const group = document.createElementNS(SVG_NS, 'g');
   group.classList.add('tuplet-group');
@@ -63,13 +69,13 @@ export function createTupletBracketSvg(
   const endHookDir = hookDirections?.end ?? hookDir;
 
   if (!omitBracket) {
-    const gapHalf = TUPLET_NUMERAL_GAP_PX / 2;
-    const leftArmEndX = numeralX - gapHalf;
-    const rightArmStartX = numeralX + gapHalf;
+    const gap = tupletLabelGapPx(display);
+    const leftArmEndX = numeralX - gap / 2;
+    const rightArmStartX = numeralX + gap / 2;
 
     // Only draw arms if there is room (bracket wider than numeral gap)
     const bracketWidth = endX - startX;
-    const hasRoom = bracketWidth > TUPLET_NUMERAL_GAP_PX + 4;
+    const hasRoom = bracketWidth > gap + 4;
 
     if (hasRoom) {
       // Left arm
@@ -96,33 +102,55 @@ export function createTupletBracketSvg(
   }
 
   group.appendChild(
-    createTupletNumeralText(
-      numeralX,
-      numeralY,
-      parsedRatio.displayString,
-      'tuplet-numeral'
-    )
+    createTupletLabel(numeralX, numeralY, display, 'tuplet-numeral')
   );
 
   return group;
 }
 
-/** An italic tuplet numeral centred on (x, y). */
-export function createTupletNumeralText(
+/**
+ * A tuplet label centred on (x, y): the italic numeral, or with a note value
+ * the numeral, `=` and a small upright note (TupletDisplay).
+ */
+export function createTupletLabel(
   x: number,
   y: number,
-  value: string,
+  display: TupletDisplay,
   className: string
-): SVGTextElement {
+): SVGElement {
   const text = document.createElementNS(SVG_NS, 'text');
   text.classList.add(className);
-  text.setAttribute('x', `${x}`);
   text.setAttribute('y', `${y}`);
-  text.setAttribute('text-anchor', 'middle');
   text.setAttribute('dominant-baseline', 'middle');
   text.setAttribute('font-style', 'italic');
   text.setAttribute('font-size', `${TUPLET_NUMERAL_FONT_SIZE}`);
   text.setAttribute('fill', 'currentColor');
-  text.textContent = value;
-  return text;
+  text.textContent = display.numeral;
+  if (display.noteValue === null) {
+    text.setAttribute('x', `${x}`);
+    text.setAttribute('text-anchor', 'middle');
+    return text;
+  }
+  const left = x - display.width / 2;
+  text.setAttribute('x', `${left}`);
+  const equals = document.createElementNS(SVG_NS, 'tspan');
+  equals.setAttribute('font-style', 'normal');
+  equals.textContent = '=';
+  text.appendChild(equals);
+
+  const label = document.createElementNS(SVG_NS, 'g');
+  label.classList.add('tuplet-label');
+  label.appendChild(text);
+  const [note] = createNoteSvg({ duration: display.noteValue, stemUp: true });
+  note.classList.add('tuplet-note-value');
+  const box = document.createElementNS(SVG_NS, 'g');
+  box.setAttribute(
+    'transform',
+    `translate(${left + display.noteBoxX} ${
+      y + display.noteBoxY
+    }) scale(${TUPLET_NOTE_VALUE_SCALE})`
+  );
+  box.appendChild(note);
+  label.appendChild(box);
+  return label;
 }

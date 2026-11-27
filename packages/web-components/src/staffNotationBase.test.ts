@@ -3216,3 +3216,43 @@ describe('cue size', () => {
     expect(minWidthOf('cue')).toBeLessThan(minWidthOf('normal'));
   });
 });
+
+describe('beam-over rests', () => {
+  function renderStaff(markup: string): any {
+    const staff = document.createElement(MUSIC_STAFF) as any;
+    staff.setAttribute(COMMON_ATTRIBUTES.TIME, '2/4');
+    document.body.appendChild(staff);
+    staff.innerHTML = markup;
+    const slot = staff.shadowRoot.querySelector('slot');
+    slot.assignedElements = () => Array.from(staff.children);
+    slot.dispatchEvent(new Event('slotchange'));
+    return staff;
+  }
+
+  it('beams a lone note beside one instead of drawing its tail', () => {
+    const staff = renderStaff(`
+      <music-rest duration="eighth" beam-over></music-rest>
+      <music-note note="G" octave="4" duration="eighth"></music-note>
+      <music-note note="G" octave="4" duration="quarter"></music-note>`);
+    const note = staff.children[1] as NoteElementType;
+    expect(note.noFlags).toBe(true);
+    expect(staff.shadowRoot.querySelectorAll('.beam-group')).toHaveLength(1);
+  });
+
+  it('moves a rest the beam runs through clear of it, by whole spaces', () => {
+    const markup = (beamOver: string) => `
+      <music-note note="G" octave="4" duration="sixteenth"></music-note>
+      <music-rest duration="sixteenth" ${beamOver}></music-rest>
+      <music-note note="G" octave="4" duration="sixteenth"></music-note>
+      <music-note note="G" octave="4" duration="sixteenth"></music-note>
+      <music-rest duration="quarter"></music-rest>`;
+    const restTop = (beamOver: string) => {
+      document.body.innerHTML = '';
+      const staff = renderStaff(markup(beamOver));
+      return parseFloat((staff.children[1] as HTMLElement).style.top);
+    };
+    const shift = restTop('beam-over') - restTop('');
+    expect(shift).toBeGreaterThan(0);
+    expect(shift % STAFF_LINE_SPACING).toBeCloseTo(0);
+  });
+});

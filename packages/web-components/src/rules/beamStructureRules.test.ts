@@ -1,4 +1,8 @@
-import { computeBeamLevelStructure } from './beamStructureRules';
+import {
+  beamReachOverRest,
+  computeBeamLevelStructure,
+  computeBeamLinesOverRests,
+} from './beamStructureRules';
 import { durationToFlagCountMap } from './theoryConsts';
 
 describe('computeBeamLevelStructure', () => {
@@ -123,6 +127,94 @@ describe('computeBeamLevelStructure', () => {
         fromNoteIndex: 0,
         fractionalBeamSide: 'right',
       }),
+    ]);
+  });
+});
+
+describe('beamReachOverRest', () => {
+  it('reaches 0.4 of the way to the rest, at most 2 spaces', () => {
+    expect(beamReachOverRest(100, 70)).toBeCloseTo(12);
+    expect(beamReachOverRest(100, 130)).toBeCloseTo(12);
+    expect(beamReachOverRest(100, 10)).toBe(20);
+  });
+});
+
+describe('computeBeamLinesOverRests', () => {
+  const note = (beamCount: number) => ({ beamCount, rest: false });
+  const rest = (beamCount: number) => ({ beamCount, rest: true });
+
+  it('matches the plain structure with no rests', () => {
+    const { primaryBeam, secondaryBeams, fractionalBeams } =
+      computeBeamLevelStructure([2, 1, 2]);
+    expect(computeBeamLinesOverRests([note(2), note(1), note(2)])).toEqual([
+      primaryBeam,
+      ...secondaryBeams,
+      ...fractionalBeams,
+    ]);
+  });
+
+  it('gives a lone note a reaching stub per beam on each side with a rest', () => {
+    expect(computeBeamLinesOverRests([rest(1), note(2)])).toEqual([
+      { fromNoteIndex: 1, toNoteIndex: 1, beamLevel: 0, reachesLeft: true },
+      { fromNoteIndex: 1, toNoteIndex: 1, beamLevel: 1, reachesLeft: true },
+    ]);
+    expect(computeBeamLinesOverRests([rest(2), note(1), rest(2)])).toEqual([
+      {
+        fromNoteIndex: 1,
+        toNoteIndex: 1,
+        beamLevel: 0,
+        reachesLeft: true,
+        reachesRight: true,
+      },
+    ]);
+  });
+
+  it('reaches every level of an outer note toward the rest beside it', () => {
+    expect(
+      computeBeamLinesOverRests([rest(2), note(2), note(2), note(2)])
+    ).toEqual([
+      { fromNoteIndex: 1, toNoteIndex: 3, beamLevel: 0, reachesLeft: true },
+      { fromNoteIndex: 1, toNoteIndex: 3, beamLevel: 1, reachesLeft: true },
+    ]);
+  });
+
+  it('turns a partial beam at the outer note into the reach', () => {
+    // A trailing sixteenth after an eighth would stub left; beside a rest it
+    // reaches right instead.
+    expect(computeBeamLinesOverRests([note(1), note(2), rest(2)])).toEqual([
+      { fromNoteIndex: 0, toNoteIndex: 1, beamLevel: 0, reachesRight: true },
+      { fromNoteIndex: 1, toNoteIndex: 1, beamLevel: 1, reachesRight: true },
+    ]);
+  });
+
+  it('runs the primary through an inner rest and breaks secondaries for its value', () => {
+    expect(
+      computeBeamLinesOverRests([note(2), rest(2), note(2), note(2)])
+    ).toEqual([
+      { fromNoteIndex: 0, toNoteIndex: 3, beamLevel: 0 },
+      { fromNoteIndex: 0, toNoteIndex: 3, beamLevel: 1 },
+    ]);
+    expect(computeBeamLinesOverRests([note(2), rest(1), note(2)])).toEqual([
+      { fromNoteIndex: 0, toNoteIndex: 2, beamLevel: 0 },
+      {
+        fromNoteIndex: 0,
+        toNoteIndex: 0,
+        beamLevel: 1,
+        fractionalBeamSide: 'right',
+      },
+      {
+        fromNoteIndex: 2,
+        toNoteIndex: 2,
+        beamLevel: 1,
+        fractionalBeamSide: 'left',
+      },
+    ]);
+  });
+
+  it('starts a secondary that begins on an inner rest at the note, reaching toward the rest', () => {
+    expect(computeBeamLinesOverRests([note(1), rest(2), note(2)])).toEqual([
+      { fromNoteIndex: 0, toNoteIndex: 2, beamLevel: 0 },
+      { fromNoteIndex: 2, toNoteIndex: 2, beamLevel: 1, reachesLeft: true },
     ]);
   });
 });
